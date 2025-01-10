@@ -2,4 +2,3 @@ telethon==1.32.1
 cryptg>=0.4.0  # 可选,用于加快加密操作
 sqlalchemy==2.0.23
 python-dotenv==1.0.0
-python-telegram-bot==21.6
