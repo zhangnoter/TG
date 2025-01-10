@@ -62,7 +62,7 @@ async def register_bot_commands(bot):
         ),
         BotCommand(
             command='switch',
-            description='切换当前源聊天'
+            description='切换当前需要设置的聊天规则'
         ),
         BotCommand(
             command='add',
