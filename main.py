@@ -91,6 +91,10 @@ async def register_bot_commands(bot):
         BotCommand(
             command='remove_replace',
             description='删除替换规则'
+        ),
+        BotCommand(
+            command='clear_all',
+            description='清空当前聊天的所有数据'
         )
     ]
     

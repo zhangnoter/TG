@@ -628,6 +628,38 @@ async def handle_command(client, event):
             finally:
                 session.close()
 
+        elif command == 'clear_all':
+            session = get_session()
+            try:
+                # 删除所有替换规则
+                replace_count = session.query(ReplaceRule).delete(synchronize_session=False)
+                
+                # 删除所有关键字
+                keyword_count = session.query(Keyword).delete(synchronize_session=False)
+                
+                # 删除所有转发规则
+                rule_count = session.query(ForwardRule).delete(synchronize_session=False)
+                
+                # 删除所有聊天
+                chat_count = session.query(Chat).delete(synchronize_session=False)
+                
+                session.commit()
+                
+                await event.reply(
+                    '已清空所有数据:\n'
+                    f'- {chat_count} 个聊天\n'
+                    f'- {rule_count} 条转发规则\n'
+                    f'- {keyword_count} 个关键字\n'
+                    f'- {replace_count} 条替换规则'
+                )
+                
+            except Exception as e:
+                session.rollback()
+                logger.error(f'清空数据时出错: {str(e)}')
+                await event.reply('清空数据时出错，请检查日志')
+            finally:
+                session.close()
+
 async def handle_callback(event):
     """处理按钮回调"""
     try:
