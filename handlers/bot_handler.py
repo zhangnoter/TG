@@ -65,8 +65,6 @@ RULE_SETTINGS = {
     }
 }
 
-# 在文件顶部添加用户状态字典
-USER_STATES = {}  # {user_id: {'current_rule_id': rule_id}}
 
 def get_user_id():
     """获取用户ID，确保环境变量已加载"""
