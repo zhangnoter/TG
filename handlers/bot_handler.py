@@ -111,8 +111,9 @@ async def handle_command(client, event):
         return
         
     if message.text.startswith('/'):
+        # 分割命令，处理可能带有机器人用户名的情况
         parts = message.text.split()
-        command = parts[0][1:]
+        command = parts[0].split('@')[0][1:]  # 移除开头的 '/' 并处理可能的 @username
         
         if command == 'bind':
             if len(parts) != 2:
