@@ -66,6 +66,7 @@ RULE_SETTINGS = {
 }
 
 
+
 def get_user_id():
     """获取用户ID，确保环境变量已加载"""
     user_id_str = os.getenv('USER_ID')
@@ -74,23 +75,39 @@ def get_user_id():
         raise ValueError('必须在 .env 文件中设置 USER_ID')
     return int(user_id_str)
 
+def get_max_media_size():
+    """获取媒体文件大小上限"""
+    max_media_size_str = os.getenv('MAX_MEDIA_SIZE')
+    if not max_media_size_str:
+        logger.error('未设置 MAX_MEDIA_SIZE 环境变量')
+        raise ValueError('必须在 .env 文件中设置 MAX_MEDIA_SIZE')
+    return float(max_media_size_str) * 1024 * 1024  # 转换为字节，支持小数
+
 def create_buttons(rule):
     """根据配置创建设置按钮"""
     buttons = []
+    
+    # 始终显示的按钮
+    basic_settings = ['mode', 'use_bot']
+    
     # 为每个配置字段创建按钮
     for field, config in RULE_SETTINGS.items():
+        # 如果是使用用户账号模式，只显示基本按钮
+        if not rule.use_bot and field not in basic_settings:
+            continue
+            
         current_value = getattr(rule, field)
         display_value = config['values'][current_value]
         button_text = f"{config['display_name']}: {display_value}"
-        # 简化回调数据格式
         callback_data = f"{config['toggle_action']}:{rule.id}"
         buttons.append([Button.inline(button_text, callback_data)])
     
     # 添加删除按钮
     buttons.append([Button.inline(
         '❌ 删除',
-        f"delete:{rule.id}"  # 简化回调数据
+        f"delete:{rule.id}"
     )])
+    
     return buttons
 
 def create_settings_text(rule):
@@ -684,6 +701,11 @@ async def handle_callback(event):
                     await event.answer('当前聊天不存在')
                     return
                 
+                # 如果已经选中了这个聊天，就不做任何操作
+                if current_chat_db.current_add_id == rule_id:
+                    await event.answer('已经选中该聊天')
+                    return
+                
                 # 更新当前选中的源聊天
                 current_chat_db.current_add_id = rule_id  # 这里的 rule_id 实际上是源聊天的 telegram_chat_id
                 session.commit()
@@ -702,7 +724,12 @@ async def handle_callback(event):
                     callback_data = f"switch:{source_chat.telegram_chat_id}"
                     buttons.append([Button.inline(button_text, callback_data)])
                 
-                await message.edit('请选择要管理的转发规则:', buttons=buttons)
+                try:
+                    await message.edit('请选择要管理的转发规则:', buttons=buttons)
+                except Exception as e:
+                    if 'message was not modified' not in str(e).lower():
+                        raise  # 如果是其他错误就继续抛出
+                
                 source_chat = session.query(Chat).filter(
                     Chat.telegram_chat_id == rule_id
                 ).first()
@@ -739,21 +766,32 @@ async def handle_callback(event):
                         current_value = getattr(rule, field_name)
                         new_value = config['toggle_func'](current_value)
                         setattr(rule, field_name, new_value)
+                        
+                        # 如果切换了转发方式，立即更新按钮
+                        if field_name == 'use_bot':
+                            await message.edit(
+                                create_settings_text(rule),
+                                buttons=create_buttons(rule)
+                            )
+                            await event.answer(f'已切换到{"机器人" if new_value else "用户账号"}模式')
+                            break
+                        
                         break
                 
                 session.commit()
                 
-                await message.edit(
-                    create_settings_text(rule),
-                    buttons=create_buttons(rule)
-                )
-                # 找到对应的配置显示名称
-                display_name = next(
-                    config['display_name'] 
-                    for config in RULE_SETTINGS.values() 
-                    if config['toggle_action'] == action
-                )
-                await event.answer(f'已更新{display_name}')
+                # 如果不是切换转发方式，使用原来的更新逻辑
+                if action != 'toggle_bot':
+                    await message.edit(
+                        create_settings_text(rule),
+                        buttons=create_buttons(rule)
+                    )
+                    display_name = next(
+                        config['display_name'] 
+                        for config in RULE_SETTINGS.values() 
+                        if config['toggle_action'] == action
+                    )
+                    await event.answer(f'已更新{display_name}')
             finally:
                 session.close()
                 
@@ -856,10 +894,36 @@ async def callback_handler(event):
         return
     await handle_callback(event) 
 
+def get_media_size(media):
+    """获取媒体文件大小"""
+    if not media:
+        return 0
+        
+    try:
+        # 对于所有类型的媒体，先尝试获取 document
+        if hasattr(media, 'document') and media.document:
+            return media.document.size
+            
+        # 对于照片，获取最大尺寸
+        if hasattr(media, 'photo') and media.photo:
+            # 获取最大尺寸的照片
+            largest_photo = max(media.photo.sizes, key=lambda x: x.size if hasattr(x, 'size') else 0)
+            return largest_photo.size if hasattr(largest_photo, 'size') else 0
+            
+        # 如果是其他类型，尝试直接获取 size 属性
+        if hasattr(media, 'size'):
+            return media.size
+            
+    except Exception as e:
+        logger.error(f'获取媒体大小时出错: {str(e)}')
+    
+    return 0
+
 async def process_forward_rule(client, event, chat_id, rule):
     """处理转发规则（机器人模式）"""
     should_forward = False
     message_text = event.message.text or ''
+    MAX_MEDIA_SIZE = get_max_media_size()
     
     # 添加日志
     logger.info(f'处理规则 ID: {rule.id}')
@@ -943,67 +1007,71 @@ async def process_forward_rule(client, event, chat_id, rule):
                 logger.info(f'处理媒体组消息 组ID: {event.message.grouped_id}')
                 
                 # 等待更长时间让所有媒体消息到达
-                await asyncio.sleep(1)  # 增加等待时间
+                await asyncio.sleep(1)
                 
                 # 收集媒体组的所有消息
                 messages = []
+                skipped_media = []  # 记录被跳过的媒体消息
+                caption = None  # 保存第一条消息的文本
+                
                 async for message in event.client.iter_messages(
                     event.chat_id,
-                    limit=20,  # 增加限制数量
-                    min_id=event.message.id - 10,  # 从当前消息往前查找
-                    max_id=event.message.id + 10   # 从当前消息往后查找
+                    limit=20,
+                    min_id=event.message.id - 10,
+                    max_id=event.message.id + 10
                 ):
-                    # 检查是否属于同一个媒体组
                     if message.grouped_id == event.message.grouped_id:
+                        # 保存第一条消息的文本
+                        if not caption and message.text:
+                            caption = message.text
+                            logger.info(f'获取到媒体组文本: {caption}')
+                        
+                        # 检查媒体大小
+                        if message.media:
+                            file_size = get_media_size(message.media)
+                            if MAX_MEDIA_SIZE and file_size > MAX_MEDIA_SIZE:
+                                skipped_media.append((message, file_size))
+                                continue
                         messages.append(message)
                         logger.info(f'找到媒体组消息: ID={message.id}, 类型={type(message.media).__name__ if message.media else "无媒体"}')
-
-                # 按照ID排序确保顺序正确
-                messages.sort(key=lambda x: x.id)
-                logger.info(f'共找到 {len(messages)} 条媒体组消息')
                 
-                # 创建临时目录存储下载的媒体文件
-                with tempfile.TemporaryDirectory() as temp_dir:
-                    files = []
-                    caption = None
+                logger.info(f'共找到 {len(messages)} 条媒体组消息，{len(skipped_media)} 条超限')
+                
+                # 如果所有媒体都超限了，但有文本，就发送文本和提示
+                if not messages and caption:
+                    # 构建提示信息
+                    skipped_info = "\n".join(f"- {size/1024/1024:.1f}MB" for _, size in skipped_media)
+                    original_link = f"https://t.me/c/{str(event.chat_id)[4:]}/{event.message.id}"
+                    text_to_send = f"{caption}\n\n⚠️ {len(skipped_media)} 个媒体文件超过大小限制 ({MAX_MEDIA_SIZE/1024/1024:.1f}MB):\n{skipped_info}\n原始消息: {original_link}"
                     
-                    for msg in messages:
-                        if msg.media:
-                            # 下载媒体文件
-                            file_path = await msg.download_media(temp_dir)
-                            if file_path:  # 确保文件下载成功
-                                files.append(file_path)
-                                logger.info(f'已下载媒体文件: {file_path}')
-                            
-                            # 获取第一条消息的文本作为说明
-                            if not caption and msg.text:
-                                caption = msg.text
-                                logger.info(f'使用文本作为说明: {caption}')
-                    
-                    # 使用 send_file 发送媒体组
-                    if files:
-                        logger.info(f'准备发送 {len(files)} 个媒体文件')
-                        try:
+                    await client.send_message(
+                        target_chat_id,
+                        text_to_send,
+                        parse_mode=parse_mode,
+                        link_preview=True
+                    )
+                    logger.info(f'[机器人] 媒体组所有文件超限，已发送文本和提示')
+                    return
+                
+                # 如果有可以发送的媒体，继续原来的处理逻辑...
+                try:
+                    with tempfile.TemporaryDirectory() as temp_dir:
+                        file_path = await event.message.download_media(temp_dir)
+                        if file_path:
                             await client.send_file(
                                 target_chat_id,
-                                files,
-                                caption=caption,
+                                file_path,
+                                caption=message_text,
                                 parse_mode=parse_mode,  # 使用字符串值
-                                reply_to=None
+                                link_preview={
+                                    PreviewMode.ON: True,
+                                    PreviewMode.OFF: False,
+                                    PreviewMode.FOLLOW: event.message.media is not None
+                                }[rule.is_preview]
                             )
-                            logger.info(f'[机器人] 媒体组消息已发送到: {target_chat.name} ({target_chat_id})')
-                        except Exception as e:
-                            logger.error(f'发送媒体组时出错: {str(e)}')
-                            # 尝试逐个发送
-                            for file in files:
-                                try:
-                                    await client.send_file(
-                                        target_chat_id,
-                                        file,
-                                        parse_mode=parse_mode  # 使用字符串值
-                                    )
-                                except Exception as e:
-                                    logger.error(f'发送单个媒体文件时出错: {str(e)}')
+                            logger.info(f'[机器人] 媒体消息已发送到: {target_chat.name} ({target_chat_id})')
+                except Exception as e:
+                    logger.error(f'发送媒体消息时出错: {str(e)}')
             else:
                 # 处理单条消息
                 # 检查是否是纯链接预览消息
@@ -1032,7 +1100,29 @@ async def process_forward_rule(client, event, chat_id, rule):
                 )
                 
                 if has_media:
-                    # 处理媒体消息
+                    # 先检查媒体大小
+                    file_size = get_media_size(event.message.media)
+                    logger.info(f'媒体文件大小: {file_size/1024/1024:.2f}MB')
+                    logger.info(f'媒体文件大小上限: {MAX_MEDIA_SIZE}')
+                    logger.info(f'媒体文件大小: {file_size}')
+                    
+                    if MAX_MEDIA_SIZE and file_size > MAX_MEDIA_SIZE:
+                        logger.info(f'媒体文件超过大小限制 ({MAX_MEDIA_SIZE/1024/1024:.2f}MB)')
+                        # 如果超过大小限制，只发送文本和提示
+                        original_link = f"https://t.me/c/{str(event.chat_id)[4:]}/{event.message.id}"
+                        text_to_send = message_text or ''
+                        text_to_send += f"\n\n⚠️ 媒体文件 ({file_size/1024/1024:.1f}MB) 超过大小限制 ({MAX_MEDIA_SIZE/1024/1024:.1f}MB)\n原始消息: {original_link}"
+                        
+                        await client.send_message(
+                            target_chat_id,
+                            text_to_send,
+                            parse_mode=parse_mode,
+                            link_preview=True
+                        )
+                        logger.info(f'[机器人] 媒体文件超过大小限制，仅转发文本')
+                        return  # 重要：立即返回，不继续处理
+                    
+                    # 如果没有超过大小限制，继续处理...
                     try:
                         with tempfile.TemporaryDirectory() as temp_dir:
                             file_path = await event.message.download_media(temp_dir)
