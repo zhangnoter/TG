@@ -23,8 +23,15 @@ phone_number = os.getenv('PHONE_NUMBER')
 user_client = TelegramClient('user', api_id, api_hash)
 bot_client = TelegramClient('bot', api_id, api_hash)
 
+# 清空./temp文件夹
+def clear_temp_dir():
+    for file in os.listdir('./temp'):
+        os.remove(os.path.join('./temp', file))
+
 # 初始化数据库
 engine = init_db()
+
+
 
 # 设置消息监听器
 setup_listeners(user_client, bot_client)
