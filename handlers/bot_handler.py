@@ -1067,15 +1067,25 @@ async def process_forward_rule(client, event, chat_id, rule):
                     logger.info(f'[机器人] 媒体组所有文件超限，已发送文本和提示')
                     return
                 
-                # 如果有可以发送的媒体，继续原来的处理逻辑...
+                # 如果有可以发送的媒体，作为一个组发送
                 try:
                     with tempfile.TemporaryDirectory() as temp_dir:
-                        file_path = await event.message.download_media(temp_dir)
-                        if file_path:
+                        files = []
+                        for message in messages:
+                            if message.media:
+                                file_path = await message.download_media(temp_dir)
+                                if file_path:
+                                    files.append(file_path)
+                        
+                        if files:
+                            # 添加原始链接
+                            caption_text = caption + original_link if caption else original_link
+                            
+                            # 作为一个组发送所有文件
                             await client.send_file(
                                 target_chat_id,
-                                file_path,
-                                caption=(message_text + original_link) if message_text else original_link,
+                                files,  # 发送所有文件
+                                caption=caption_text,
                                 parse_mode=parse_mode,
                                 link_preview={
                                     PreviewMode.ON: True,
@@ -1083,9 +1093,9 @@ async def process_forward_rule(client, event, chat_id, rule):
                                     PreviewMode.FOLLOW: event.message.media is not None
                                 }[rule.is_preview]
                             )
-                            logger.info(f'[机器人] 媒体消息已发送到: {target_chat.name} ({target_chat_id})')
+                            logger.info(f'[机器人] 媒体组消息已发送到: {target_chat.name} ({target_chat_id})')
                 except Exception as e:
-                    logger.error(f'发送媒体消息时出错: {str(e)}')
+                    logger.error(f'发送媒体组消息时出错: {str(e)}')
             else:
                 # 处理单条消息
                 # 检查是否是纯链接预览消息
