@@ -147,7 +147,7 @@ async def register_bot_commands(bot):
         BotCommand(
             command='import_replace',
             description='导入替换规则'
-        ),
+        )
     ]
     
     try:
