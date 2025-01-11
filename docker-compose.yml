@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  telegram-forwarder:
+    build: .
+    container_name: telegram-forwarder
+    restart: unless-stopped
+    volumes:
+      # 持久化数据
+      - ./data:/app/data
+      # 持久化配置
+      - ./.env:/app/.env
+      # 持久化会话文件
+      - ./sessions:/app/sessions
+      # 临时文件目录
+      - ./temp:/app/temp

@@ -66,12 +66,12 @@ class ReplaceRule(Base):
 
 def init_db():
     """初始化数据库"""
-    engine = create_engine('sqlite:///forward.db')
+    engine = create_engine('sqlite:///./db/forward.db')
     Base.metadata.create_all(engine)
     return engine
 
 def get_session():
     """创建会话工厂"""
-    engine = create_engine('sqlite:///forward.db')
+    engine = create_engine('sqlite:///./db/forward.db')
     Session = sessionmaker(bind=engine)
     return Session() 
