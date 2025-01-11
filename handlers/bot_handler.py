@@ -11,6 +11,11 @@ from sqlalchemy.exc import IntegrityError
 
 logger = logging.getLogger(__name__)
 
+# 在文件顶部添加
+TEMP_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'temp')
+# 确保 temp 目录存在
+os.makedirs(TEMP_DIR, exist_ok=True)
+
 # 规则配置字段定义
 RULE_SETTINGS = {
     'mode': {
@@ -1069,22 +1074,22 @@ async def process_forward_rule(client, event, chat_id, rule):
                 
                 # 如果有可以发送的媒体，作为一个组发送
                 try:
-                    with tempfile.TemporaryDirectory() as temp_dir:
-                        files = []
-                        for message in messages:
-                            if message.media:
-                                file_path = await message.download_media(temp_dir)
-                                if file_path:
-                                    files.append(file_path)
-                        
-                        if files:
+                    files = []
+                    for message in messages:
+                        if message.media:
+                            file_path = await message.download_media(TEMP_DIR)
+                            if file_path:
+                                files.append(file_path)
+                    
+                    if files:
+                        try:
                             # 添加原始链接
                             caption_text = caption + original_link if caption else original_link
                             
                             # 作为一个组发送所有文件
                             await client.send_file(
                                 target_chat_id,
-                                files,  # 发送所有文件
+                                files,
                                 caption=caption_text,
                                 parse_mode=parse_mode,
                                 link_preview={
@@ -1094,6 +1099,13 @@ async def process_forward_rule(client, event, chat_id, rule):
                                 }[rule.is_preview]
                             )
                             logger.info(f'[机器人] 媒体组消息已发送到: {target_chat.name} ({target_chat_id})')
+                        finally:
+                            # 删除临时文件
+                            for file_path in files:
+                                try:
+                                    os.remove(file_path)
+                                except Exception as e:
+                                    logger.error(f'删除临时文件失败: {str(e)}')
                 except Exception as e:
                     logger.error(f'发送媒体组消息时出错: {str(e)}')
             else:
@@ -1148,9 +1160,9 @@ async def process_forward_rule(client, event, chat_id, rule):
                     
                     # 如果没有超过大小限制，继续处理...
                     try:
-                        with tempfile.TemporaryDirectory() as temp_dir:
-                            file_path = await event.message.download_media(temp_dir)
-                            if file_path:
+                        file_path = await event.message.download_media(TEMP_DIR)
+                        if file_path:
+                            try:
                                 await client.send_file(
                                     target_chat_id,
                                     file_path,
@@ -1163,6 +1175,12 @@ async def process_forward_rule(client, event, chat_id, rule):
                                     }[rule.is_preview]
                                 )
                                 logger.info(f'[机器人] 媒体消息已发送到: {target_chat.name} ({target_chat_id})')
+                            finally:
+                                # 删除临时文件
+                                try:
+                                    os.remove(file_path)
+                                except Exception as e:
+                                    logger.error(f'删除临时文件失败: {str(e)}')
                     except Exception as e:
                         logger.error(f'发送媒体消息时出错: {str(e)}')
                 else:
