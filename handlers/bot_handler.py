@@ -6,6 +6,7 @@ import logging
 import asyncio
 from enums.enums import ForwardMode, PreviewMode, MessageMode
 from sqlalchemy.exc import IntegrityError
+from telethon.tl.types import ChannelParticipantsAdmins
 
 logger = logging.getLogger(__name__)
 
@@ -129,11 +130,28 @@ def create_settings_text(rule):
 
 async def handle_command(client, event):
     """处理机器人命令"""
-    # 只处理来自管理员的消息
-    user_id = event.sender_id
-    if user_id != get_user_id():
-        return
-        
+    
+    # 检查是否是频道消息
+    if event.is_channel:
+        # 获取频道管理员列表
+        try:
+            admins = await client.get_participants(event.chat_id, filter=ChannelParticipantsAdmins)
+            admin_ids = [admin.id for admin in admins]
+            user_id = get_user_id()
+            if user_id not in admin_ids:
+                logger.info(f'非管理员的频道消息，已忽略')
+                return
+        except Exception as e:
+            logger.error(f'获取频道管理员列表失败: {str(e)}')
+            return
+    else:
+        # 普通聊天消息，检查发送者ID
+        user_id = event.sender_id
+        if user_id != get_user_id():
+            logger.info(f'非管理员的消息，已忽略')
+            return
+    
+    logger.info(f'收到管理员命令: {event.message.text}')
     # 处理命令逻辑
     message = event.message
     if not message.text:
@@ -704,20 +722,22 @@ async def handle_command(client, event):
 /bind <目标聊天链接> - 绑定一个新的转发规则
 例如：/bind https://t.me/channel_name
 
-📝 关键字管理(添加于当前规则，使用/switch切换规则)
-/add <关键字1> [关键字2] ... - 添加普通关键字
-/add_regex <正则1> [正则2] ... - 添加正则表达式关键字
+📝 关键字管理
+/add <关键字1> [关键字2] ... - 添加普通关键字到当前规则
+/add_regex <正则1> [正则2] ... - 添加正则表达式关键字到当前规则
+/add_all <关键字1> [关键字2] ... - 添加普通关键字到所有规则
+/add_regex_all <正则1> [正则2] ... - 添加正则表达式关键字到所有规则
 例如：
   /add 新闻 体育    (转发包含"新闻"或"体育"的消息)
   /add_regex ^.*新闻.*$ ^.*体育.*$
+  /add_all 新闻 体育    (为所有规则添加关键字)
 
-🔄 替换规则(添加于当前规则，使用/switch切换规则)
-/replace <匹配模式> <替换内容> - 添加替换规则
+🔄 替换规则
+/replace <匹配模式> <替换内容> - 添加替换规则到当前规则
+/replace_all <匹配模式> <替换内容> - 添加替换规则到所有规则
 例如：
   /replace 机密 ***    (将"机密"替换为"***")
-  /replace ^.*$ 已删除    (替换整个消息为"已删除")
-  /replace 广告 （不填替换内容，则删除匹配内容）
-  
+  /replace_all 广告    (为所有规则添加删除广告的规则)
 
 🔀 切换规则
 /switch - 切换当前操作的转发规则
@@ -733,6 +753,143 @@ async def handle_command(client, event):
 /clear_all - 清空所有数据
 """
             await event.reply(help_text)
+
+        elif command in ['add_all', 'add_regex_all']:
+            if len(parts) < 2:
+                await event.reply(f'用法: /{command} <关键字1> [关键字2] [关键字3] ...')
+                return
+                
+            keywords = parts[1:]  # 获取所有关键字
+            session = get_session()
+            try:
+                # 获取当前聊天
+                current_chat = await event.get_chat()
+                current_chat_db = session.query(Chat).filter(
+                    Chat.telegram_chat_id == str(current_chat.id)
+                ).first()
+                
+                if not current_chat_db:
+                    await event.reply('当前聊天没有任何转发规则')
+                    return
+                
+                # 查找所有以当前聊天为目标的规则
+                rules = session.query(ForwardRule).filter(
+                    ForwardRule.target_chat_id == current_chat_db.id
+                ).all()
+                
+                if not rules:
+                    await event.reply('当前聊天没有任何转发规则')
+                    return
+                
+                # 为每个规则添加关键字
+                success_count = 0
+                duplicate_count = 0
+                for rule in rules:
+                    for keyword in keywords:
+                        try:
+                            new_keyword = Keyword(
+                                rule_id=rule.id,
+                                keyword=keyword,
+                                is_regex=(command == 'add_regex_all')
+                            )
+                            session.add(new_keyword)
+                            success_count += 1
+                        except IntegrityError:
+                            session.rollback()
+                            duplicate_count += 1
+                            continue
+                
+                session.commit()
+                
+                # 构建回复消息
+                keyword_type = "正则表达式" if command == "add_regex_all" else "关键字"
+                keywords_text = '\n'.join(f'- {k}' for k in keywords)
+                result_text = f'已添加 {success_count} 个{keyword_type}\n'
+                if duplicate_count > 0:
+                    result_text += f'跳过 {duplicate_count} 个重复的{keyword_type}\n'
+                result_text += f'关键字列表:\n{keywords_text}'
+                
+                await event.reply(result_text)
+                
+            except Exception as e:
+                session.rollback()
+                logger.error(f'批量添加关键字时出错: {str(e)}')
+                await event.reply('添加关键字时出错，请检查日志')
+            finally:
+                session.close()
+
+        elif command == 'replace_all':
+            if len(parts) < 2:
+                await event.reply('用法: /replace_all <匹配规则> [替换内容]\n例如:\n/replace_all 广告  # 删除匹配内容\n/replace_all 广告 [已替换]')
+                return
+                
+            pattern = parts[1]
+            # 如果没有提供替换内容，默认替换为空字符串
+            content = ' '.join(parts[2:]) if len(parts) > 2 else ''
+            
+            session = get_session()
+            try:
+                # 获取当前聊天
+                current_chat = await event.get_chat()
+                current_chat_db = session.query(Chat).filter(
+                    Chat.telegram_chat_id == str(current_chat.id)
+                ).first()
+                
+                if not current_chat_db:
+                    await event.reply('当前聊天没有任何转发规则')
+                    return
+                
+                # 查找所有以当前聊天为目标的规则
+                rules = session.query(ForwardRule).filter(
+                    ForwardRule.target_chat_id == current_chat_db.id
+                ).all()
+                
+                if not rules:
+                    await event.reply('当前聊天没有任何转发规则')
+                    return
+                
+                # 为每个规则添加替换规则
+                success_count = 0
+                duplicate_count = 0
+                for rule in rules:
+                    try:
+                        new_replace_rule = ReplaceRule(
+                            rule_id=rule.id,
+                            pattern=pattern,
+                            content=content
+                        )
+                        session.add(new_replace_rule)
+                        
+                        # 确保启用替换模式
+                        if not rule.is_replace:
+                            rule.is_replace = True
+                            
+                        success_count += 1
+                    except IntegrityError:
+                        session.rollback()
+                        duplicate_count += 1
+                        continue
+                
+                session.commit()
+                
+                # 构建回复消息
+                action_type = "删除" if not content else "替换"
+                result_text = f'已为 {success_count} 个规则添加替换规则:\n'
+                if duplicate_count > 0:
+                    result_text += f'跳过 {duplicate_count} 个重复的替换规则\n'
+                result_text += f'匹配模式: {pattern}\n'
+                result_text += f'动作: {action_type}\n'
+                if content:
+                    result_text += f'替换为: {content}'
+                
+                await event.reply(result_text)
+                
+            except Exception as e:
+                session.rollback()
+                logger.error(f'批量添加替换规则时出错: {str(e)}')
+                await event.reply('添加替换规则时出错，请检查日志')
+            finally:
+                session.close()
 
 async def handle_callback(event):
     """处理按钮回调"""

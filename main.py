@@ -109,13 +109,26 @@ async def register_bot_commands(bot):
             description='清空当前聊天的所有数据'
         ),
         BotCommand(
+            command='add_all',
+            description='添加普通关键字到所有规则'
+        ),
+        BotCommand(
+            command='add_regex_all',
+            description='添加正则表达式到所有规则'
+        ),
+        BotCommand(
+            command='replace_all',
+            description='添加替换规则到所有规则'
+        ),
+        BotCommand(
             command='help',
             description='查看帮助'
         ),
         BotCommand(
             command='start',
             description='开始使用'
-        )
+        ),
+        
     ]
     
     try:
