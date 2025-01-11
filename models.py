@@ -29,7 +29,8 @@ class ForwardRule(Base):
     is_replace = Column(Boolean, default=False)
     # 三个值，开，关，按照原消息
     is_preview = Column(Enum(PreviewMode), nullable=False, default=PreviewMode.FOLLOW)
-    
+    # 是否附带原消息链接
+    is_original_link = Column(Boolean, default=False)
     # 添加唯一约束
     __table_args__ = (
         UniqueConstraint('source_chat_id', 'target_chat_id', name='unique_source_target'),

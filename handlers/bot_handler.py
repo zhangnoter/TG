@@ -62,6 +62,15 @@ RULE_SETTINGS = {
             PreviewMode.OFF: PreviewMode.FOLLOW,
             PreviewMode.FOLLOW: PreviewMode.ON
         }[current]
+    },
+    'is_original_link': {
+        'display_name': '原始链接',
+        'values': {
+            True: '附带',
+            False: '不附带'
+        },
+        'toggle_action': 'toggle_original_link',
+        'toggle_func': lambda current: not current
     }
 }
 
@@ -1002,6 +1011,11 @@ async def process_forward_rule(client, event, chat_id, rule):
             parse_mode = rule.message_mode.value  # 使用枚举的值（字符串）
             logger.info(f'使用消息格式: {parse_mode}')
             
+            # 如果启用了原始链接，生成链接
+            original_link = ''
+            if rule.is_original_link:
+                original_link = f"\n\n原始消息: https://t.me/c/{str(event.chat_id)[4:]}/{event.message.id}"
+            
             if event.message.grouped_id:
                 # 处理媒体组
                 logger.info(f'处理媒体组消息 组ID: {event.message.grouped_id}')
@@ -1061,8 +1075,8 @@ async def process_forward_rule(client, event, chat_id, rule):
                             await client.send_file(
                                 target_chat_id,
                                 file_path,
-                                caption=message_text,
-                                parse_mode=parse_mode,  # 使用字符串值
+                                caption=(message_text + original_link) if message_text else original_link,
+                                parse_mode=parse_mode,
                                 link_preview={
                                     PreviewMode.ON: True,
                                     PreviewMode.OFF: False,
@@ -1111,7 +1125,7 @@ async def process_forward_rule(client, event, chat_id, rule):
                         # 如果超过大小限制，只发送文本和提示
                         original_link = f"https://t.me/c/{str(event.chat_id)[4:]}/{event.message.id}"
                         text_to_send = message_text or ''
-                        text_to_send += f"\n\n⚠️ 媒体文件 ({file_size/1024/1024:.1f}MB) 超过大小限制 ({MAX_MEDIA_SIZE/1024/1024:.1f}MB)\n原始消息: {original_link}"
+                        text_to_send += f"\n\n⚠️ 媒体文件 ({file_size/1024/1024:.1f}MB) 超过大小限制 ({MAX_MEDIA_SIZE/1024/1024:.1f}MB){original_link}"
                         
                         await client.send_message(
                             target_chat_id,
@@ -1130,8 +1144,8 @@ async def process_forward_rule(client, event, chat_id, rule):
                                 await client.send_file(
                                     target_chat_id,
                                     file_path,
-                                    caption=message_text,
-                                    parse_mode=parse_mode,  # 使用字符串值
+                                    caption=(message_text + original_link) if message_text else original_link,
+                                    parse_mode=parse_mode,
                                     link_preview={
                                         PreviewMode.ON: True,
                                         PreviewMode.OFF: False,
@@ -1153,8 +1167,8 @@ async def process_forward_rule(client, event, chat_id, rule):
                         
                         await client.send_message(
                             target_chat_id,
-                            message_text,
-                            parse_mode=parse_mode,  # 使用字符串值
+                            message_text + original_link,  # 添加原始链接
+                            parse_mode=parse_mode,
                             link_preview=link_preview
                         )
                         logger.info(
