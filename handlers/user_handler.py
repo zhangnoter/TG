@@ -1,4 +1,4 @@
-from models import get_session, Chat, ForwardRule, ForwardMode
+from db.models import ForwardMode
 import re
 import logging
 import asyncio

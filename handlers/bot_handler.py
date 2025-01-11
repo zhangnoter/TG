@@ -1,14 +1,11 @@
 from telethon import events, Button
-from models import get_session, Chat, ForwardRule, ForwardMode, Keyword, ReplaceRule
+from db.models import get_session, Chat, ForwardRule, Keyword, ReplaceRule
 import re
 import os
 import logging
-import json
-import tempfile
 import asyncio
 from enums.enums import ForwardMode, PreviewMode, MessageMode
 from sqlalchemy.exc import IntegrityError
-import cryptg
 
 logger = logging.getLogger(__name__)
 
@@ -206,10 +203,7 @@ async def handle_command(client, event):
                     # 创建转发规则
                     rule = ForwardRule(
                         source_chat_id=source_chat_db.id,
-                        target_chat_id=target_chat_db.id,
-                        mode=ForwardMode.BLACKLIST,
-                        use_bot=False,
-                        is_replace=False
+                        target_chat_id=target_chat_db.id
                     )
                     session.add(rule)
                     session.commit()

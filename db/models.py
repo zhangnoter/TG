@@ -24,7 +24,7 @@ class ForwardRule(Base):
     source_chat_id = Column(Integer, ForeignKey('chats.id'), nullable=False)
     target_chat_id = Column(Integer, ForeignKey('chats.id'), nullable=False)
     mode = Column(Enum(ForwardMode), nullable=False, default=ForwardMode.BLACKLIST)
-    use_bot = Column(Boolean, default=False)
+    use_bot = Column(Boolean, default=True)
     message_mode = Column(Enum(MessageMode), nullable=False, default=MessageMode.MARKDOWN)
     is_replace = Column(Boolean, default=False)
     # 三个值，开，关，按照原消息
