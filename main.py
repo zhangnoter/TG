@@ -128,7 +128,26 @@ async def register_bot_commands(bot):
             command='start',
             description='开始使用'
         ),
-        
+        BotCommand(
+            command='export_keyword',
+            description='导出当前规则的关键字'
+        ),
+        BotCommand(
+            command='export_replace',
+            description='导出当前规则的替换规则'
+        ),
+        BotCommand(
+            command='import_keyword',
+            description='导入普通关键字'
+        ),
+        BotCommand(
+            command='import_regex_keyword',
+            description='导入正则表达式关键字'
+        ),
+        BotCommand(
+            command='import_replace',
+            description='导入替换规则'
+        ),
     ]
     
     try:

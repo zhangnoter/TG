@@ -128,6 +128,67 @@ def create_settings_text(rule):
     text = f'管理转发规则\n目标聊天: {rule.target_chat.name}\n'
     return text
 
+async def get_current_rule(session, event):
+    """获取当前选中的规则"""
+    try:
+        # 获取当前聊天
+        current_chat = await event.get_chat()
+        current_chat_db = session.query(Chat).filter(
+            Chat.telegram_chat_id == str(current_chat.id)
+        ).first()
+        
+        if not current_chat_db or not current_chat_db.current_add_id:
+            await event.reply('请先使用 /switch 选择一个源聊天')
+            return None
+        
+        # 查找对应的规则
+        source_chat = session.query(Chat).filter(
+            Chat.telegram_chat_id == current_chat_db.current_add_id
+        ).first()
+        
+        rule = session.query(ForwardRule).filter(
+            ForwardRule.source_chat_id == source_chat.id,
+            ForwardRule.target_chat_id == current_chat_db.id
+        ).first()
+        
+        if not rule:
+            await event.reply('转发规则不存在')
+            return None
+            
+        return rule, source_chat
+    except Exception as e:
+        logger.error(f'获取当前规则时出错: {str(e)}')
+        await event.reply('获取当前规则时出错，请检查日志')
+        return None
+
+async def get_all_rules(session, event):
+    """获取当前聊天的所有规则"""
+    try:
+        # 获取当前聊天
+        current_chat = await event.get_chat()
+        current_chat_db = session.query(Chat).filter(
+            Chat.telegram_chat_id == str(current_chat.id)
+        ).first()
+        
+        if not current_chat_db:
+            await event.reply('当前聊天没有任何转发规则')
+            return None
+        
+        # 查找所有以当前聊天为目标的规则
+        rules = session.query(ForwardRule).filter(
+            ForwardRule.target_chat_id == current_chat_db.id
+        ).all()
+        
+        if not rules:
+            await event.reply('当前聊天没有任何转发规则')
+            return None
+            
+        return rules
+    except Exception as e:
+        logger.error(f'获取所有规则时出错: {str(e)}')
+        await event.reply('获取规则时出错，请检查日志')
+        return None
+
 async def handle_command(client, event):
     """处理机器人命令"""
     
@@ -351,37 +412,11 @@ async def handle_command(client, event):
             keywords = parts[1:]  # 获取所有关键字
             session = get_session()
             try:
-                # 获取当前聊天
-                current_chat = await event.get_chat()
-                current_chat_db = session.query(Chat).filter(
-                    Chat.telegram_chat_id == str(current_chat.id)
-                ).first()
-                
-                if not current_chat_db:
-                    await event.reply('当前聊天没有任何转发规则')
+                rule_info = await get_current_rule(session, event)
+                if not rule_info:
                     return
-                
-                if not current_chat_db.current_add_id:
-                    await event.reply('请先使用 /switch 选择一个源聊天')
-                    return
-                
-                # 查找对应的规则
-                source_chat = session.query(Chat).filter(
-                    Chat.telegram_chat_id == current_chat_db.current_add_id
-                ).first()
-                
-                if not source_chat:
-                    await event.reply('源聊天不存在')
-                    return
-                
-                rule = session.query(ForwardRule).filter(
-                    ForwardRule.source_chat_id == source_chat.id,
-                    ForwardRule.target_chat_id == current_chat_db.id
-                ).first()
-                
-                if not rule:
-                    await event.reply('转发规则不存在')
-                    return
+                    
+                rule, source_chat = rule_info
                 
                 # 添加所有关键字
                 added_keywords = []
@@ -417,37 +452,11 @@ async def handle_command(client, event):
             
             session = get_session()
             try:
-                # 获取当前聊天
-                current_chat = await event.get_chat()
-                current_chat_db = session.query(Chat).filter(
-                    Chat.telegram_chat_id == str(current_chat.id)
-                ).first()
-                
-                if not current_chat_db:
-                    await event.reply('当前聊天没有任何转发规则')
+                rule_info = await get_current_rule(session, event)
+                if not rule_info:
                     return
-                
-                if not current_chat_db.current_add_id:
-                    await event.reply('请先使用 /switch 选择一个源聊天')
-                    return
-                
-                # 查找对应的规则
-                source_chat = session.query(Chat).filter(
-                    Chat.telegram_chat_id == current_chat_db.current_add_id
-                ).first()
-                
-                if not source_chat:
-                    await event.reply('源聊天不存在')
-                    return
-                
-                rule = session.query(ForwardRule).filter(
-                    ForwardRule.source_chat_id == source_chat.id,
-                    ForwardRule.target_chat_id == current_chat_db.id
-                ).first()
-                
-                if not rule:
-                    await event.reply('转发规则不存在')
-                    return
+                    
+                rule, source_chat = rule_info
                 
                 # 添加替换规则
                 new_replace_rule = ReplaceRule(
@@ -485,29 +494,11 @@ async def handle_command(client, event):
         elif command == 'list_keyword':
             session = get_session()
             try:
-                # 获取当前聊天
-                current_chat = await event.get_chat()
-                current_chat_db = session.query(Chat).filter(
-                    Chat.telegram_chat_id == str(current_chat.id)
-                ).first()
-                
-                if not current_chat_db or not current_chat_db.current_add_id:
-                    await event.reply('请先使用 /switch 选择一个源聊天')
+                rule_info = await get_current_rule(session, event)
+                if not rule_info:
                     return
-                
-                # 查找对应的规则
-                source_chat = session.query(Chat).filter(
-                    Chat.telegram_chat_id == current_chat_db.current_add_id
-                ).first()
-                
-                rule = session.query(ForwardRule).filter(
-                    ForwardRule.source_chat_id == source_chat.id,
-                    ForwardRule.target_chat_id == current_chat_db.id
-                ).first()
-                
-                if not rule:
-                    await event.reply('转发规则不存在')
-                    return
+                    
+                rule, source_chat = rule_info
                 
                 # 获取所有关键字
                 keywords = session.query(Keyword).filter(
@@ -528,29 +519,11 @@ async def handle_command(client, event):
         elif command == 'list_replace':
             session = get_session()
             try:
-                # 获取当前聊天
-                current_chat = await event.get_chat()
-                current_chat_db = session.query(Chat).filter(
-                    Chat.telegram_chat_id == str(current_chat.id)
-                ).first()
-                
-                if not current_chat_db or not current_chat_db.current_add_id:
-                    await event.reply('请先使用 /switch 选择一个源聊天')
+                rule_info = await get_current_rule(session, event)
+                if not rule_info:
                     return
-                
-                # 查找对应的规则
-                source_chat = session.query(Chat).filter(
-                    Chat.telegram_chat_id == current_chat_db.current_add_id
-                ).first()
-                
-                rule = session.query(ForwardRule).filter(
-                    ForwardRule.source_chat_id == source_chat.id,
-                    ForwardRule.target_chat_id == current_chat_db.id
-                ).first()
-                
-                if not rule:
-                    await event.reply('转发规则不存在')
-                    return
+                    
+                rule, source_chat = rule_info
                 
                 # 获取所有替换规则
                 replace_rules = session.query(ReplaceRule).filter(
@@ -582,80 +555,59 @@ async def handle_command(client, event):
             
             session = get_session()
             try:
-                # 获取当前聊天和规则
-                current_chat = await event.get_chat()
-                current_chat_db = session.query(Chat).filter(
-                    Chat.telegram_chat_id == str(current_chat.id)
-                ).first()
-                
-                if not current_chat_db or not current_chat_db.current_add_id:
-                    await event.reply('请先使用 /switch 选择一个源聊天')
+                rule_info = await get_current_rule(session, event)
+                if not rule_info:
                     return
+                    
+                rule, source_chat = rule_info
                 
-                # 查找对应的规则
-                source_chat = session.query(Chat).filter(
-                    Chat.telegram_chat_id == current_chat_db.current_add_id
-                ).first()
-                
-                rule = session.query(ForwardRule).filter(
-                    ForwardRule.source_chat_id == source_chat.id,
-                    ForwardRule.target_chat_id == current_chat_db.id
-                ).first()
-                
-                if not rule:
-                    await event.reply('转发规则不存在')
-                    return
-                
-                # 获取所有项目并创建ID映射
+                # 根据命令类型选择要删除的对象
                 if command == 'remove_keyword':
                     items = session.query(Keyword).filter(
                         Keyword.rule_id == rule.id
-                    ).order_by(Keyword.id).all()
-                    
-                    item_type = "关键字"
-                    Model = Keyword
+                    ).all()
+                    item_type = '关键字'
                 else:  # remove_replace
                     items = session.query(ReplaceRule).filter(
                         ReplaceRule.rule_id == rule.id
-                    ).order_by(ReplaceRule.id).all()
-                    
-                    item_type = "替换规则"
-                    Model = ReplaceRule
+                    ).all()
+                    item_type = '替换规则'
                 
+                # 检查ID是否有效
                 if not items:
                     await event.reply(f'当前规则没有任何{item_type}')
                     return
                 
-                # 创建序号到ID的映射
-                index_to_id = {i + 1: item.id for i, item in enumerate(items)}
-                
-                # 检查要删除的序号是否有效
-                invalid_ids = [i for i in ids_to_remove if i not in index_to_id]
+                max_id = len(items)
+                invalid_ids = [id for id in ids_to_remove if id < 1 or id > max_id]
                 if invalid_ids:
-                    await event.reply(f'无效的序号: {", ".join(map(str, invalid_ids))}')
+                    await event.reply(f'无效的ID: {", ".join(map(str, invalid_ids))}')
                     return
                 
-                # 执行删除
-                actual_ids = [index_to_id[i] for i in ids_to_remove]
-                deleted_count = session.query(Model).filter(
-                    Model.id.in_(actual_ids)
-                ).delete(synchronize_session=False)
+                # 删除选中的项目
+                deleted_count = 0
+                for id_to_remove in ids_to_remove:
+                    if 1 <= id_to_remove <= max_id:
+                        item = items[id_to_remove - 1]
+                        session.delete(item)
+                        deleted_count += 1
                 
                 session.commit()
                 
-                # 重新获取列表并显示
-                items = session.query(Model).filter(
-                    Model.rule_id == rule.id
-                ).order_by(Model.id).all()
+                await event.reply(f'已删除 {deleted_count} 个{item_type}')
                 
-                # 构建格式化函数
+                # 重新获取列表并显示
                 if command == 'remove_keyword':
+                    items = session.query(Keyword).filter(
+                        Keyword.rule_id == rule.id
+                    ).all()
                     formatter = lambda i, kw: f'{i}. {kw.keyword}{" (正则)" if kw.is_regex else ""}'
-                else:
+                else:  # remove_replace
+                    items = session.query(ReplaceRule).filter(
+                        ReplaceRule.rule_id == rule.id
+                    ).all()
                     formatter = lambda i, rr: f'{i}. 匹配: {rr.pattern} -> {"删除" if not rr.content else f"替换为: {rr.content}"}'
                 
-                # 显示更新后的列表
-                await event.reply(f'已删除 {deleted_count} 个{item_type}')
                 if items:  # 如果还有剩余项目，显示更新后的列表
                     await show_list(
                         event,
@@ -727,6 +679,7 @@ async def handle_command(client, event):
 /add_regex <正则1> [正则2] ... - 添加正则表达式关键字到当前规则
 /add_all <关键字1> [关键字2] ... - 添加普通关键字到所有规则
 /add_regex_all <正则1> [正则2] ... - 添加正则表达式关键字到所有规则
+/export_keyword - 导出当前规则的关键字到文件
 例如：
   /add 新闻 体育    (转发包含"新闻"或"体育"的消息)
   /add_regex ^.*新闻.*$ ^.*体育.*$
@@ -735,6 +688,7 @@ async def handle_command(client, event):
 🔄 替换规则
 /replace <匹配模式> <替换内容> - 添加替换规则到当前规则
 /replace_all <匹配模式> <替换内容> - 添加替换规则到所有规则
+/export_replace - 导出当前规则的替换规则到文件
 例如：
   /replace 机密 ***    (将"机密"替换为"***")
   /replace_all 广告    (为所有规则添加删除广告的规则)
@@ -754,6 +708,91 @@ async def handle_command(client, event):
 """
             await event.reply(help_text)
 
+        elif command == 'export_keyword':
+            session = get_session()
+            try:
+                rule_info = await get_current_rule(session, event)
+                if not rule_info:
+                    return
+                    
+                rule, source_chat = rule_info
+                
+                # 获取所有关键字
+                keywords = session.query(Keyword).filter(
+                    Keyword.rule_id == rule.id
+                ).all()
+                
+                # 分离普通关键字和正则关键字
+                normal_keywords = [kw.keyword for kw in keywords if not kw.is_regex]
+                regex_keywords = [kw.keyword for kw in keywords if kw.is_regex]
+                
+                # 创建并写入文件
+                normal_file = os.path.join(TEMP_DIR, 'keywords.txt')
+                regex_file = os.path.join(TEMP_DIR, 'regex_keywords.txt')
+                
+                with open(normal_file, 'w', encoding='utf-8') as f:
+                    f.write('\n'.join(normal_keywords))
+                
+                with open(regex_file, 'w', encoding='utf-8') as f:
+                    f.write('\n'.join(regex_keywords))
+                
+                try:
+                    # 发送文件
+                    await client.send_file(
+                        event.chat_id,
+                        [normal_file, regex_file],
+                        caption=f'已导出关键字列表\n规则: 来自 {source_chat.name}'
+                    )
+                finally:
+                    # 删除临时文件
+                    os.remove(normal_file)
+                    os.remove(regex_file)
+                
+            except Exception as e:
+                logger.error(f'导出关键字时出错: {str(e)}')
+                await event.reply('导出关键字时出错，请检查日志')
+            finally:
+                session.close()
+
+        elif command == 'export_replace':
+            session = get_session()
+            try:
+                rule_info = await get_current_rule(session, event)
+                if not rule_info:
+                    return
+                    
+                rule, source_chat = rule_info
+                
+                # 获取所有替换规则
+                replace_rules = session.query(ReplaceRule).filter(
+                    ReplaceRule.rule_id == rule.id
+                ).all()
+                
+                # 创建并写入文件
+                replace_file = os.path.join(TEMP_DIR, 'replace_rules.txt')
+                
+                with open(replace_file, 'w', encoding='utf-8') as f:
+                    for rule in replace_rules:
+                        line = f"{rule.pattern}\t{rule.content if rule.content else ''}"
+                        f.write(line + '\n')
+                
+                try:
+                    # 发送文件
+                    await client.send_file(
+                        event.chat_id,
+                        replace_file,
+                        caption=f'已导出替换规则列表\n规则: 来自 {source_chat.name}'
+                    )
+                finally:
+                    # 删除临时文件
+                    os.remove(replace_file)
+                
+            except Exception as e:
+                logger.error(f'导出替换规则时出错: {str(e)}')
+                await event.reply('导出替换规则时出错，请检查日志')
+            finally:
+                session.close()
+
         elif command in ['add_all', 'add_regex_all']:
             if len(parts) < 2:
                 await event.reply(f'用法: /{command} <关键字1> [关键字2] [关键字3] ...')
@@ -762,23 +801,8 @@ async def handle_command(client, event):
             keywords = parts[1:]  # 获取所有关键字
             session = get_session()
             try:
-                # 获取当前聊天
-                current_chat = await event.get_chat()
-                current_chat_db = session.query(Chat).filter(
-                    Chat.telegram_chat_id == str(current_chat.id)
-                ).first()
-                
-                if not current_chat_db:
-                    await event.reply('当前聊天没有任何转发规则')
-                    return
-                
-                # 查找所有以当前聊天为目标的规则
-                rules = session.query(ForwardRule).filter(
-                    ForwardRule.target_chat_id == current_chat_db.id
-                ).all()
-                
+                rules = await get_all_rules(session, event)
                 if not rules:
-                    await event.reply('当前聊天没有任何转发规则')
                     return
                 
                 # 为每个规则添加关键字
@@ -806,7 +830,7 @@ async def handle_command(client, event):
                 keywords_text = '\n'.join(f'- {k}' for k in keywords)
                 result_text = f'已添加 {success_count} 个{keyword_type}\n'
                 if duplicate_count > 0:
-                    result_text += f'跳过 {duplicate_count} 个重复的{keyword_type}\n'
+                    result_text += f'跳过重复: {duplicate_count} 个'
                 result_text += f'关键字列表:\n{keywords_text}'
                 
                 await event.reply(result_text)
@@ -824,28 +848,12 @@ async def handle_command(client, event):
                 return
                 
             pattern = parts[1]
-            # 如果没有提供替换内容，默认替换为空字符串
             content = ' '.join(parts[2:]) if len(parts) > 2 else ''
             
             session = get_session()
             try:
-                # 获取当前聊天
-                current_chat = await event.get_chat()
-                current_chat_db = session.query(Chat).filter(
-                    Chat.telegram_chat_id == str(current_chat.id)
-                ).first()
-                
-                if not current_chat_db:
-                    await event.reply('当前聊天没有任何转发规则')
-                    return
-                
-                # 查找所有以当前聊天为目标的规则
-                rules = session.query(ForwardRule).filter(
-                    ForwardRule.target_chat_id == current_chat_db.id
-                ).all()
-                
+                rules = await get_all_rules(session, event)
                 if not rules:
-                    await event.reply('当前聊天没有任何转发规则')
                     return
                 
                 # 为每个规则添加替换规则
@@ -888,6 +896,109 @@ async def handle_command(client, event):
                 session.rollback()
                 logger.error(f'批量添加替换规则时出错: {str(e)}')
                 await event.reply('添加替换规则时出错，请检查日志')
+            finally:
+                session.close()
+
+        elif command in ['import_keyword', 'import_regex_keyword', 'import_replace']:
+            session = get_session()
+            try:
+                rule_info = await get_current_rule(session, event)
+                if not rule_info:
+                    return
+                    
+                rule, source_chat = rule_info
+                
+                # 检查是否有附带文件
+                if not event.message.file:
+                    if command == 'import_keyword':
+                        await event.reply('请在命令中附带包含关键字的文本文件（每行一个关键字）')
+                    elif command == 'import_regex_keyword':
+                        await event.reply('请在命令中附带包含正则表达式的文本文件（每行一个正则表达式）')
+                    else:  # import_replace
+                        await event.reply('请在命令中附带包含替换规则的文本文件（每行一个规则，使用制表符分隔匹配模式和替换内容）')
+                    return
+                
+                # 下载文件
+                file_path = os.path.join(TEMP_DIR, 'import_temp.txt')
+                await event.message.download_media(file_path)
+                
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        lines = [line.strip() for line in f.readlines() if line.strip()]
+                    
+                    success_count = 0
+                    duplicate_count = 0
+                    
+                    if command in ['import_keyword', 'import_regex_keyword']:
+                        # 导入关键字
+                        is_regex = (command == 'import_regex_keyword')
+                        for keyword in lines:
+                            try:
+                                new_keyword = Keyword(
+                                    rule_id=rule.id,
+                                    keyword=keyword,
+                                    is_regex=is_regex
+                                )
+                                session.add(new_keyword)
+                                session.flush()
+                                success_count += 1
+                            except IntegrityError:
+                                session.rollback()
+                                duplicate_count += 1
+                                continue
+                    else:
+                        # 导入替换规则
+                        for line in lines:
+                            try:
+                                parts = line.split('\t', 1)
+                                if len(parts) == 2:
+                                    pattern, content = parts
+                                else:
+                                    pattern = parts[0]
+                                    content = ''
+                                
+                                new_rule = ReplaceRule(
+                                    rule_id=rule.id,
+                                    pattern=pattern,
+                                    content=content
+                                )
+                                session.add(new_rule)
+                                session.flush()
+                                success_count += 1
+                            except IntegrityError:
+                                session.rollback()
+                                duplicate_count += 1
+                                continue
+                    
+                    # 如果是替换规则，确保启用替换模式
+                    if command == 'import_replace' and success_count > 0:
+                        rule.is_replace = True
+                    
+                    session.commit()
+                    
+                    # 构建回复消息
+                    rule_type = {
+                        'import_keyword': '关键字',
+                        'import_regex_keyword': '正则表达式',
+                        'import_replace': '替换规则'
+                    }[command]
+                    
+                    result_text = f'导入完成\n成功导入: {success_count} 个{rule_type}\n'
+                    if duplicate_count > 0:
+                        result_text += f'跳过重复: {duplicate_count} 个'
+                    
+                    await event.reply(result_text)
+                    
+                finally:
+                    # 清理临时文件
+                    try:
+                        os.remove(file_path)
+                    except:
+                        pass
+                    
+            except Exception as e:
+                logger.error(f'导入过程出错: {str(e)}')
+                await event.reply('导入过程出错，请检查日志')
             finally:
                 session.close()
 
