@@ -7,7 +7,7 @@ services:
     restart: unless-stopped
     volumes:
       # 持久化数据
-      - ./data:/app/data
+      - ./db:/app/db
       # 持久化配置
       - ./.env:/app/.env
       # 持久化会话文件
