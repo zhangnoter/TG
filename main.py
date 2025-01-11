@@ -19,14 +19,19 @@ api_hash = os.getenv('API_HASH')
 bot_token = os.getenv('BOT_TOKEN')
 phone_number = os.getenv('PHONE_NUMBER')
 
-# 创建客户端
-user_client = TelegramClient('./sessions/user', api_id, api_hash)
-bot_client = TelegramClient('./sessions/bot', api_id, api_hash)
-
+# 创建文件夹
+os.makedirs('./sessions', exist_ok=True)
+os.makedirs('./temp', exist_ok=True)
 # 清空./temp文件夹
 def clear_temp_dir():
     for file in os.listdir('./temp'):
         os.remove(os.path.join('./temp', file))
+
+# 创建客户端
+user_client = TelegramClient('./sessions/user', api_id, api_hash)
+bot_client = TelegramClient('./sessions/bot', api_id, api_hash)
+
+
 
 # 初始化数据库
 engine = init_db()
@@ -102,6 +107,14 @@ async def register_bot_commands(bot):
         BotCommand(
             command='clear_all',
             description='清空当前聊天的所有数据'
+        ),
+        BotCommand(
+            command='help',
+            description='查看帮助'
+        ),
+        BotCommand(
+            command='start',
+            description='开始使用'
         )
     ]
     
