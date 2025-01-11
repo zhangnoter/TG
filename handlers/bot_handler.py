@@ -7,6 +7,7 @@ import asyncio
 from enums.enums import ForwardMode, PreviewMode, MessageMode
 from sqlalchemy.exc import IntegrityError
 from telethon.tl.types import ChannelParticipantsAdmins
+from handlers.db_operations import add_keywords, get_keywords, delete_keywords, get_replace_rules, delete_replace_rules, add_replace_rules
 
 logger = logging.getLogger(__name__)
 
@@ -154,7 +155,7 @@ async def get_current_rule(session, event):
         if not rule:
             await event.reply('转发规则不存在')
             return None
-            
+        
         return rule, source_chat
     except Exception as e:
         logger.error(f'获取当前规则时出错: {str(e)}')
@@ -211,16 +212,16 @@ async def handle_command(client, event):
         if user_id != get_user_id():
             logger.info(f'非管理员的消息，已忽略')
             return
-    
+                
     logger.info(f'收到管理员命令: {event.message.text}')
     # 处理命令逻辑
     message = event.message
     if not message.text:
         return
-        
+            
     if not message.text.startswith('/'):
         return
-        
+                
     # 分割命令，处理可能带有机器人用户名的情况
     parts = message.text.split()
     command = parts[0].split('@')[0][1:]  # 移除开头的 '/' 并处理可能的 @username
@@ -270,26 +271,31 @@ async def handle_add_command(event, command, parts):
             
         rule, source_chat = rule_info
         
-        # 添加所有关键字
-        added_keywords = []
-        for keyword in keywords:
-            new_keyword = Keyword(
-                rule_id=rule.id,
-                keyword=keyword,
-                is_regex=(command == 'add_regex')
-            )
-            session.add(new_keyword)
-            added_keywords.append(keyword)
+        # 使用 db_operations 添加关键字
+        success_count, duplicate_count = await add_keywords(
+            session,
+            rule.id,
+            keywords,
+            is_regex=(command == 'add_regex')
+        )
         
         session.commit()
         
         # 构建回复消息
         keyword_type = "正则" if command == "add_regex" else "关键字"
-        keywords_text = '\n'.join(f'- {k}' for k in added_keywords)
-        await event.reply(
-            f'已添加{keyword_type}:\n{keywords_text}\n'
-            f'当前规则: 来自 {source_chat.name}'
-        )
+        keywords_text = '\n'.join(f'- {k}' for k in keywords)
+        result_text = f'已添加 {success_count} 个{keyword_type}'
+        if duplicate_count > 0:
+            result_text += f'\n跳过重复: {duplicate_count} 个'
+        result_text += f'\n关键字列表:\n{keywords_text}\n'
+        result_text += f'当前规则: 来自 {source_chat.name}'
+        
+        await event.reply(result_text)
+        
+    except Exception as e:
+        session.rollback()
+        logger.error(f'添加关键字时出错: {str(e)}')
+        await event.reply('添加关键字时出错，请检查日志')
     finally:
         session.close()
 
@@ -937,31 +943,34 @@ async def handle_replace_command(event, parts):
             
         rule, source_chat = rule_info
         
-        # 添加替换规则
-        new_replace_rule = ReplaceRule(
-            rule_id=rule.id,
-            pattern=pattern,
-            content=content  # 可能为空字符串
+        # 使用 add_replace_rules 添加替换规则
+        success_count, duplicate_count = await add_replace_rules(
+            session,
+            rule.id,
+            [(pattern, content)]  # 传入一个元组列表，每个元组包含 pattern 和 content
         )
-        session.add(new_replace_rule)
         
         # 确保启用替换模式
-        if not rule.is_replace:
+        if success_count > 0 and not rule.is_replace:
             rule.is_replace = True
-        
+            
         session.commit()
         
         # 检查是否是全文替换
         rule_type = "全文替换" if pattern == ".*" else "正则替换"
         action_type = "删除" if not content else "替换"
         
-        await event.reply(
-            f'已添加{rule_type}规则:\n'
-            f'匹配: {pattern}\n'
-            f'动作: {action_type}\n'
-            f'{"替换为: " + content if content else "删除匹配内容"}\n'
-            f'当前规则: 来自 {source_chat.name}'
-        )
+        # 构建回复消息
+        result_text = f'已添加{rule_type}规则:\n'
+        if success_count > 0:
+            result_text += f'匹配: {pattern}\n'
+            result_text += f'动作: {action_type}\n'
+            result_text += f'{"替换为: " + content if content else "删除匹配内容"}\n'
+        if duplicate_count > 0:
+            result_text += f'跳过重复规则: {duplicate_count} 个\n'
+        result_text += f'当前规则: 来自 {source_chat.name}'
+        
+        await event.reply(result_text)
         
     except Exception as e:
         session.rollback()
@@ -980,10 +989,8 @@ async def handle_list_keyword_command(event):
             
         rule, source_chat = rule_info
         
-        # 获取所有关键字
-        keywords = session.query(Keyword).filter(
-            Keyword.rule_id == rule.id
-        ).all()
+        # 使用 get_keywords 获取所有关键字
+        keywords = await get_keywords(session, rule.id)
         
         await show_list(
             event,
@@ -1006,10 +1013,8 @@ async def handle_list_replace_command(event):
             
         rule, source_chat = rule_info
         
-        # 获取所有替换规则
-        replace_rules = session.query(ReplaceRule).filter(
-            ReplaceRule.rule_id == rule.id
-        ).all()
+        # 使用 get_replace_rules 获取所有替换规则
+        replace_rules = await get_replace_rules(session, rule.id)
         
         await show_list(
             event,
@@ -1229,14 +1234,12 @@ async def handle_remove_command(event, command, parts):
         
         # 根据命令类型选择要删除的对象
         if command == 'remove_keyword':
-            items = session.query(Keyword).filter(
-                Keyword.rule_id == rule.id
-            ).all()
+            # 获取当前所有关键字
+            items = await get_keywords(session, rule.id)
             item_type = '关键字'
         else:  # remove_replace
-            items = session.query(ReplaceRule).filter(
-                ReplaceRule.rule_id == rule.id
-            ).all()
+            # 获取当前所有替换规则
+            items = await get_replace_rules(session, rule.id)
             item_type = '替换规则'
         
         # 检查ID是否有效
@@ -1251,34 +1254,30 @@ async def handle_remove_command(event, command, parts):
             return
         
         # 删除选中的项目
-        deleted_count = 0
-        for id_to_remove in ids_to_remove:
-            if 1 <= id_to_remove <= max_id:
-                item = items[id_to_remove - 1]
-                session.delete(item)
-                deleted_count += 1
+        if command == 'remove_keyword':
+            await delete_keywords(session, rule.id, ids_to_remove)
+            # 重新获取更新后的列表
+            remaining_items = await get_keywords(session, rule.id)
+        else:  # remove_replace
+            await delete_replace_rules(session, rule.id, ids_to_remove)
+            # 重新获取更新后的列表
+            remaining_items = await get_replace_rules(session, rule.id)
         
         session.commit()
         
-        await event.reply(f'已删除 {deleted_count} 个{item_type}')
+        await event.reply(f'已删除 {len(ids_to_remove)} 个{item_type}')
         
-        # 重新获取列表并显示
-        if command == 'remove_keyword':
-            items = session.query(Keyword).filter(
-                Keyword.rule_id == rule.id
-            ).all()
-            formatter = lambda i, kw: f'{i}. {kw.keyword}{" (正则)" if kw.is_regex else ""}'
-        else:  # remove_replace
-            items = session.query(ReplaceRule).filter(
-                ReplaceRule.rule_id == rule.id
-            ).all()
-            formatter = lambda i, rr: f'{i}. 匹配: {rr.pattern} -> {"删除" if not rr.content else f"替换为: {rr.content}"}'
-        
-        if items:  # 如果还有剩余项目，显示更新后的列表
+        # 显示更新后的列表
+        if remaining_items:
+            if command == 'remove_keyword':
+                formatter = lambda i, kw: f'{i}. {kw.keyword}{" (正则)" if kw.is_regex else ""}'
+            else:  # remove_replace
+                formatter = lambda i, rr: f'{i}. 匹配: {rr.pattern} -> {"删除" if not rr.content else f"替换为: {rr.content}"}'
+            
             await show_list(
                 event,
                 command.split('_')[1],  # 'keyword' 或 'replace'
-                items,
+                remaining_items,
                 formatter,
                 f'{item_type}列表\n规则: 来自 {source_chat.name}'
             )
@@ -1288,7 +1287,7 @@ async def handle_remove_command(event, command, parts):
         logger.error(f'删除{item_type}时出错: {str(e)}')
         await event.reply(f'删除{item_type}时出错，请检查日志')
     finally:
-        session.close() 
+        session.close()
 
 async def handle_clear_all_command(event):
     """处理 clear_all 命令"""
@@ -1529,38 +1528,38 @@ async def handle_replace_all_command(event, parts):
             return
         
         # 为每个规则添加替换规则
-        success_count = 0
-        duplicate_count = 0
+        total_success = 0
+        total_duplicate = 0
+        
         for rule in rules:
-            try:
-                new_replace_rule = ReplaceRule(
-                    rule_id=rule.id,
-                    pattern=pattern,
-                    content=content
-                )
-                session.add(new_replace_rule)
-                
-                # 确保启用替换模式
-                if not rule.is_replace:
-                    rule.is_replace = True
-                    
-                success_count += 1
-            except IntegrityError:
-                session.rollback()
-                duplicate_count += 1
-                continue
+            # 使用 add_replace_rules 添加替换规则
+            success_count, duplicate_count = await add_replace_rules(
+                session,
+                rule.id,
+                [(pattern, content)]  # 传入一个元组列表，每个元组包含 pattern 和 content
+            )
+            
+            # 累计成功和重复的数量
+            total_success += success_count
+            total_duplicate += duplicate_count
+            
+            # 确保启用替换模式
+            if success_count > 0 and not rule.is_replace:
+                rule.is_replace = True
         
         session.commit()
         
         # 构建回复消息
         action_type = "删除" if not content else "替换"
-        result_text = f'已为 {success_count} 个规则添加替换规则:\n'
-        if duplicate_count > 0:
-            result_text += f'跳过 {duplicate_count} 个重复的替换规则\n'
-        result_text += f'匹配模式: {pattern}\n'
-        result_text += f'动作: {action_type}\n'
-        if content:
-            result_text += f'替换为: {content}'
+        result_text = f'已为 {len(rules)} 个规则添加替换规则:\n'
+        if total_success > 0:
+            result_text += f'成功添加: {total_success} 个\n'
+            result_text += f'匹配模式: {pattern}\n'
+            result_text += f'动作: {action_type}\n'
+            if content:
+                result_text += f'替换为: {content}\n'
+        if total_duplicate > 0:
+            result_text += f'跳过重复规则: {total_duplicate} 个'
         
         await event.reply(result_text)
         
@@ -1599,53 +1598,35 @@ async def handle_import_command(event, command):
             with open(file_path, 'r', encoding='utf-8') as f:
                 lines = [line.strip() for line in f.readlines() if line.strip()]
             
-            success_count = 0
-            duplicate_count = 0
-            
             if command in ['import_keyword', 'import_regex_keyword']:
                 # 导入关键字
-                is_regex = (command == 'import_regex_keyword')
-                for keyword in lines:
-                    try:
-                        new_keyword = Keyword(
-                            rule_id=rule.id,
-                            keyword=keyword,
-                            is_regex=is_regex
-                        )
-                        session.add(new_keyword)
-                        session.flush()
-                        success_count += 1
-                    except IntegrityError:
-                        session.rollback()
-                        duplicate_count += 1
-                        continue
+                success_count, duplicate_count = await add_keywords(
+                    session,
+                    rule.id,
+                    lines,
+                    is_regex=(command == 'import_regex_keyword')
+                )
             else:
                 # 导入替换规则
+                replace_rules = []
                 for line in lines:
-                    try:
-                        parts = line.split('\t', 1)
-                        if len(parts) == 2:
-                            pattern, content = parts
-                        else:
-                            pattern = parts[0]
-                            content = ''
-                        
-                        new_rule = ReplaceRule(
-                            rule_id=rule.id,
-                            pattern=pattern,
-                            content=content
-                        )
-                        session.add(new_rule)
-                        session.flush()
-                        success_count += 1
-                    except IntegrityError:
-                        session.rollback()
-                        duplicate_count += 1
-                        continue
-            
-            # 如果是替换规则，确保启用替换模式
-            if command == 'import_replace' and success_count > 0:
-                rule.is_replace = True
+                    parts = line.split('\t', 1)
+                    if len(parts) == 2:
+                        pattern, content = parts
+                    else:
+                        pattern = parts[0]
+                        content = ''
+                    replace_rules.append((pattern, content))
+                
+                success_count, duplicate_count = await add_replace_rules(
+                    session,
+                    rule.id,
+                    replace_rules
+                )
+                
+                # 如果成功导入了替换规则，确保启用替换模式
+                if success_count > 0 and not rule.is_replace:
+                    rule.is_replace = True
             
             session.commit()
             
@@ -1670,6 +1651,7 @@ async def handle_import_command(event, command):
                 pass
                 
     except Exception as e:
+        session.rollback()
         logger.error(f'导入过程出错: {str(e)}')
         await event.reply('导入过程出错，请检查日志')
     finally:
