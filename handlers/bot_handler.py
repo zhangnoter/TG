@@ -1,5 +1,5 @@
 from telethon import events, Button
-from db.models import get_session, Chat, ForwardRule, Keyword, ReplaceRule
+from handlers.models import get_session, Chat, ForwardRule, Keyword, ReplaceRule
 import re
 import os
 import logging

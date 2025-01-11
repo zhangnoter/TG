@@ -1,4 +1,4 @@
-from db.models import ForwardMode
+from handlers.models import ForwardMode
 import re
 import logging
 import asyncio

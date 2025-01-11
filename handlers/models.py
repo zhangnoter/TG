@@ -52,6 +52,11 @@ class Keyword(Base):
 
     # 关系
     rule = relationship('ForwardRule', back_populates='keywords')
+    
+    # 添加唯一约束
+    __table_args__ = (
+        UniqueConstraint('rule_id', 'keyword','is_regex', name='unique_rule_keyword_is_regex'),
+    )
 
 class ReplaceRule(Base):
     __tablename__ = 'replace_rules'
@@ -63,6 +68,11 @@ class ReplaceRule(Base):
     
     # 关系
     rule = relationship('ForwardRule', back_populates='replace_rules')
+    
+    # 添加唯一约束
+    __table_args__ = (
+        UniqueConstraint('rule_id', 'pattern', 'content', name='unique_rule_pattern_content'),
+    )
 
 def init_db():
     """初始化数据库"""
