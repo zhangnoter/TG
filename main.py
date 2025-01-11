@@ -20,8 +20,8 @@ bot_token = os.getenv('BOT_TOKEN')
 phone_number = os.getenv('PHONE_NUMBER')
 
 # 创建客户端
-user_client = TelegramClient('./session/user', api_id, api_hash)
-bot_client = TelegramClient('./session/bot', api_id, api_hash)
+user_client = TelegramClient('./sessions/user', api_id, api_hash)
+bot_client = TelegramClient('./sessions/bot', api_id, api_hash)
 
 # 清空./temp文件夹
 def clear_temp_dir():
