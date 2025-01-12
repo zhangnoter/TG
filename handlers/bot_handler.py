@@ -707,27 +707,12 @@ async def handle_callback(event):
 使用方法：
 /settings - 显示所有转发规则的设置
 
-可配置项：
-• 转发模式 (白名单/黑名单)
-• 转发方式 (机器人/用户账号)
-• 替换模式 (开启/关闭)
-• 消息格式 (Markdown/HTML)
-• 预览模式 (开启/关闭/跟随原消息)
-• 原始链接 (附带/不附带)
 """
             elif rule_id == 'help':
                 help_text = """
 ❓ 完整帮助
 
 请使用 /help 命令查看所有可用命令的详细说明。
-
-包括：
-• 绑定转发
-• 关键字管理
-• 替换规则
-• 查看列表
-• 设置管理
-• 其他功能
 """
             
             # 添加返回按钮
@@ -1521,8 +1506,6 @@ async def handle_start_command(event):
 async def handle_help_command(event):
     """处理 help 命令"""
     help_text = """
-📋 命令使用说明：
-
 🔗 绑定转发
 /bind <目标聊天链接> - 绑定一个新的转发规则
 例如：/bind https://t.me/channel_name
@@ -1532,19 +1515,16 @@ async def handle_help_command(event):
 /add_regex <正则1> [正则2] ... - 添加正则表达式关键字到当前规则
 /add_all <关键字1> [关键字2] ... - 添加普通关键字到所有规则
 /add_regex_all <正则1> [正则2] ... - 添加正则表达式关键字到所有规则
+/import_keyword <同时发送文件> - 指令和文件一起发送，一行一个关键字
+/import_regex_keyword <同时发送文件> - 指令和文件一起发送，一行一个正则表达式
 /export_keyword - 导出当前规则的关键字到文件
-例如：
-  /add 新闻 体育    (转发包含"新闻"或"体育"的消息)
-  /add_regex ^.*新闻.*$ ^.*体育.*$
-  /add_all 新闻 体育    (为所有规则添加关键字)
 
 🔄 替换规则
 /replace <匹配模式> <替换内容> - 添加替换规则到当前规则
 /replace_all <匹配模式> <替换内容> - 添加替换规则到所有规则
+/import_replace <同时发送文件> - 指令和文件一起发送，一行一个替换规则
 /export_replace - 导出当前规则的替换规则到文件
-例如：
-  /replace 机密 ***    (将"机密"替换为"***")
-  /replace_all 广告    (为所有规则添加删除广告的规则)
+注意：不填替换内容则删除匹配内容
 
 🔀 切换规则
 /switch - 切换当前操作的转发规则
@@ -1555,6 +1535,11 @@ async def handle_help_command(event):
 
 ⚙️ 设置管理
 /settings - 显示选用的转发规则的设置
+
+🔗 UFB
+/ufb_bind <域名> - 绑定指定的域名
+/ufb_unbind - 解除域名绑定
+/ufb_item_change - 指定绑定域名下的项目
 
 🗑 清除数据
 /clear_all - 清空所有数据

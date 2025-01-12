@@ -31,10 +31,10 @@ Telegram 转发器是一个消息转发工具，可以将指定聊天中的消�
 API_ID=
 API_HASH=
 
-# 用户账号登录用的手机号 (格式如: +8613333333333)
+# Telethon 用户账号登录用的手机号 (格式如: +8613812345678)
 PHONE_NUMBER=
 
-# Bot Token
+# Bot Token (可选，如果需要使用机器人功能，从 @BotFather 获取)
 BOT_TOKEN=
 
 # 用户ID (从 @userinfobot 获取)
@@ -52,13 +52,11 @@ DATABASE_URL=sqlite:///./db/forward.db
 
 ######### 扩展内容 #########
 
-# 是否开启ufb (true/false)
+# 是否开启与通用论坛屏蔽插件服务端的同步服务 (true/false)
 UFB_ENABLED=false
-
-# ufb服务器地址
+# 服务端地址
 UFB_SERVER_URL=
-
-# ufb服务器用户API
+# 用户API
 UFB_TOKEN=
 
 ```
@@ -85,7 +83,6 @@ services:
 
 首次运行（需要验证）：
 
-第一次初始化容器，输入验证码
 ```bash
 docker-compose run -it telegram-forwarder
 ```
