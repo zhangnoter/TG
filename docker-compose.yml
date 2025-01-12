@@ -10,3 +10,4 @@ services:
       - ./.env:/app/.env
       - ./sessions:/app/sessions
       - ./temp:/app/temp
+      - ./ufb:/app/ufb
