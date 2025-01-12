@@ -98,6 +98,15 @@ RULE_SETTINGS = {
         },
         'toggle_action': 'toggle_original_link',
         'toggle_func': lambda current: not current
+    },
+    'is_ufb': {
+        'display_name': 'UFB同步',
+        'values': {
+            True: '开启',
+            False: '关闭'
+        },
+        'toggle_action': 'toggle_ufb',
+        'toggle_func': lambda current: not current
     }
 }
 
@@ -270,7 +279,10 @@ async def handle_command(client, event):
         'replace_all': lambda: handle_replace_all_command(event, parts),
         'import_keyword': lambda: handle_import_command(event, command),
         'import_regex_keyword': lambda: handle_import_command(event, command),
-        'import_replace': lambda: handle_import_command(event, command)
+        'import_replace': lambda: handle_import_command(event, command),
+        'ufb_bind': lambda: handle_ufb_bind_command(event, command),
+        'ufb_unbind': lambda: handle_ufb_unbind_command(event, command),
+        'ufb_item_change': lambda: handle_ufb_item_change_command(event, command)
     }
     
     # 执行对应的命令处理器
@@ -278,6 +290,102 @@ async def handle_command(client, event):
     if handler:
         await handler()
 
+async def handle_ufb_item_change_command(event, command):
+    """处理 ufb_item_change 命令"""
+    
+    session = get_session()
+    try:
+        rule_info = await get_current_rule(session, event)
+        if not rule_info:
+            return
+            
+        rule, source_chat = rule_info
+        
+        # 创建4个按钮
+        buttons = [
+            [
+                Button.inline("主页关键字", "ufb_item:main"),
+                Button.inline("内容页关键字", "ufb_item:content")
+            ],
+            [
+                Button.inline("主页用户名", "ufb_item:main_username"),
+                Button.inline("内容页用户名", "ufb_item:content_username")
+            ]
+        ]
+        
+        # 发送带按钮的消息
+        await event.reply("请选择要切换的UFB同步配置类型:", buttons=buttons)
+        
+    except Exception as e:
+        session.rollback()
+        logger.error(f'切换UFB配置类型时出错: {str(e)}')
+        await event.reply('切换UFB配置类型时出错，请检查日志')
+    finally:
+        session.close()
+
+async def handle_ufb_bind_command(event, command):
+    """处理 ufb_bind 命令"""
+    session = get_session()
+    try:
+        rule_info = await get_current_rule(session, event)
+        if not rule_info:
+            return
+            
+        rule, source_chat = rule_info
+        
+        # 从消息中获取域名和类型
+        parts = event.message.text.split()
+        if len(parts) < 2 or len(parts) > 3:
+            await event.reply('用法: /ufb_bind <域名> [类型]\n类型可选: main, content, main_username, content_username\n例如: /ufb_bind example.com main')
+            return
+            
+        domain = parts[1].strip().lower()
+        item = 'main'  # 默认值
+        
+        if len(parts) == 3:
+            item = parts[2].strip().lower()
+            if item not in ['main', 'content', 'main_username', 'content_username']:
+                await event.reply('类型必须是以下之一: main, content, main_username, content_username')
+                return
+        
+        # 更新规则的 ufb_domain 和 ufb_item
+        rule.ufb_domain = domain
+        rule.ufb_item = item
+        session.commit()
+        
+        await event.reply(f'已绑定 UFB 域名: {domain}\n类型: {item}\n规则: 来自 {source_chat.name}')
+        
+    except Exception as e:
+        session.rollback()
+        logger.error(f'绑定 UFB 域名时出错: {str(e)}')
+        await event.reply('绑定 UFB 域名时出错，请检查日志')
+    finally:
+        session.close()
+
+async def handle_ufb_unbind_command(event, command):
+    """处理 ufb_unbind 命令"""
+    session = get_session()
+    try:
+        rule_info = await get_current_rule(session, event)
+        if not rule_info:
+            return
+            
+        rule, source_chat = rule_info
+        
+        # 清除规则的 ufb_domain
+        old_domain = rule.ufb_domain
+        rule.ufb_domain = None
+        session.commit()
+        
+        await event.reply(f'已解绑 UFB 域名: {old_domain or "无"}\n规则: 来自 {source_chat.name}')
+        
+    except Exception as e:
+        session.rollback()
+        logger.error(f'解绑 UFB 域名时出错: {str(e)}')
+        await event.reply('解绑 UFB 域名时出错，请检查日志')
+    finally:
+        session.close()
+        
 async def handle_add_command(event, command, parts):
     """处理 add 和 add_regex 命令"""
     if len(parts) < 2:
@@ -326,8 +434,15 @@ async def handle_callback(event):
     """处理按钮回调"""
     try:
         data = event.data.decode()
-        action, rule_id = data.split(':')
-        rule_id = int(rule_id)
+        action, rule_id_str = data.split(':')
+        
+        # 对于 ufb_item action，直接使用字符串值
+        if action == 'ufb_item':
+            rule_id = rule_id_str
+        else:
+            # 其他 action 需要转换为整数
+            rule_id = int(rule_id_str)
+            
         user_id = event.sender_id
         
         # 获取消息对象
@@ -379,6 +494,48 @@ async def handle_callback(event):
                     Chat.telegram_chat_id == rule_id
                 ).first()
                 await event.answer(f'已切换到: {source_chat.name if source_chat else "未知聊天"}')
+            finally:
+                session.close()
+        elif action == 'ufb_item':
+            session = get_session()
+            try:
+                # 获取当前聊天
+                current_chat = await event.get_chat()
+                current_chat_db = session.query(Chat).filter(
+                    Chat.telegram_chat_id == str(current_chat.id)
+                ).first()
+                
+                if not current_chat_db or not current_chat_db.current_add_id:
+                    await event.answer('请先选择一个源聊天')
+                    return
+                
+                # 查找对应的规则
+                source_chat = session.query(Chat).filter(
+                    Chat.telegram_chat_id == current_chat_db.current_add_id
+                ).first()
+                
+                rule = session.query(ForwardRule).filter(
+                    ForwardRule.source_chat_id == source_chat.id,
+                    ForwardRule.target_chat_id == current_chat_db.id
+                ).first()
+                
+                if not rule:
+                    await event.answer('转发规则不存在')
+                    return
+                
+                # 更新 ufb_item
+                rule.ufb_item = rule_id  # rule_id 是类型字符串
+                session.commit()
+                
+                # 更新消息
+                message = await event.get_message()
+                await message.edit(f"已将UFB同步配置类型切换为: {rule_id}")
+                await event.answer(f'已切换到: {rule_id}')
+                
+            except Exception as e:
+                session.rollback()
+                logger.error(f'更新UFB配置类型时出错: {str(e)}')
+                await event.answer('更新配置时出错，请检查日志')
             finally:
                 session.close()
                 

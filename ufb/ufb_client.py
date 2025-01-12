@@ -40,9 +40,6 @@ class UFBClient:
         # 获取项目根目录（当前文件的上级目录）
         project_root = current_file_dir.parent
         
-        # logger.info(f"项目根目录: {project_root}")
-        # logger.info(f"当前工作目录: {Path.cwd()}")
-        
         self.server_url: Optional[str] = None
         self.token: Optional[str] = None
         
@@ -305,23 +302,3 @@ class UFBClient:
             await self.websocket.close()
             self.is_connected = False
             logger.info("WebSocket连接已关闭")
-
-# # 使用示例
-# async def main():
-#     # 创建客户端实例
-#     client = UFBClient()
-
-#     # 注册配置更新回调
-#     def on_config_updated(config):
-#         print("配置已更新:", config)
-
-#     client.on_config_update(on_config_updated)
-
-#     try:
-#         # 启动客户端，可以选择现在传入连接参数或稍后传入
-#         await client.start(server_url="wss://ufb.tuyu.me", token="250217ba-5757-433e-9f92-901add8e500a")
-#     except KeyboardInterrupt:
-#         await client.close()
-
-# if __name__ == "__main__":
-#     asyncio.run(main())

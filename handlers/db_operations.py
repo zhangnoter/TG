@@ -74,7 +74,7 @@ class DBOperations:
             rule = session.query(ForwardRule).filter(ForwardRule.id == rule_id).first()
             ufb_domain = rule.ufb_domain
             if rule.is_ufb and ufb_domain:
-                item = os.getenv('UFB_ITEM')
+                item = rule.ufb_item
                 # 获取规则的所有非正则表达关键字
                 normal_keywords = session.query(Keyword).filter(
                     Keyword.rule_id == rule_id,
@@ -99,18 +99,29 @@ class DBOperations:
                         # 根据item类型更新关键字
                         if item == 'main':
                             keywords_config = user_config.get('mainAndSubPageKeywords', {})
-                        else:  # content
+                        elif item == 'content':
                             keywords_config = user_config.get('contentPageKeywords', {})
+                        elif item == 'main_username':
+                            keywords_config = user_config.get('mainAndSubPageUserKeywords', {})
+                        elif item == 'content_username':
+                            keywords_config = user_config.get('contentPageUserKeywords', {})
 
                         # 更新关键字列表
                         keywords_config['keywords'] = [k.keyword for k in normal_keywords]
                         keywords_config['regexPatterns'] = [k.keyword for k in regex_keywords]
 
                         # 保存回对应的位置
-                        if item == 'main':
+                        if item == 'main':  
                             user_config['mainAndSubPageKeywords'] = keywords_config
-                        else:
+                        elif item == 'content':
                             user_config['contentPageKeywords'] = keywords_config
+                        elif item == 'main_username':
+                            user_config['mainAndSubPageUserKeywords'] = keywords_config
+                        elif item == 'content_username':
+                            user_config['contentPageUserKeywords'] = keywords_config
+                        else:
+                            logger.error(f"未设置UFB_ITEM环境变量")
+                            return
                         break
                 
                 # 更新时间戳
@@ -140,7 +151,7 @@ class DBOperations:
         Args:
             config: 收到的配置数据
         """
-        
+        logger.info(f"从JSON同步关键字到数据库: {config}")
         session = get_session()
         try:
             # 获取所有启用了UFB的规则
@@ -152,15 +163,17 @@ class DBOperations:
             if not ufb_rules:
                 logger.info("没有找到启用UFB的规则")
                 return
-                
-            # 获取item类型
-            item = os.getenv('UFB_ITEM')
-            if not item:
-                logger.error("未设置UFB_ITEM环境变量")
-                return
-                
+            logger.info(f"ufb_rules: {ufb_rules}")
+            
             # 遍历所有启用UFB的规则
             for rule in ufb_rules:
+                # 获取item类型
+                item = rule.ufb_item
+                logger.info(f"item: {item}")
+                if not item:
+                    logger.error("未设置UFB_ITEM环境变量")
+                    continue  # 跳过没有设置 item 的规则
+                
                 # 在收到的配置中查找对应domain的配置
                 for user_config in config.get('userConfig', []):
                     if user_config.get('domain') == rule.ufb_domain:
@@ -169,8 +182,15 @@ class DBOperations:
                         # 根据item类型获取关键字配置
                         if item == 'main':
                             keywords_config = user_config.get('mainAndSubPageKeywords', {})
-                        else:  # content
+                        elif item == 'content':
                             keywords_config = user_config.get('contentPageKeywords', {})
+                        elif item == 'main_username':
+                            keywords_config = user_config.get('mainAndSubPageUserKeywords', {})
+                        elif item == 'content_username':
+                            keywords_config = user_config.get('contentPageUserKeywords', {})
+                        else:
+                            logger.error(f"未设置UFB_ITEM环境变量")
+                            continue
                         
                         # 清空现有关键字
                         session.query(Keyword).filter(
@@ -199,7 +219,7 @@ class DBOperations:
                         logger.info(f"已从JSON同步关键字到规则 {rule.id} (domain: {rule.ufb_domain})")
                         break  # 找到匹配的domain后跳出内层循环
         finally:
-            session.close() 
+            session.close()
 
     async def add_keywords(self, session, rule_id, keywords, is_regex=False):
         """添加关键字到规则

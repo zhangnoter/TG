@@ -164,6 +164,18 @@ async def register_bot_commands(bot):
         BotCommand(
             command='import_replace',
             description='导入替换规则'
+        ),
+        BotCommand(
+            command='ufb_bind',
+            description='绑定ufb域名'
+        ),
+        BotCommand(
+            command='ufb_unbind',
+            description='解绑ufb域名'
+        ),
+        BotCommand(
+            command='ufb_item_change',
+            description='切换ufb同步配置类型'
         )
     ]
     

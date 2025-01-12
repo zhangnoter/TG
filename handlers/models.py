@@ -33,6 +33,7 @@ class ForwardRule(Base):
     is_original_link = Column(Boolean, default=False)
     is_ufb = Column(Boolean, default=False)
     ufb_domain = Column(String, nullable=True)
+    ufb_item = Column(String, nullable=True,default='main')
     # 添加唯一约束
     __table_args__ = (
         UniqueConstraint('source_chat_id', 'target_chat_id', name='unique_source_target'),
