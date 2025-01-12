@@ -1,6 +1,6 @@
 services:
   telegram-forwarder:
-    build: .
+    image: heavrnl/telegramforwarder:latest
     container_name: telegram-forwarder
     restart: unless-stopped
     volumes:
@@ -9,3 +9,5 @@ services:
       - ./sessions:/app/sessions
       - ./temp:/app/temp
       - ./ufb/config:/app/ufb/config
+    stdin_open: true
+    tty: true
