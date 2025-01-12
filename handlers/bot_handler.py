@@ -1125,10 +1125,12 @@ async def handle_replace_command(event, parts):
         
         # 使用 add_replace_rules 添加替换规则
         db_ops = await get_db_ops()
+        # 分别传递 patterns 和 contents 参数
         success_count, duplicate_count = await db_ops.add_replace_rules(
             session,
             rule.id,
-            [(pattern, content)]  # 传入一个元组列表，每个元组包含 pattern 和 content
+            [pattern],  # patterns 参数
+            [content]   # contents 参数
         )
         
         # 确保启用替换模式

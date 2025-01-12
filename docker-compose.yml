@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   telegram-forwarder:
     build: .
@@ -10,4 +8,4 @@ services:
       - ./.env:/app/.env
       - ./sessions:/app/sessions
       - ./temp:/app/temp
-      - ./ufb:/app/ufb
+      - ./ufb/config:/app/ufb/config
