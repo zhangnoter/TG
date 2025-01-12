@@ -7,6 +7,8 @@ from message_listener import setup_listeners
 import os
 import asyncio
 import logging
+from ufb.ufb_client import UFBClient
+from handlers.db_operations import DBOperations
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +20,16 @@ api_id = os.getenv('API_ID')
 api_hash = os.getenv('API_HASH')
 bot_token = os.getenv('BOT_TOKEN')
 phone_number = os.getenv('PHONE_NUMBER')
+
+# 创建 DBOperations 实例
+db_ops = None
+
+async def init_db_ops():
+    """初始化 DBOperations 实例"""
+    global db_ops
+    if db_ops is None:
+        db_ops = await DBOperations.create()
+    return db_ops
 
 # 创建文件夹
 os.makedirs('./sessions', exist_ok=True)
@@ -31,35 +43,40 @@ def clear_temp_dir():
 user_client = TelegramClient('./sessions/user', api_id, api_hash)
 bot_client = TelegramClient('./sessions/bot', api_id, api_hash)
 
-
-
 # 初始化数据库
 engine = init_db()
-
-
 
 # 设置消息监听器
 setup_listeners(user_client, bot_client)
 
 async def start_clients():
-    # 启动用户客户端
-    await user_client.start(phone=phone_number)
-    me_user = await user_client.get_me()
-    print(f'用户客户端已启动: {me_user.first_name} (@{me_user.username})')
+    # 初始化 DBOperations
+    global db_ops
+    db_ops = await DBOperations.create()
     
-    # 启动机器人客户端
-    await bot_client.start(bot_token=bot_token)
-    me_bot = await bot_client.get_me()
-    print(f'机器人客户端已启动: {me_bot.first_name} (@{me_bot.username})')
-    
-    # 注册命令
-    await register_bot_commands(bot_client)
-    
-    # 等待两个客户端都断开连接
-    await asyncio.gather(
-        user_client.run_until_disconnected(),
-        bot_client.run_until_disconnected()
-    )
+    try:
+        # 启动用户客户端
+        await user_client.start(phone=phone_number)
+        me_user = await user_client.get_me()
+        print(f'用户客户端已启动: {me_user.first_name} (@{me_user.username})')
+        
+        # 启动机器人客户端
+        await bot_client.start(bot_token=bot_token)
+        me_bot = await bot_client.get_me()
+        print(f'机器人客户端已启动: {me_bot.first_name} (@{me_bot.username})')
+        
+        # 注册命令
+        await register_bot_commands(bot_client)
+        
+        # 等待两个客户端都断开连接
+        await asyncio.gather(
+            user_client.run_until_disconnected(),
+            bot_client.run_until_disconnected()
+        )
+    finally:
+        # 关闭 DBOperations
+        if db_ops and hasattr(db_ops, 'close'):
+            await db_ops.close()
 
 async def register_bot_commands(bot):
     """注册机器人命令"""

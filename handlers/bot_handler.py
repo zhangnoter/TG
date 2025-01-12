@@ -4,10 +4,11 @@ import re
 import os
 import logging
 import asyncio
+import importlib.util
+import sys
 from enums.enums import ForwardMode, PreviewMode, MessageMode
 from sqlalchemy.exc import IntegrityError
 from telethon.tl.types import ChannelParticipantsAdmins
-from handlers.db_operations import add_keywords, get_keywords, delete_keywords, get_replace_rules, delete_replace_rules, add_replace_rules
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +16,27 @@ logger = logging.getLogger(__name__)
 TEMP_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'temp')
 # 确保 temp 目录存在
 os.makedirs(TEMP_DIR, exist_ok=True)
+
+def get_main_module():
+    """获取 main 模块"""
+    try:
+        return sys.modules['__main__']
+    except KeyError:
+        # 如果找不到 main 模块，尝试手动导入
+        spec = importlib.util.spec_from_file_location(
+            "main",
+            os.path.join(os.path.dirname(os.path.dirname(__file__)), "main.py")
+        )
+        main = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(main)
+        return main
+
+async def get_db_ops():
+    """获取 main.py 中的 db_ops 实例"""
+    main = get_main_module()
+    if main.db_ops is None:
+        main.db_ops = await main.init_db_ops()
+    return main.db_ops
 
 # 规则配置字段定义
 RULE_SETTINGS = {
@@ -272,7 +294,8 @@ async def handle_add_command(event, command, parts):
         rule, source_chat = rule_info
         
         # 使用 db_operations 添加关键字
-        success_count, duplicate_count = await add_keywords(
+        db_ops = await get_db_ops()
+        success_count, duplicate_count = await db_ops.add_keywords(
             session,
             rule.id,
             keywords,
@@ -944,7 +967,8 @@ async def handle_replace_command(event, parts):
         rule, source_chat = rule_info
         
         # 使用 add_replace_rules 添加替换规则
-        success_count, duplicate_count = await add_replace_rules(
+        db_ops = await get_db_ops()
+        success_count, duplicate_count = await db_ops.add_replace_rules(
             session,
             rule.id,
             [(pattern, content)]  # 传入一个元组列表，每个元组包含 pattern 和 content
@@ -990,7 +1014,8 @@ async def handle_list_keyword_command(event):
         rule, source_chat = rule_info
         
         # 使用 get_keywords 获取所有关键字
-        keywords = await get_keywords(session, rule.id)
+        db_ops = await get_db_ops()
+        keywords = await db_ops.get_keywords(session, rule.id)
         
         await show_list(
             event,
@@ -1014,7 +1039,8 @@ async def handle_list_replace_command(event):
         rule, source_chat = rule_info
         
         # 使用 get_replace_rules 获取所有替换规则
-        replace_rules = await get_replace_rules(session, rule.id)
+        db_ops = await get_db_ops()
+        replace_rules = await db_ops.get_replace_rules(session, rule.id)
         
         await show_list(
             event,
@@ -1232,14 +1258,15 @@ async def handle_remove_command(event, command, parts):
             
         rule, source_chat = rule_info
         
+        db_ops = await get_db_ops()
         # 根据命令类型选择要删除的对象
         if command == 'remove_keyword':
             # 获取当前所有关键字
-            items = await get_keywords(session, rule.id)
+            items = await db_ops.get_keywords(session, rule.id)
             item_type = '关键字'
         else:  # remove_replace
             # 获取当前所有替换规则
-            items = await get_replace_rules(session, rule.id)
+            items = await db_ops.get_replace_rules(session, rule.id)
             item_type = '替换规则'
         
         # 检查ID是否有效
@@ -1255,13 +1282,13 @@ async def handle_remove_command(event, command, parts):
         
         # 删除选中的项目
         if command == 'remove_keyword':
-            await delete_keywords(session, rule.id, ids_to_remove)
+            await db_ops.delete_keywords(session, rule.id, ids_to_remove)
             # 重新获取更新后的列表
-            remaining_items = await get_keywords(session, rule.id)
+            remaining_items = await db_ops.get_keywords(session, rule.id)
         else:  # remove_replace
-            await delete_replace_rules(session, rule.id, ids_to_remove)
+            await db_ops.delete_replace_rules(session, rule.id, ids_to_remove)
             # 重新获取更新后的列表
-            remaining_items = await get_replace_rules(session, rule.id)
+            remaining_items = await db_ops.get_replace_rules(session, rule.id)
         
         session.commit()
         
@@ -1386,9 +1413,8 @@ async def handle_export_keyword_command(event, client):
         rule, source_chat = rule_info
         
         # 获取所有关键字
-        keywords = session.query(Keyword).filter(
-            Keyword.rule_id == rule.id
-        ).all()
+        db_ops = await get_db_ops()
+        keywords = await db_ops.get_keywords(session, rule.id)
         
         # 分离普通关键字和正则关键字
         normal_keywords = [kw.keyword for kw in keywords if not kw.is_regex]
@@ -1433,9 +1459,8 @@ async def handle_export_replace_command(event, client):
         rule, source_chat = rule_info
         
         # 获取所有替换规则
-        replace_rules = session.query(ReplaceRule).filter(
-            ReplaceRule.rule_id == rule.id
-        ).all()
+        db_ops = await get_db_ops()
+        replace_rules = await db_ops.get_replace_rules(session, rule.id)
         
         # 创建并写入文件
         replace_file = os.path.join(TEMP_DIR, 'replace_rules.txt')
@@ -1475,23 +1500,20 @@ async def handle_add_all_command(event, command, parts):
         if not rules:
             return
         
+        db_ops = await get_db_ops()
         # 为每个规则添加关键字
         success_count = 0
         duplicate_count = 0
         for rule in rules:
-            for keyword in keywords:
-                try:
-                    new_keyword = Keyword(
-                        rule_id=rule.id,
-                        keyword=keyword,
-                        is_regex=(command == 'add_regex_all')
-                    )
-                    session.add(new_keyword)
-                    success_count += 1
-                except IntegrityError:
-                    session.rollback()
-                    duplicate_count += 1
-                    continue
+            # 使用 add_keywords 添加关键字
+            s_count, d_count = await db_ops.add_keywords(
+                session,
+                rule.id,
+                keywords,
+                is_regex=(command == 'add_regex_all')
+            )
+            success_count += s_count
+            duplicate_count += d_count
         
         session.commit()
         
@@ -1527,13 +1549,14 @@ async def handle_replace_all_command(event, parts):
         if not rules:
             return
         
+        db_ops = await get_db_ops()
         # 为每个规则添加替换规则
         total_success = 0
         total_duplicate = 0
         
         for rule in rules:
             # 使用 add_replace_rules 添加替换规则
-            success_count, duplicate_count = await add_replace_rules(
+            success_count, duplicate_count = await db_ops.add_replace_rules(
                 session,
                 rule.id,
                 [(pattern, content)]  # 传入一个元组列表，每个元组包含 pattern 和 content
@@ -1600,7 +1623,8 @@ async def handle_import_command(event, command):
             
             if command in ['import_keyword', 'import_regex_keyword']:
                 # 导入关键字
-                success_count, duplicate_count = await add_keywords(
+                db_ops = await get_db_ops()
+                success_count, duplicate_count = await db_ops.add_keywords(
                     session,
                     rule.id,
                     lines,
@@ -1618,7 +1642,8 @@ async def handle_import_command(event, command):
                         content = ''
                     replace_rules.append((pattern, content))
                 
-                success_count, duplicate_count = await add_replace_rules(
+                db_ops = await get_db_ops()
+                success_count, duplicate_count = await db_ops.add_replace_rules(
                     session,
                     rule.id,
                     replace_rules
