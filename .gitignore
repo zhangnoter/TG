@@ -18,3 +18,7 @@ ENV/
 *.session
 *.session-journal 
 /.idea
+/example
+/config
+/ufb/.idea
+ufb/config/config.json
