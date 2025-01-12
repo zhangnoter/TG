@@ -801,8 +801,8 @@ async def process_forward_rule(client, event, chat_id, rule):
                 except re.error:
                     logger.error(f'正则表达式错误: {keyword.keyword}')
             else:
-                # 普通关键字匹配（包含即可）
-                if keyword.keyword in message_text:
+                # 普通关键字匹配（包含即可，不区分大小写）
+                if keyword.keyword.lower() in message_text.lower():
                     should_forward = True
                     logger.info('关键字匹配成功')
                     break
@@ -821,8 +821,8 @@ async def process_forward_rule(client, event, chat_id, rule):
                 except re.error:
                     logger.error(f'正则表达式错误: {keyword.keyword}')
             else:
-                # 普通关键字匹配（包含即可）
-                if keyword.keyword in message_text:
+                # 普通关键字匹配（包含即可，不区分大小写）
+                if keyword.keyword.lower() in message_text.lower():
                     should_forward = False
                     logger.info('关键字匹配成功，不转发')
                     break
