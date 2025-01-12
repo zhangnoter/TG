@@ -98,7 +98,7 @@ docker-compose up -d
 ## 使用说明
 ### 使用实例
 
-假设你想订阅频道 "TG 新闻" (https://t.me/tgnews)和 "TG 阅读" (https://t.me/tgread)，但想过滤掉一些不感兴趣的内容：
+假设你想订阅频道 "TG 新闻" (https://t.me/tgnews) 和 "TG 阅读" (https://t.me/tgread)，但想过滤掉一些不感兴趣的内容：
 
 1. 创建一个 Telegram 群组/频道（例如："My TG Filter"）
 2. 将机器人添加到群组/频道，并设置为管理员
@@ -134,3 +134,46 @@ docker-compose up -d
 #### 与通用论坛屏蔽插件联动
 
 确保.env文件中已配置相关参数，在已经绑定好的聊天窗口中使用`/ufb_bind <论坛域名>`，即可实现三端联动屏蔽，使用`/ufb_item_change`切换要同步当前域名的主页关键字/主页用户名/内容页关键字/内容页用户名
+
+### 完整指令
+
+```bash
+🔗 绑定转发
+/bind <目标聊天链接> - 绑定一个新的转发规则
+例如：/bind https://t.me/channel_name
+
+📝 关键字管理
+/add <关键字1> [关键字2] ... - 添加普通关键字到当前规则
+/add_regex <正则1> [正则2] ... - 添加正则表达式关键字到当前规则
+/add_all <关键字1> [关键字2] ... - 添加普通关键字到所有规则
+/add_regex_all <正则1> [正则2] ... - 添加正则表达式关键字到所有规则
+/import_keyword <同时发送文件> - 指令和文件一起发送，一行一个关键字
+/import_regex_keyword <同时发送文件> - 指令和文件一起发送，一行一个正则表达式
+/export_keyword - 导出当前规则的关键字到文件
+
+🔄 替换规则
+/replace <匹配模式> <替换内容> - 添加替换规则到当前规则
+/replace_all <匹配模式> <替换内容> - 添加替换规则到所有规则
+/import_replace <同时发送文件> - 指令和文件一起发送，一行一个替换规则
+/export_replace - 导出当前规则的替换规则到文件
+注意：不填替换内容则删除匹配内容
+
+🔀 切换规则
+/switch - 切换当前操作的转发规则
+
+📊 查看列表
+/list_keyword - 查看当前规则的关键字列表
+/list_replace - 查看当前规则的替换规则列表
+
+⚙️ 设置管理
+/settings - 显示选用的转发规则的设置
+
+🔗 UFB
+/ufb_bind <域名> - 绑定指定的域名
+/ufb_unbind - 解除域名绑定
+/ufb_item_change - 指定绑定域名下的项目
+
+🗑 清除数据
+/clear_all - 清空所有数据
+```
+
