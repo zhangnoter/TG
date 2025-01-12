@@ -781,7 +781,7 @@ async def process_forward_rule(client, event, chat_id, rule):
                 try:
                     if re.search(keyword.keyword, message_text):
                         should_forward = True
-                        logger.info('正则匹配成功')
+                        logger.info(f'正则匹配成功: {keyword.keyword}')
                         break
                 except re.error:
                     logger.error(f'正则表达式错误: {keyword.keyword}')
@@ -789,7 +789,7 @@ async def process_forward_rule(client, event, chat_id, rule):
                 # 普通关键字匹配（包含即可，不区分大小写）
                 if keyword.keyword.lower() in message_text.lower():
                     should_forward = True
-                    logger.info('关键字匹配成功')
+                    logger.info(f'关键字匹配成功: {keyword.keyword}')
                     break
     else:
         # 黑名单模式：不能匹配任何关键字
@@ -801,7 +801,7 @@ async def process_forward_rule(client, event, chat_id, rule):
                 try:
                     if re.search(keyword.keyword, message_text):
                         should_forward = False
-                        logger.info('正则匹配成功，不转发')
+                        logger.info(f'正则匹配成功，不转发: {keyword.keyword}')
                         break
                 except re.error:
                     logger.error(f'正则表达式错误: {keyword.keyword}')
@@ -809,7 +809,7 @@ async def process_forward_rule(client, event, chat_id, rule):
                 # 普通关键字匹配（包含即可，不区分大小写）
                 if keyword.keyword.lower() in message_text.lower():
                     should_forward = False
-                    logger.info('关键字匹配成功，不转发')
+                    logger.info(f'关键字匹配成功，不转发: {keyword.keyword}')
                     break
     
     logger.info(f'最终决定: {"转发" if should_forward else "不转发"}')
