@@ -98,7 +98,7 @@ docker-compose up -d
 ## 使用说明
 ### 使用实例
 
-假设你想订阅频道 "TG 新闻" (https://t.me/tgnews) 和 "TG 阅读" (https://t.me/tgread)，但想过滤掉一些不感兴趣的内容：
+假设你想订阅频道 "TG 新闻" (https://t.me/tgnews) 和 "TG 阅读" (https://t.me/tgread) ，但想过滤掉一些不感兴趣的内容：
 
 1. 创建一个 Telegram 群组/频道（例如："My TG Filter"）
 2. 将机器人添加到群组/频道，并设置为管理员
