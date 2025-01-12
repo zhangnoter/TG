@@ -13,18 +13,20 @@
 </div>
 
 ## 简介
-Telegram 转发器主要作用是信息流过滤器，可以把任意指定聊天中的消息转发到另一个聊天。主要功能有：
+Telegram 转发器是一个消息转发工具，可以将指定聊天中的消息转发到其他聊天。
 
-- 支持白名单和黑名单模式
-- 支持正则表达式匹配
-- 支持替换关键字
-- 支持消息发送时设置各自参数
-- 支持与[通用论坛屏蔽插件](https://github.com/heavrnl/universalforumblock)联动同步，实现三端屏蔽
+- 🔄 **多源转发**：支持从多个来源转发到指定目标
+- 🔍 **关键词过滤**：支持白名单和黑名单模式
+- 📝 **消息格式**：支持 Markdown 和 HTML 格式
+- 📋 **正则替换**：支持使用正则表达式替换消息内容
+- 🔗 **联动同步**：支持与[通用论坛屏蔽插件](https://github.com/heavrnl/universalforumblock)联动同步，实现三端屏蔽
 
 ## 快速开始
 
+### 1. 配置环境
+
 新建.env文件，填写参数
-```
+```ini
 # Telegram API 配置 (从 https://my.telegram.org/apps 获取)
 API_ID=
 API_HASH=
@@ -63,7 +65,7 @@ UFB_TOKEN=
 
 新建docker-compose.yml文件，内容如下：
 
-```
+```yaml
 services:
   telegram-forwarder:
     image: heavrnl/telegramforwarder:latest
@@ -75,6 +77,25 @@ services:
       - ./sessions:/app/sessions
       - ./temp:/app/temp
       - ./ufb/config:/app/ufb/config
-
+    stdin_open: true
+    tty: true
 ```
 
+### 2. 启动服务
+
+首次运行（需要验证）：
+
+第一次初始化容器，输入验证码
+```bash
+docker-compose run -it telegram-forwarder
+```
+CTRL+C 退出容器
+
+修改 docker-compose.yml 文件，修改 `stdin_open: false` 和 `tty: false`
+
+后台运行：
+```bash
+docker-compose up -d
+```
+
+## 使用说明
