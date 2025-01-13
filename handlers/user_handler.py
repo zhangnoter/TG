@@ -53,10 +53,11 @@ async def process_forward_rule(client, event, chat_id, rule):
         target_chat_id = int(target_chat.telegram_chat_id)
         
         try:
+            # 直接使用event.message.chat_id作为源聊天
             await client.forward_messages(
                 target_chat_id,
                 messages=event.message,
-                from_peer=chat_id
+                from_peer=event.message.chat_id
             )
             logger.info(f'[用户] 消息已转发到: {target_chat.name} ({target_chat_id})')
         except Exception as e:
