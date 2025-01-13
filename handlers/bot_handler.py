@@ -691,10 +691,17 @@ async def handle_callback(event):
 🔗 绑定新规则
 
 使用方法：
-/bind <目标聊天链接>
+/bind <目标聊天链接或名称>
 
 例如：
 /bind https://t.me/channel_name
+/bind 频道名称
+
+注意事项：
+1. 可以使用完整链接或群组/频道名称
+2. 使用名称时，会匹配第一个包含该名称的群组/频道
+3. 机器人必须是目标聊天的管理员
+4. 每个聊天可以设置多个转发规则
 """
             elif rule_id == 'settings':
                 help_text = """
@@ -1291,10 +1298,10 @@ async def handle_settings_command(event):
 async def handle_bind_command(event, client, parts):
     """处理 bind 命令"""
     if len(parts) != 2:
-        await event.reply('用法: /bind <目标聊天链接>\n例如: /bind https://t.me/channel_name')
+        await event.reply('用法: /bind <目标聊天链接或名称>\n例如:\n/bind https://t.me/channel_name\n/bind 频道名称')
         return
         
-    target_link = parts[1]
+    target = parts[1]
     source_chat = await event.get_chat()
     
     try:
@@ -1304,9 +1311,24 @@ async def handle_bind_command(event, client, parts):
         
         # 使用用户客户端获取目标聊天的实体信息
         try:
-            target_chat = await user_client.get_entity(target_link)
+            if target.startswith(('https://', 't.me/')):
+                # 如果是链接，直接获取实体
+                target_chat = await user_client.get_entity(target)
+            else:
+                # 如果是名称，获取对话列表并查找匹配的第一个
+                async for dialog in user_client.iter_dialogs():
+                    if dialog.name and target.lower() in dialog.name.lower():
+                        target_chat = dialog.entity
+                        break
+                else:
+                    await event.reply('未找到匹配的群组/频道，请确保名称正确且账号已加入该群组/频道')
+                    return
         except ValueError:
-            await event.reply('无法获取目标聊天信息，请确保链接正确且账号已加入该群组/频道')
+            await event.reply('无法获取目标聊天信息，请确保链接/名称正确且账号已加入该群组/频道')
+            return
+        except Exception as e:
+            logger.error(f'获取目标聊天信息时出错: {str(e)}')
+            await event.reply('获取目标聊天信息时出错，请检查日志')
             return
         
         # 保存到数据库
@@ -1499,9 +1521,18 @@ async def handle_start_command(event):
 async def handle_help_command(event):
     """处理 help 命令"""
     help_text = """
-🔗 绑定转发
-/bind <目标聊天链接> - 绑定一个新的转发规则
-例如：/bind https://t.me/channel_name
+🔗 绑定转发 
+/bind <目标聊天链接或名称>
+
+例如：
+/bind https://t.me/channel_name
+/bind 频道名称
+
+注意事项：
+1. 可以使用完整链接或群组/频道名称
+2. 使用名称时，会匹配第一个包含该名称的群组/频道
+3. 机器人必须是目标聊天的管理员
+4. 每个聊天可以设置多个转发规则
 
 📝 关键字管理
 /add <关键字1> [关键字2] ... - 添加普通关键字到当前规则
