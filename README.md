@@ -141,7 +141,6 @@ docker-compose up -d
 ```bash
 绑定转发
 /bind <目标聊天链接> - 绑定一个新的转发规则
-例如：/bind https://t.me/channel_name
 
 关键字管理
 /add <关键字1> [关键字2] ... - 添加普通关键字到当前规则
