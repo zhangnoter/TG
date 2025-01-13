@@ -23,9 +23,22 @@ Telegram 转发器是一个消息转发工具，可以将指定聊天中的消�
 
 ## 快速开始
 
-### 1. 配置环境
+### 1. 准备工作
 
-新建.env文件，填写参数
+1. 获取 Telegram API 凭据：
+   - 访问 https://my.telegram.org/apps
+   - 创建一个应用获取 `API_ID` 和 `API_HASH`
+
+2. 获取机器人 Token：
+   - 与 @BotFather 对话创建机器人
+   - 获取机器人的 `BOT_TOKEN`
+
+3. 获取用户 ID：
+   - 与 @userinfobot 对话获取你的 `USER_ID`
+
+### 2. 配置环境
+
+新建`.env`文件，填写参数
 ```ini
 # Telegram API 配置 (从 https://my.telegram.org/apps 获取)
 API_ID=
@@ -61,7 +74,7 @@ UFB_TOKEN=
 
 ```
 
-新建docker-compose.yml文件，内容如下：
+新建 `docker-compose.yml` 文件，内容如下：
 
 ```yaml
 services:
@@ -79,7 +92,7 @@ services:
     tty: true
 ```
 
-### 2. 启动服务
+### 3. 启动服务
 
 首次运行（需要验证）：
 
@@ -98,7 +111,7 @@ docker-compose up -d
 ## 使用说明
 ### 使用实例
 
-假设你想订阅频道 "TG 新闻" (https://t.me/tgnews) 和 "TG 阅读" (https://t.me/tgread) ，但想过滤掉一些不感兴趣的内容：
+假设订阅了频道 "TG 新闻" (https://t.me/tgnews) 和 "TG 阅读" (https://t.me/tgread) ，但想过滤掉一些不感兴趣的内容：
 
 1. 创建一个 Telegram 群组/频道（例如："My TG Filter"）
 2. 将机器人添加到群组/频道，并设置为管理员
@@ -124,7 +137,7 @@ docker-compose up -d
    ```
    这会删除消息中的所有 `**` 符号
 
->注意：以上增删改查操作，只对第一个绑定的规则生效，这里是TG NEWS，若想对TG READ进行操作，需要先使用`/switch`，选择TG READ，再进行操作增删改查，也可以使用`/add_all`，`/replace_all`等指令同时对两条规则生效
+>注意：以上增删改查操作，只对第一个绑定的规则生效，示例里是TG NEWS。若想对TG READ进行操作，需要先使用`/switch`，选择TG READ，再进行操作增删改查。也可以使用`/add_all`，`/replace_all`等指令同时对两条规则生效
 
 
 这样，你就能收到经过过滤和格式化的频道消息了
