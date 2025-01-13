@@ -149,10 +149,9 @@ def create_buttons(rule):
         buttons.append([Button.inline(button_text, callback_data)])
     
     # 添加删除按钮
-    buttons.append([Button.inline(
-        '❌ 删除',
-        f"delete:{rule.id}"
-    )])
+    buttons.append([Button.inline('❌ 删除当前规则', f"delete:{rule.id}")])
+    # 添加返回按钮
+    buttons.append([Button.inline('👈 返回', 'settings')])
     
     return buttons
 
@@ -435,15 +434,21 @@ async def handle_callback(event):
     """处理按钮回调"""
     try:
         data = event.data.decode()
-        action, rule_id_str = data.split(':')
         
-        # 对于 ufb_item action，直接使用字符串值
-        if action == 'ufb_item':
-            rule_id = rule_id_str
+        # 特殊处理 'settings' 动作，因为它不需要 rule_id
+        if data == 'settings':
+            action = 'settings'
+            rule_id = None
         else:
-            # 其他 action 需要转换为整数
-            rule_id = int(rule_id_str)
-            
+            # 其他动作需要分割获取 rule_id
+            action, rule_id_str = data.split(':')
+            # 对于 ufb_item action，直接使用字符串值
+            if action == 'ufb_item':
+                rule_id = rule_id_str
+            else:
+                # 其他 action 需要转换为整数
+                rule_id = int(rule_id_str)
+        
         user_id = event.sender_id
         
         # 获取消息对象
@@ -495,6 +500,38 @@ async def handle_callback(event):
                     Chat.telegram_chat_id == rule_id
                 ).first()
                 await event.answer(f'已切换到: {source_chat.name if source_chat else "未知聊天"}')
+            finally:
+                session.close()
+        elif action == 'settings':
+            session = get_session()
+            try:
+                # 获取当前聊天
+                current_chat = await event.get_chat()
+                current_chat_db = session.query(Chat).filter(
+                    Chat.telegram_chat_id == str(current_chat.id)
+                ).first()
+                
+                if not current_chat_db:
+                    await event.answer('当前聊天没有任何转发规则')
+                    return
+                
+                rules = session.query(ForwardRule).filter(
+                    ForwardRule.target_chat_id == current_chat_db.id
+                ).all()
+                
+                if not rules:
+                    await event.answer('当前聊天没有任何转发规则')
+                    return
+                
+                # 创建规则选择按钮
+                buttons = []
+                for rule in rules:
+                    source_chat = rule.source_chat
+                    button_text = f'来自: {source_chat.name}'
+                    callback_data = f"rule_settings:{rule.id}"
+                    buttons.append([Button.inline(button_text, callback_data)])
+                
+                await message.edit('请选择要管理的转发规则:', buttons=buttons)
             finally:
                 session.close()
         elif action == 'ufb_item':
