@@ -22,3 +22,4 @@ ENV/
 /config
 /ufb/.idea
 ufb/config/config.json
+/logo/svg
