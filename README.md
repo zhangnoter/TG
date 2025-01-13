@@ -109,7 +109,7 @@ docker-compose up -d
 ```
 
 
-## 使用实例
+## 使用示例
 
 假设订阅了频道 "TG 新闻" (https://t.me/tgnews) 和 "TG 阅读" (https://t.me/tgread) ，但想过滤掉一些不感兴趣的内容：
 
