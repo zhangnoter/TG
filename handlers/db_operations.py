@@ -151,7 +151,7 @@ class DBOperations:
         Args:
             config: 收到的配置数据
         """
-        logger.info(f"从JSON同步关键字到数据库: {config}")
+        logger.info(f"从JSON同步关键字到数据库")
         session = get_session()
         try:
             # 获取所有启用了UFB的规则
