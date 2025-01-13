@@ -146,6 +146,11 @@ docker-compose up -d
 ### 特殊案例
 TG频道的部分消息由于文字嵌入链接，点击会让你确认再跳转，例如nodeseek的官方通知频道
 
+频道的原始消息格式
+```
+[**贴子标题**](https://www.nodeseek.com/post-xxxx-1)
+```
+
 可以对通知频道的转发规则**依次**使用以下指令
 ```
 /replace \*\*
