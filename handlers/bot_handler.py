@@ -695,13 +695,14 @@ async def handle_callback(event):
 
 例如：
 /bind https://t.me/channel_name
-/bind 频道名称
+/bind "频道 名称"
 
 注意事项：
 1. 可以使用完整链接或群组/频道名称
-2. 使用名称时，会匹配第一个包含该名称的群组/频道
-3. 机器人必须是目标聊天的管理员
-4. 每个聊天可以设置多个转发规则
+2. 如果名称中包含空格，需要用双引号包起来
+3. 使用名称时，会匹配第一个包含该名称的群组/频道
+4. 机器人必须是目标聊天的管理员
+5. 每个聊天可以设置多个转发规则
 """
             elif rule_id == 'settings':
                 help_text = """
@@ -1297,11 +1298,23 @@ async def handle_settings_command(event):
 
 async def handle_bind_command(event, client, parts):
     """处理 bind 命令"""
-    if len(parts) != 2:
-        await event.reply('用法: /bind <目标聊天链接或名称>\n例如:\n/bind https://t.me/channel_name\n/bind 频道名称')
+    # 重新解析命令，支持带引号的名称
+    message_text = event.message.text
+    if len(message_text.split(None, 1)) != 2:
+        await event.reply('用法: /bind <目标聊天链接或名称>\n例如:\n/bind https://t.me/channel_name\n/bind "频道 名称"')
         return
-        
-    target = parts[1]
+    
+    # 分离命令和参数
+    _, target = message_text.split(None, 1)
+    target = target.strip()
+    
+    # 检查是否是带引号的名称
+    if target.startswith('"') and target.endswith('"'):
+        target = target[1:-1]  # 移除引号
+        is_link = False
+    else:
+        is_link = target.startswith(('https://', 't.me/'))
+    
     source_chat = await event.get_chat()
     
     try:
@@ -1311,7 +1324,7 @@ async def handle_bind_command(event, client, parts):
         
         # 使用用户客户端获取目标聊天的实体信息
         try:
-            if target.startswith(('https://', 't.me/')):
+            if is_link:
                 # 如果是链接，直接获取实体
                 target_chat = await user_client.get_entity(target)
             else:
@@ -1526,7 +1539,7 @@ async def handle_help_command(event):
 
 例如：
 /bind https://t.me/channel_name
-/bind 频道名称
+/bind "频道 名称"
 
 注意事项：
 1. 可以使用完整链接或群组/频道名称
