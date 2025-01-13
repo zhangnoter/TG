@@ -13,7 +13,7 @@
 </div>
 
 ## 简介
-Telegram 转发器是一个消息转发工具，可以将指定聊天中的消息转发到其他聊天。
+Telegram 转发器是一个消息转发工具，可以将指定聊天中的消息转发到其他聊天。可用于信息流过滤，消息提醒，内容收藏等多种场景。
 
 - 🔄 **多源转发**：支持从多个来源转发到指定目标
 - 🔍 **关键词过滤**：支持白名单和黑名单模式
@@ -31,10 +31,10 @@ Telegram 转发器是一个消息转发工具，可以将指定聊天中的消�
 API_ID=
 API_HASH=
 
-# Telethon 用户账号登录用的手机号 (格式如: +8613812345678)
+# 用户账号登录用的手机号 (格式如: +8613812345678)
 PHONE_NUMBER=
 
-# Bot Token (可选，如果需要使用机器人功能，从 @BotFather 获取)
+# Bot Token
 BOT_TOKEN=
 
 # 用户ID (从 @userinfobot 获取)
@@ -177,3 +177,13 @@ docker-compose up -d
 /clear_all - 清空所有数据
 ```
 
+## 捐赠
+
+如果你觉得这个项目对你有帮助，欢迎通过以下方式请我喝杯咖啡：
+
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/heavrnl)
+
+
+## 开源协议
+
+本项目采用 [GPL-3.0](LICENSE) 开源协议，详细信息请参阅 [LICENSE](LICENSE) 文件。
