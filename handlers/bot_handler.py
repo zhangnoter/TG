@@ -695,11 +695,6 @@ async def handle_callback(event):
 
 例如：
 /bind https://t.me/channel_name
-
-注意事项：
-1. 目标聊天必须是公开聊天
-2. 机器人必须是目标聊天的管理员
-3. 每个聊天可以设置多个转发规则
 """
             elif rule_id == 'settings':
                 help_text = """
@@ -1303,19 +1298,16 @@ async def handle_bind_command(event, client, parts):
     source_chat = await event.get_chat()
     
     try:
-        # 从链接中提取目标聊天的用户名或ID
-        if '/joinchat/' in target_link or 't.me/+' in target_link:
-            await event.reply('暂不支持私有链接，请使用公开链接')
+        # 获取 main 模块中的用户客户端
+        main = get_main_module()
+        user_client = main.user_client
+        
+        # 使用用户客户端获取目标聊天的实体信息
+        try:
+            target_chat = await user_client.get_entity(target_link)
+        except ValueError:
+            await event.reply('无法获取目标聊天信息，请确保链接正确且账号已加入该群组/频道')
             return
-        else:
-            # 公开链接，格式如 https://t.me/channel_name
-            channel_name = target_link.split('/')[-1]
-            try:
-                # 获取目标聊天的实体信息
-                target_chat = await client.get_entity(channel_name)
-            except ValueError:
-                await event.reply('无法获取目标聊天信息，请确保链接正确')
-                return
         
         # 保存到数据库
         session = get_session()
