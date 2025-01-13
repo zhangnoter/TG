@@ -9,7 +9,8 @@ async def process_forward_rule(client, event, chat_id, rule):
     """处理转发规则"""
     should_forward = False
     message_text = event.message.text or ''
-    
+    check_message_text = pre_handle(message_text)
+
     # 添加日志：开始处理规则
     logger.info(f'开始处理规则 ID: {rule.id}')
     logger.info(f'规则模式: {rule.mode.value}')
@@ -21,12 +22,12 @@ async def process_forward_rule(client, event, chat_id, rule):
         for keyword in rule.keywords:
             logger.info(f'检查白名单关键字: {keyword.keyword} (正则: {keyword.is_regex})')
             if keyword.is_regex:
-                if re.search(keyword.keyword, message_text):
+                if re.search(keyword.keyword, check_message_text):
                     should_forward = True
                     logger.info(f'正则匹配成功: {keyword.keyword}')
                     break
             else:
-                if keyword.keyword.lower() in message_text.lower():
+                if keyword.keyword.lower() in check_message_text.lower():
                     should_forward = True
                     logger.info(f'关键字匹配成功: {keyword.keyword}')
                     break
@@ -36,12 +37,12 @@ async def process_forward_rule(client, event, chat_id, rule):
         for keyword in rule.keywords:
             logger.info(f'检查黑名单关键字: {keyword.keyword} (正则: {keyword.is_regex})')
             if keyword.is_regex:
-                if re.search(keyword.keyword, message_text):
+                if re.search(keyword.keyword, check_message_text):
                     should_forward = False
                     logger.info(f'正则匹配成功，不转发: {keyword.keyword}')
                     break
             else:
-                if keyword.keyword.lower() in message_text.lower():
+                if keyword.keyword.lower() in check_message_text.lower():
                     should_forward = False
                     logger.info(f'关键字匹配成功，不转发: {keyword.keyword}')
                     break

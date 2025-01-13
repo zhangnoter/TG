@@ -1,5 +1,6 @@
 from telethon import events, Button
 from handlers.models import get_session, Chat, ForwardRule, Keyword, ReplaceRule
+from handlers.handle_message import pre_handle
 import re
 import os
 import logging
@@ -765,7 +766,7 @@ async def process_forward_rule(client, event, chat_id, rule):
     should_forward = False
     message_text = event.message.text or ''
     MAX_MEDIA_SIZE = get_max_media_size()
-    
+    check_message_text = pre_handle(message_text)
     # 添加日志
     logger.info(f'处理规则 ID: {rule.id}')
     logger.info(f'消息内容: {message_text}')
@@ -779,7 +780,7 @@ async def process_forward_rule(client, event, chat_id, rule):
             if keyword.is_regex:
                 # 正则表达式匹配
                 try:
-                    if re.search(keyword.keyword, message_text):
+                    if re.search(keyword.keyword, check_message_text):
                         should_forward = True
                         logger.info(f'正则匹配成功: {keyword.keyword}')
                         break
@@ -787,7 +788,7 @@ async def process_forward_rule(client, event, chat_id, rule):
                     logger.error(f'正则表达式错误: {keyword.keyword}')
             else:
                 # 普通关键字匹配（包含即可，不区分大小写）
-                if keyword.keyword.lower() in message_text.lower():
+                if keyword.keyword.lower() in check_message_text.lower():
                     should_forward = True
                     logger.info(f'关键字匹配成功: {keyword.keyword}')
                     break
@@ -799,7 +800,7 @@ async def process_forward_rule(client, event, chat_id, rule):
             if keyword.is_regex:
                 # 正则表达式匹配
                 try:
-                    if re.search(keyword.keyword, message_text):
+                    if re.search(keyword.keyword, check_message_text):
                         should_forward = False
                         logger.info(f'正则匹配成功，不转发: {keyword.keyword}')
                         break
@@ -807,7 +808,7 @@ async def process_forward_rule(client, event, chat_id, rule):
                     logger.error(f'正则表达式错误: {keyword.keyword}')
             else:
                 # 普通关键字匹配（包含即可，不区分大小写）
-                if keyword.keyword.lower() in message_text.lower():
+                if keyword.keyword.lower() in check_message_text.lower():
                     should_forward = False
                     logger.info(f'关键字匹配成功，不转发: {keyword.keyword}')
                     break
