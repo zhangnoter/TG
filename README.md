@@ -6,7 +6,7 @@
 
 <div align="center">
 
-[![Docker](https://img.shields.io/badge/-Docker-2496ED?style=flat-square&logo=docker&logoColor=white)][docker-url]
+[![Docker](https://img.shields.io/badge/-Docker-2496ED?style=flat-square&logo=docker&logoColor=white)][docker-url] [![License: GPL-3.0](https://img.shields.io/badge/License-GPL%203.0-2196F3?style=flat-square)](https://www.gnu.org/licenses/gpl-3.0)
 
 [docker-url]: https://hub.docker.com/r/heavrnl/telegramforwarder
 
