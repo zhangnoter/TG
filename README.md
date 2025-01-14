@@ -38,6 +38,10 @@ Telegram 转发器是一个消息转发工具，只需要你的账号加入频�
 
 ### 2. 配置环境
 
+新建文件夹
+```bash
+mkdir ./TelegramForwarder && cd ./TelegramForwarder
+```
 新建`.env`文件，填写参数
 ```ini
 # Telegram API 配置 (从 https://my.telegram.org/apps 获取)
