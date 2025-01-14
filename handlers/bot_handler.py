@@ -1571,20 +1571,10 @@ async def handle_start_command(event):
 async def handle_help_command(event):
     """处理 help 命令"""
     help_text = """
-🔗 绑定转发 
-/bind <目标聊天链接或名称>
+绑定转发 
+/bind <目标聊天链接或名称> - 名称用引号包裹
 
-例如：
-/bind https://t.me/channel_name
-/bind "频道 名称"
-
-注意事项：
-1. 可以使用完整链接或群组/频道名称
-2. 使用名称时，会匹配第一个包含该名称的群组/频道
-3. 机器人必须是目标聊天的管理员
-4. 每个聊天可以设置多个转发规则
-
-📝 关键字管理
+关键字管理
 /add <关键字1> [关键字2] ... - 添加普通关键字到当前规则
 /add_regex <正则1> [正则2] ... - 添加正则表达式关键字到当前规则
 /add_all <关键字1> [关键字2] ... - 添加普通关键字到所有规则
@@ -1593,29 +1583,29 @@ async def handle_help_command(event):
 /import_regex_keyword <同时发送文件> - 指令和文件一起发送，一行一个正则表达式
 /export_keyword - 导出当前规则的关键字到文件
 
-🔄 替换规则
-/replace <匹配模式> <替换内容> - 添加替换规则到当前规则
-/replace_all <匹配模式> <替换内容> - 添加替换规则到所有规则
+替换规则
+/replace <匹配模式> <替换内容/替换表达式> - 添加替换规则到当前规则
+/replace_all <匹配模式> <替换内容/替换表达式> - 添加替换规则到所有规则
 /import_replace <同时发送文件> - 指令和文件一起发送，一行一个替换规则
 /export_replace - 导出当前规则的替换规则到文件
 注意：不填替换内容则删除匹配内容
 
-🔀 切换规则
+切换规则
 /switch - 切换当前操作的转发规则
 
-📊 查看列表
+查看列表
 /list_keyword - 查看当前规则的关键字列表
 /list_replace - 查看当前规则的替换规则列表
 
-⚙️ 设置管理
+设置管理
 /settings - 显示选用的转发规则的设置
 
-🔗 UFB
+UFB
 /ufb_bind <域名> - 绑定指定的域名
 /ufb_unbind - 解除域名绑定
 /ufb_item_change - 指定绑定域名下的项目
 
-🗑 清除数据
+清除数据
 /clear_all - 清空所有数据
 """
     await event.reply(help_text) 
