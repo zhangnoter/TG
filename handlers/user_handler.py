@@ -1,8 +1,8 @@
-from handlers.models import ForwardMode
+from models.models import ForwardMode
 import re
 import logging
 import asyncio
-from handlers.handle_message import pre_handle
+from handlers.message_handler import pre_handle
 
 logger = logging.getLogger(__name__)
 

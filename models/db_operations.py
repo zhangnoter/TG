@@ -1,14 +1,13 @@
 from sqlalchemy.exc import IntegrityError
-from handlers.models import Keyword, ReplaceRule, ForwardRule
+from models.models import Keyword, ReplaceRule, ForwardRule
 import logging
-from typing import Optional
 import os
 import json
 import time
 from pathlib import Path
 from dotenv import load_dotenv
 from ufb.ufb_client import UFBClient
-from handlers.models import get_session
+from models.models import get_session
 
 logger = logging.getLogger(__name__)
 load_dotenv()

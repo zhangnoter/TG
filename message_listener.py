@@ -1,5 +1,5 @@
 from telethon import events
-from handlers.models import get_session, Chat, ForwardRule
+from models.models import get_session, Chat, ForwardRule
 import logging
 from handlers import user_handler, bot_handler
 import asyncio

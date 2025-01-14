@@ -1,6 +1,6 @@
 from telethon import events, Button
-from handlers.models import get_session, Chat, ForwardRule, Keyword, ReplaceRule
-from handlers.handle_message import pre_handle
+from models.models import get_session, Chat, ForwardRule, Keyword, ReplaceRule
+from handlers.message_handler import pre_handle
 import re
 import os
 import logging
