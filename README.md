@@ -240,7 +240,7 @@ TG频道的部分消息由于文字嵌入链接，点击会让你确认再跳转
 
 如果你觉得这个项目对你有帮助，欢迎通过以下方式请我喝杯咖啡：
 
-[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/heavrnl)
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/0heavrnl)
 
 
 ## 开源协议
