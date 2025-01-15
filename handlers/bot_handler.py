@@ -14,7 +14,6 @@ import traceback
 
 logger = logging.getLogger(__name__)
 
-# 在文件顶部添加
 TEMP_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'temp')
 # 确保 temp 目录存在
 os.makedirs(TEMP_DIR, exist_ok=True)
