@@ -111,8 +111,6 @@ RULE_SETTINGS = {
     }
 }
 
-
-
 def get_user_id():
     """获取用户ID，确保环境变量已加载"""
     user_id_str = os.getenv('USER_ID')
@@ -148,9 +146,7 @@ def create_buttons(rule):
         callback_data = f"{config['toggle_action']}:{rule.id}"
         buttons.append([Button.inline(button_text, callback_data)])
     
-    # 添加删除按钮
     buttons.append([Button.inline('❌ 删除当前规则', f"delete:{rule.id}")])
-    # 添加返回按钮
     buttons.append([Button.inline('👈 返回', 'settings')])
     
     return buttons
