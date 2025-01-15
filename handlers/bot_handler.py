@@ -10,6 +10,7 @@ import sys
 from enums.enums import ForwardMode, PreviewMode, MessageMode
 from sqlalchemy.exc import IntegrityError
 from telethon.tl.types import ChannelParticipantsAdmins
+import traceback
 
 logger = logging.getLogger(__name__)
 
@@ -434,21 +435,20 @@ async def handle_callback(event):
     """处理按钮回调"""
     try:
         data = event.data.decode()
+        logger.info(f'收到回调数据: {data}')
         
         # 特殊处理 'settings' 动作，因为它不需要 rule_id
         if data == 'settings':
             action = 'settings'
             rule_id = None
+            logger.info('处理 settings 动作')
         else:
             # 其他动作需要分割获取 rule_id
-            action, rule_id_str = data.split(':')
-            # 对于 ufb_item action，直接使用字符串值
-            if action == 'ufb_item':
-                rule_id = rule_id_str
-            else:
-                # 其他 action 需要转换为整数
-                rule_id = int(rule_id_str)
-        
+            parts = data.split(':')
+            action = parts[0]
+            rule_id = ':'.join(parts[1:]) if len(parts) > 1 else None
+            logger.info(f'解析回调数据: action={action}, rule_id={rule_id}')
+            
         user_id = event.sender_id
         
         # 获取消息对象
@@ -661,66 +661,73 @@ async def handle_callback(event):
                 session.close()
                 
         elif action == 'page':
-            command, page = rule_id.split(':')  # 这里的 rule_id 实际上是 "command:page"
-            page = int(page)
+        
+            logger.info(f'翻页回调数据: action={action}, rule_id={rule_id}')
             
-            session = get_session()
             try:
-                # 获取当前聊天和规则
-                current_chat = await event.get_chat()
-                current_chat_db = session.query(Chat).filter(
-                    Chat.telegram_chat_id == str(current_chat.id)
-                ).first()
+                # 解析页码和命令
+                page_number, command = rule_id.split(':')
+                page = int(page_number)
                 
-                if not current_chat_db or not current_chat_db.current_add_id:
-                    await event.answer('请先选择一个源聊天')
-                    return
-                
-                source_chat = session.query(Chat).filter(
-                    Chat.telegram_chat_id == current_chat_db.current_add_id
-                ).first()
-                
-                rule = session.query(ForwardRule).filter(
-                    ForwardRule.source_chat_id == source_chat.id,
-                    ForwardRule.target_chat_id == current_chat_db.id
-                ).first()
-                
-                if command == 'keyword':
-                    # 获取关键字列表
-                    keywords = session.query(Keyword).filter(
-                        Keyword.rule_id == rule.id
-                    ).all()
+                session = get_session()
+                try:
+                    # 获取当前聊天和规则
+                    current_chat = await event.get_chat()
+                    current_chat_db = session.query(Chat).filter(
+                        Chat.telegram_chat_id == str(current_chat.id)
+                    ).first()
                     
-                    await show_list(
-                        event,
-                        'keyword',
-                        keywords,
-                        lambda i, kw: f'{i}. {kw.keyword}{" (正则)" if kw.is_regex else ""}',
-                        f'关键字列表\n规则: 来自 {source_chat.name}',
-                        page
-                    )
+                    if not current_chat_db or not current_chat_db.current_add_id:
+                        await event.answer('请先选择一个源聊天')
+                        return
                     
-                elif command == 'replace':
-                    # 获取替换规则列表
-                    replace_rules = session.query(ReplaceRule).filter(
-                        ReplaceRule.rule_id == rule.id
-                    ).all()
+                    source_chat = session.query(Chat).filter(
+                        Chat.telegram_chat_id == current_chat_db.current_add_id
+                    ).first()
                     
-                    await show_list(
-                        event,
-                        'replace',
-                        replace_rules,
-                        lambda i, rr: f'{i}. 匹配: {rr.pattern} -> {"删除" if not rr.content else f"替换为: {rr.content}"}',
-                        f'替换规则列表\n规则: 来自 {source_chat.name}',
-                        page
-                    )
+                    rule = session.query(ForwardRule).filter(
+                        ForwardRule.source_chat_id == source_chat.id,
+                        ForwardRule.target_chat_id == current_chat_db.id
+                    ).first()
                     
-                # 删除原消息
-                message = await event.get_message()
-                await message.delete()
-                
-            finally:
-                session.close()
+                    if command == 'keyword':
+                        # 获取关键字列表
+                        keywords = session.query(Keyword).filter(
+                            Keyword.rule_id == rule.id
+                        ).all()
+                        
+                        await show_list(
+                            event,
+                            'keyword',
+                            keywords,
+                            lambda i, kw: f'{i}. {kw.keyword}{" (正则)" if kw.is_regex else ""}',
+                            f'关键字列表\n规则: 来自 {source_chat.name}',
+                            page
+                        )
+                        
+                    elif command == 'replace':
+                        # 获取替换规则列表
+                        replace_rules = session.query(ReplaceRule).filter(
+                            ReplaceRule.rule_id == rule.id
+                        ).all()
+                        
+                        await show_list(
+                            event,
+                            'replace',
+                            replace_rules,
+                            lambda i, rr: f'{i}. 匹配: {rr.pattern} -> {"删除" if not rr.content else f"替换为: {rr.content}"}',
+                            f'替换规则列表\n规则: 来自 {source_chat.name}',
+                            page
+                        )
+                    
+                    # 标记回调已处理
+                    await event.answer()
+                    
+                finally:
+                    session.close()
+            except Exception as e:
+                logger.error(f'处理翻页时出错: {str(e)}')
+                await event.answer('处理翻页时出错，请检查日志')
                 
         elif action == 'help':
             if rule_id == 'bind':
@@ -765,7 +772,9 @@ async def handle_callback(event):
             await handle_command(event.client, event)
 
     except Exception as e:
+        import traceback
         logger.error(f'处理按钮回调时出错: {str(e)}')
+        logger.error(f'错误堆栈: {traceback.format_exc()}')
         await event.answer('处理请求时出错，请检查日志')
 
 # 注册回调处理器
@@ -889,6 +898,9 @@ async def process_forward_rule(client, event, chat_id, rule):
             if rule.is_original_link:
                 original_link = f"\n\n原始消息: https://t.me/c/{str(event.chat_id)[4:]}/{event.message.id}"
             
+            # 获取原消息的按钮
+            buttons = event.message.buttons if hasattr(event.message, 'buttons') else None
+            
             if event.message.grouped_id:
                 # 处理媒体组
                 logger.info(f'处理媒体组消息 组ID: {event.message.grouped_id}')
@@ -900,6 +912,7 @@ async def process_forward_rule(client, event, chat_id, rule):
                 messages = []
                 skipped_media = []  # 记录被跳过的媒体消息
                 caption = None  # 保存第一条消息的文本
+                first_buttons = None  # 保存第一条消息的按钮
                 
                 async for message in event.client.iter_messages(
                     event.chat_id,
@@ -908,9 +921,10 @@ async def process_forward_rule(client, event, chat_id, rule):
                     max_id=event.message.id + 10
                 ):
                     if message.grouped_id == event.message.grouped_id:
-                        # 保存第一条消息的文本
-                        if not caption and message.text:
+                        # 保存第一条消息的文本和按钮
+                        if not caption:
                             caption = message.text
+                            first_buttons = message.buttons if hasattr(message, 'buttons') else None
                             logger.info(f'获取到媒体组文本: {caption}')
                         
                         # 检查媒体大小
@@ -935,7 +949,8 @@ async def process_forward_rule(client, event, chat_id, rule):
                         target_chat_id,
                         text_to_send,
                         parse_mode=parse_mode,
-                        link_preview=True
+                        link_preview=True,
+                        buttons=first_buttons 
                     )
                     logger.info(f'[机器人] 媒体组所有文件超限，已发送文本和提示')
                     return
@@ -960,6 +975,7 @@ async def process_forward_rule(client, event, chat_id, rule):
                                 files,
                                 caption=caption_text,
                                 parse_mode=parse_mode,
+                                buttons=first_buttons, 
                                 link_preview={
                                     PreviewMode.ON: True,
                                     PreviewMode.OFF: False,
@@ -1021,7 +1037,8 @@ async def process_forward_rule(client, event, chat_id, rule):
                             target_chat_id,
                             text_to_send,
                             parse_mode=parse_mode,
-                            link_preview=True
+                            link_preview=True,
+                            buttons=buttons
                         )
                         logger.info(f'[机器人] 媒体文件超过大小限制，仅转发文本')
                         return  # 重要：立即返回，不继续处理
@@ -1036,6 +1053,7 @@ async def process_forward_rule(client, event, chat_id, rule):
                                     file_path,
                                     caption=(message_text + original_link) if message_text else original_link,
                                     parse_mode=parse_mode,
+                                    buttons=buttons, 
                                     link_preview={
                                         PreviewMode.ON: True,
                                         PreviewMode.OFF: False,
@@ -1065,7 +1083,8 @@ async def process_forward_rule(client, event, chat_id, rule):
                             target_chat_id,
                             message_text + original_link,  # 添加原始链接
                             parse_mode=parse_mode,
-                            link_preview=link_preview
+                            link_preview=link_preview,
+                            buttons=buttons 
                         )
                         logger.info(
                             f'[机器人] {"带预览的" if link_preview else "无预览的"}文本消息已发送到: '
@@ -1074,7 +1093,7 @@ async def process_forward_rule(client, event, chat_id, rule):
                 
         except Exception as e:
             logger.error(f'发送消息时出错: {str(e)}')
-            logger.exception(e) 
+            logger.exception(e)
 
 async def create_list_buttons(total_pages, current_page, command):
     """创建分页按钮"""
@@ -1085,7 +1104,7 @@ async def create_list_buttons(total_pages, current_page, command):
     if current_page > 1:
         row.append(Button.inline(
             '⬅️ 上一页',
-            f'page:{command}:{current_page-1}'
+            f'page:{current_page-1}:{command}'  
         ))
     
     # 页码显示
@@ -1098,7 +1117,7 @@ async def create_list_buttons(total_pages, current_page, command):
     if current_page < total_pages:
         row.append(Button.inline(
             '下一页 ➡️',
-            f'page:{command}:{current_page+1}'
+            f'page:{current_page+1}:{command}'  
         ))
     
     buttons.append(row)
@@ -1111,7 +1130,7 @@ async def show_list(event, command, items, formatter, title, page=1):
     total_pages = (total_items + PAGE_SIZE - 1) // PAGE_SIZE
     
     if not items:
-        return await event.reply(f'没有找到任何{title}')
+        return await event.edit(f'没有找到任何{title}')
     
     # 获取当前页的项目
     start = (page - 1) * PAGE_SIZE
@@ -1124,12 +1143,12 @@ async def show_list(event, command, items, formatter, title, page=1):
     # 创建分页按钮
     buttons = await create_list_buttons(total_pages, page, command)
     
-    # 发送消息
+    # 编辑消息
     text = f'{title}:\n{chr(10).join(item_list)}'
     if len(text) > 4096:  # Telegram消息长度限制
         text = text[:4093] + '...'
     
-    return await event.reply(text, buttons=buttons) 
+    return await event.edit(text, buttons=buttons)
 
 async def handle_replace_command(event, parts):
     """处理 replace 命令"""
