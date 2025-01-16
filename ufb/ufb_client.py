@@ -51,6 +51,7 @@ class UFBClient:
         self.websocket: Optional[websockets.WebSocketClientProtocol] = None
         self.is_connected = False
         self.on_config_update_callbacks: list[Callable[[Dict[str, Any]], None]] = []
+        self.reconnect_task = None  # 用于存储重连任务
         
         # 确保配置目录存在
         self.config_dir.mkdir(parents=True, exist_ok=True)
@@ -167,13 +168,51 @@ class UFBClient:
         self.token = token
 
         try:
-
             self.websocket = await websockets.connect(f"{server_url}/ws/config/{token}")
             self.is_connected = True
             logger.info("WebSocket连接已建立")
+            
+            # 连接成功后取消重连任务
+            if self.reconnect_task:
+                self.reconnect_task.cancel()
+                self.reconnect_task = None
+                
         except Exception as e:
             logger.error(f"WebSocket连接失败: {e}")
+            # 启动重连
+            await self.start_reconnect()
             raise
+
+    async def reconnect(self):
+        """重连逻辑"""
+        while True:
+            try:
+                if not self.is_connected and self.server_url and self.token:
+                    logger.info("尝试重新连接...")
+                    self.websocket = await websockets.connect(f"{self.server_url}/ws/config/{self.token}")
+                    self.is_connected = True
+                    logger.info("重连成功")
+                    
+                    # 重新启动消息处理
+                    asyncio.create_task(self._handle_messages())
+                    
+                    # 重新发送配置更新
+                    local_config = self.load_config()
+                    await self.websocket.send(json.dumps({
+                        "type": "update",
+                        **local_config
+                    }))
+                    
+                    # 重连成功后退出循环
+                    break
+            except Exception as e:
+                logger.error(f"重连失败: {e}")
+                await asyncio.sleep(10)  # 等待10秒后重试
+
+    async def start_reconnect(self):
+        """启动重连任务"""
+        if not self.reconnect_task or self.reconnect_task.done():
+            self.reconnect_task = asyncio.create_task(self.reconnect())
 
     async def start(self, server_url: Optional[str] = None, token: Optional[str] = None):
         """启动客户端"""
@@ -243,9 +282,7 @@ class UFBClient:
 
                     elif msg_type == "update":
                         if data:
-                            
                             if data.get('additional_info') != "to_server" or data.get('additional_info') is None:
-                                
                                 await self.save_config(data, to_client=True)
                             else:
                                 await self.save_config(data)
@@ -292,9 +329,13 @@ class UFBClient:
         except websockets.ConnectionClosed:
             logger.info("WebSocket连接已关闭")
             self.is_connected = False
+            # 启动重连
+            await self.start_reconnect()
         except Exception as e:
             logger.error(f"WebSocket错误: {e}")
             self.is_connected = False
+            # 启动重连
+            await self.start_reconnect()
 
     async def close(self):
         """关闭客户端"""
@@ -302,3 +343,7 @@ class UFBClient:
             await self.websocket.close()
             self.is_connected = False
             logger.info("WebSocket连接已关闭")
+            # 取消重连任务
+            if self.reconnect_task:
+                self.reconnect_task.cancel()
+                self.reconnect_task = None
