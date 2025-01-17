@@ -109,10 +109,6 @@ async def register_bot_commands(bot):
             command='switch',
             description='切换当前需要设置的聊天规则'
         ),
-        BotCommand(
-            command='clear_all',
-            description='清空当前聊天的所有数据'
-        ),
         # 关键字管理
         BotCommand(
             command='add',
@@ -188,7 +184,11 @@ async def register_bot_commands(bot):
         BotCommand(
             command='ufb_item_change',
             description='切换ufb同步配置类型'
-        )
+        ),
+        BotCommand(
+            command='clear_all',
+            description='慎用！清空所有数据'
+        ),
     ]
 
     try:
