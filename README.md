@@ -121,8 +121,8 @@ docker-compose up -d
 2. 将机器人添加到群组/频道，并设置为管理员
 3. 在**新创建**的群组/频道中发送命令：
    ```bash
-   /bind https://t.me/tgnews 或者 /bind "TG 阅读"
-   /bind https://t.me/tgread 或者 /bind "TG 新闻"
+   /bind https://t.me/tgnews 或者 /bind "TG 新闻"
+   /bind https://t.me/tgread 或者 /bind "TG 阅读"
    ```
 4. 设置消息处理模式：
    ```bash
