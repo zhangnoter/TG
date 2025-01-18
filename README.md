@@ -58,7 +58,7 @@ BOT_TOKEN=
 USER_ID=
 
 # 最大媒体文件大小限制（单位：MB），不填或0表示无限制
-MAX_MEDIA_SIZE=
+MAX_MEDIA_SIZE=15
 
 # 是否开启调试日志 (true/false)
 DEBUG=false
