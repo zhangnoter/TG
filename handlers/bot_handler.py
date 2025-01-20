@@ -161,18 +161,29 @@ async def get_current_rule(session, event):
     try:
         # 获取当前聊天
         current_chat = await event.get_chat()
+        logger.info(f'获取当前聊天: {current_chat.id}')
+        
         current_chat_db = session.query(Chat).filter(
             Chat.telegram_chat_id == str(current_chat.id)
         ).first()
         
         if not current_chat_db or not current_chat_db.current_add_id:
+            logger.info('未找到当前聊天或未选择源聊天')
             await event.reply('请先使用 /switch 选择一个源聊天')
             return None
+        
+        logger.info(f'当前选中的源聊天ID: {current_chat_db.current_add_id}')
         
         # 查找对应的规则
         source_chat = session.query(Chat).filter(
             Chat.telegram_chat_id == current_chat_db.current_add_id
         ).first()
+        
+        if source_chat:
+            logger.info(f'找到源聊天: {source_chat.name}')
+        else:
+            logger.error('未找到源聊天')
+            return None
         
         rule = session.query(ForwardRule).filter(
             ForwardRule.source_chat_id == source_chat.id,
@@ -180,12 +191,15 @@ async def get_current_rule(session, event):
         ).first()
         
         if not rule:
+            logger.info('未找到对应的转发规则')
             await event.reply('转发规则不存在')
             return None
         
+        logger.info(f'找到转发规则 ID: {rule.id}')
         return rule, source_chat
     except Exception as e:
         logger.error(f'获取当前规则时出错: {str(e)}')
+        logger.exception(e)
         await event.reply('获取当前规则时出错，请检查日志')
         return None
 
@@ -194,13 +208,18 @@ async def get_all_rules(session, event):
     try:
         # 获取当前聊天
         current_chat = await event.get_chat()
+        logger.info(f'获取当前聊天: {current_chat.id}')
+        
         current_chat_db = session.query(Chat).filter(
             Chat.telegram_chat_id == str(current_chat.id)
         ).first()
         
         if not current_chat_db:
+            logger.info('未找到当前聊天')
             await event.reply('当前聊天没有任何转发规则')
             return None
+        
+        logger.info(f'找到当前聊天数据库记录 ID: {current_chat_db.id}')
         
         # 查找所有以当前聊天为目标的规则
         rules = session.query(ForwardRule).filter(
@@ -208,12 +227,15 @@ async def get_all_rules(session, event):
         ).all()
         
         if not rules:
+            logger.info('未找到任何转发规则')
             await event.reply('当前聊天没有任何转发规则')
             return None
             
+        logger.info(f'找到 {len(rules)} 条转发规则')
         return rules
     except Exception as e:
         logger.error(f'获取所有规则时出错: {str(e)}')
+        logger.exception(e)
         await event.reply('获取规则时出错，请检查日志')
         return None
 
@@ -802,7 +824,10 @@ async def show_list(event, command, items, formatter, title, page=1):
     total_pages = (total_items + PAGE_SIZE - 1) // PAGE_SIZE
     
     if not items:
-        return await event.edit(f'没有找到任何{title}')
+        try:
+            return await event.edit(f'没有找到任何{title}')
+        except:
+            return await event.reply(f'没有找到任何{title}')
     
     # 获取当前页的项目
     start = (page - 1) * PAGE_SIZE
@@ -815,12 +840,15 @@ async def show_list(event, command, items, formatter, title, page=1):
     # 创建分页按钮
     buttons = await create_list_buttons(total_pages, page, command)
     
-    # 编辑消息
+    # 构建消息文本
     text = f'{title}:\n{chr(10).join(item_list)}'
     if len(text) > 4096:  # Telegram消息长度限制
         text = text[:4093] + '...'
     
-    return await event.edit(text, buttons=buttons)
+    try:
+        return await event.edit(text, buttons=buttons)
+    except:
+        return await event.reply(text, buttons=buttons)
 
 async def handle_replace_command(event, parts):
     """处理 replace 命令"""
