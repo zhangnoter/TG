@@ -1725,6 +1725,26 @@ async def process_forward_rule(client, event, chat_id, rule):
                             caption = message.text
                             first_buttons = message.buttons if hasattr(message, 'buttons') else None
                             logger.info(f'获取到媒体组文本: {caption}')
+                            
+                            # 应用替换规则
+                            if rule.is_replace and caption:
+                                try:
+                                    for replace_rule in rule.replace_rules:
+                                        if replace_rule.pattern == '.*':
+                                            caption = replace_rule.content or ''
+                                            break 
+                                        else:
+                                            try:
+                                                caption = re.sub(
+                                                    replace_rule.pattern,
+                                                    replace_rule.content or '',
+                                                    caption
+                                                )
+                                            except re.error:
+                                                logger.error(f'替换规则格式错误: {replace_rule.pattern}')
+                                except Exception as e:
+                                    logger.error(f'应用替换规则时出错: {str(e)}')
+                                logger.info(f'替换后的媒体组文本: {caption}')
                         
                         # 检查媒体大小
                         if message.media:
