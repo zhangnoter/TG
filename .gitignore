@@ -23,3 +23,4 @@ ENV/
 /ufb/.idea
 ufb/config/config.json
 /logo/svg
+/test
