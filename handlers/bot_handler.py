@@ -1092,6 +1092,12 @@ async def handle_bind_command(event, client, parts):
                 else:
                     await event.reply('未找到匹配的群组/频道，请确保名称正确且账号已加入该群组/频道')
                     return
+
+            # 检查是否在绑定自己
+            if str(target_chat.id) == str(source_chat.id):
+                await event.reply('⚠️ 不能将频道/群组绑定到自己')
+                return
+
         except ValueError:
             await event.reply('无法获取目标聊天信息，请确保链接/名称正确且账号已加入该群组/频道')
             return
