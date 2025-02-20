@@ -5,6 +5,8 @@ from handlers import user_handler, bot_handler
 import asyncio
 import os
 from dotenv import load_dotenv
+import re
+from telethon.tl.types import ChannelParticipantsAdmins
 
 # 加载环境变量
 load_dotenv()
@@ -58,8 +60,101 @@ def setup_listeners(user_client, bot_client):
 async def handle_user_message(event, user_client, bot_client):
     """处理用户客户端收到的消息"""
     chat = await event.get_chat()
-    chat_id = str(chat.id)
-    
+    chat_id = chat.id
+
+    # 处理设置AI提示词回调
+    try:
+        previous_messages = await user_client.get_messages(chat_id, limit=2)
+        if len(previous_messages) > 1 and "请输入新的 AI 提示词" in previous_messages[1].text:
+            # 只有在需要时才检查权限
+            if (event.sender_id == int(os.getenv('USER_ID')) or 
+                (event.is_channel and await is_admin(event.chat_id, int(os.getenv('USER_ID')), user_client))):
+                # 从上一条消息中提取规则ID
+                rule_id = re.search(r"当前规则ID: (\d+)", previous_messages[1].text).group(1)
+                logger.info(f"检测到设置AI提示词请求,规则ID: {rule_id}")
+                
+                session = get_session()
+                try:
+                    # 处理取消命令 - 支持带机器人用户名的命令
+                    command = event.message.text.strip().lower().split('@')[0]  # 移除 @username 部分
+                    if command == '/cancel':
+                        logger.info(f"用户取消设置AI提示词,规则ID: {rule_id}")
+                        await bot_client.send_message(
+                            chat_id,
+                            "已取消设置", 
+                            buttons=bot_handler.create_buttons(session.query(ForwardRule).get(int(rule_id)))
+                        )
+                        return
+                    
+                    # 更新提示词
+                    rule = session.query(ForwardRule).get(int(rule_id))
+                    if rule:
+                        logger.info(f"开始更新规则 {rule_id} 的AI提示词")
+                        rule.ai_prompt = event.message.text
+                        session.commit()
+                        logger.info(f"已更新规则 {rule_id} 的AI提示词: {rule.ai_prompt}")
+                        
+                        # 使用bot发送更新后的设置页面
+                        await bot_client.send_message(
+                            chat_id,
+                            f"AI 提示词已更新为：\n{rule.ai_prompt}", 
+                            buttons=bot_handler.create_ai_settings_buttons(rule)  # 返回到 AI 设置页面
+                        )
+                        return
+                    else:
+                        logger.warning(f"未找到规则ID: {rule_id}")
+                finally:
+                    session.close()
+    except Exception as e:
+        logger.error(f"处理AI提示词设置时出错: {str(e)}")
+        logger.exception(e)
+
+    # 处理设置AI总结提示词回调
+    try:
+        previous_messages = await user_client.get_messages(chat_id, limit=2)
+        if len(previous_messages) > 1 and "请发送新的AI总结提示词" in previous_messages[1].text:
+            # 只有在需要时才检查权限
+            if (event.sender_id == int(os.getenv('USER_ID')) or 
+                (event.is_channel and await is_admin(event.chat_id, int(os.getenv('USER_ID')), user_client))):
+                # 从上一条消息中提取规则ID
+                rule_id = re.search(r"当前规则ID: (\d+)", previous_messages[1].text).group(1)
+                logger.info(f"检测到设置AI总结提示词请求,规则ID: {rule_id}")
+                
+                session = get_session()
+                try:
+                    # 处理取消命令
+                    command = event.message.text.strip().lower().split('@')[0]
+                    if command == '/cancel':
+                        logger.info(f"用户取消设置AI总结提示词,规则ID: {rule_id}")
+                        await bot_client.send_message(
+                            chat_id,
+                            "已取消设置", 
+                            buttons=bot_handler.create_ai_settings_buttons(session.query(ForwardRule).get(int(rule_id)))
+                        )
+                        return
+                    
+                    # 更新总结提示词
+                    rule = session.query(ForwardRule).get(int(rule_id))
+                    if rule:
+                        logger.info(f"开始更新规则 {rule_id} 的AI总结提示词")
+                        rule.summary_prompt = event.message.text
+                        session.commit()
+                        logger.info(f"已更新规则 {rule_id} 的AI总结提示词: {rule.summary_prompt}")
+                        
+                        await bot_client.send_message(
+                            chat_id,
+                            f"AI总结提示词已更新为：\n{rule.summary_prompt}", 
+                            buttons=bot_handler.create_ai_settings_buttons(rule)
+                        )
+                        return
+                    else:
+                        logger.warning(f"未找到规则ID: {rule_id}")
+                finally:
+                    session.close()
+    except Exception as e:
+        logger.error(f"处理AI总结提示词设置时出错: {str(e)}")
+        logger.exception(e)
+
     # 检查是否是媒体组消息
     if event.message.grouped_id:
         # 如果这个媒体组已经处理过，就跳过
@@ -75,7 +170,7 @@ async def handle_user_message(event, user_client, bot_client):
     session = get_session()
     try:
         chat_exists = session.query(Chat).filter(
-            Chat.telegram_chat_id == chat_id
+            Chat.telegram_chat_id == str(chat_id)  # 这里转换为字符串
         ).first()
         
         if chat_exists:
@@ -92,7 +187,7 @@ async def handle_user_message(event, user_client, bot_client):
         # 添加日志：查询源聊天)
         
         source_chat = session.query(Chat).filter(
-            Chat.telegram_chat_id == chat_id
+            Chat.telegram_chat_id == str(chat_id)
         ).first()
         
         if not source_chat:
@@ -118,9 +213,9 @@ async def handle_user_message(event, user_client, bot_client):
             target_chat = rule.target_chat
             logger.info(f'处理转发规则 ID: {rule.id} (从 {source_chat.name} 转发到: {target_chat.name})')
             if rule.use_bot:
-                await bot_handler.process_forward_rule(bot_client, event, chat_id, rule)
+                await bot_handler.process_forward_rule(bot_client, event, str(chat_id), rule)
             else:
-                await user_handler.process_forward_rule(user_client, event, chat_id, rule)
+                await user_handler.process_forward_rule(user_client, event, str(chat_id), rule)
         
     except Exception as e:
         logger.error(f'处理用户消息时发生错误: {str(e)}')
@@ -139,3 +234,14 @@ async def clear_group_cache(group_key, delay=300):  # 5分钟后清除缓存
     """清除已处理的媒体组记录"""
     await asyncio.sleep(delay)
     PROCESSED_GROUPS.discard(group_key) 
+
+async def is_admin(channel_id, user_id, client):
+    """检查用户是否为频道管理员"""
+    try:
+        # 获取频道的管理员列表
+        admins = await client.get_participants(channel_id, filter=ChannelParticipantsAdmins)
+        # 检查用户是否在管理员列表中
+        return any(admin.id == user_id for admin in admins)
+    except Exception as e:
+        logger.error(f"检查管理员权限时出错: {str(e)}")
+        return False 

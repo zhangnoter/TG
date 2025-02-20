@@ -24,3 +24,4 @@ ENV/
 ufb/config/config.json
 /logo/svg
 /test
+db/forward.db1

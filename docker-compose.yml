@@ -9,5 +9,6 @@ services:
       - ./sessions:/app/sessions
       - ./temp:/app/temp
       - ./ufb/config:/app/ufb/config
+      - ./config:/app/config
     stdin_open: true
     tty: true

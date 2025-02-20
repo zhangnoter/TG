@@ -8,6 +8,7 @@ import os
 import asyncio
 import logging
 from models.db_operations import DBOperations
+from scheduler.summary_scheduler import SummaryScheduler
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +23,8 @@ phone_number = os.getenv('PHONE_NUMBER')
 
 # 创建 DBOperations 实例
 db_ops = None
+
+scheduler = None
 
 
 async def init_db_ops():
@@ -56,7 +59,7 @@ setup_listeners(user_client, bot_client)
 
 async def start_clients():
     # 初始化 DBOperations
-    global db_ops
+    global db_ops, scheduler
     db_ops = await DBOperations.create()
 
     try:
@@ -73,6 +76,14 @@ async def start_clients():
         # 注册命令
         await register_bot_commands(bot_client)
 
+        # 创建并启动调度器
+        scheduler = SummaryScheduler(user_client, bot_client)
+        await scheduler.start()
+        
+        # 发送欢迎消息
+        from handlers.bot_handler import send_welcome_message
+        await send_welcome_message(bot_client)
+        
         # 等待两个客户端都断开连接
         await asyncio.gather(
             user_client.run_until_disconnected(),
@@ -82,6 +93,8 @@ async def start_clients():
         # 关闭 DBOperations
         if db_ops and hasattr(db_ops, 'close'):
             await db_ops.close()
+        # 停止调度器
+        scheduler.stop()
 
 
 async def register_bot_commands(bot):

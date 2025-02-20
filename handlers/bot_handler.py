@@ -1,6 +1,6 @@
 from telethon import events, Button
 from models.models import get_session, Chat, ForwardRule, Keyword, ReplaceRule
-from handlers.message_handler import pre_handle
+from handlers.message_handler import pre_handle, ai_handle
 import re
 import os
 import logging
@@ -11,12 +11,24 @@ from enums.enums import ForwardMode, PreviewMode, MessageMode
 from sqlalchemy.exc import IntegrityError
 from telethon.tl.types import ChannelParticipantsAdmins
 import traceback
+from dotenv import load_dotenv
+import yaml
+import pytz
+import tempfile
+
 
 logger = logging.getLogger(__name__)
 
 TEMP_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'temp')
 # 确保 temp 目录存在
 os.makedirs(TEMP_DIR, exist_ok=True)
+
+load_dotenv()
+
+
+MODELS_PER_PAGE = int(os.getenv('AI_MODELS_PER_PAGE', 10))
+KEYWORDS_PER_PAGE = int(os.getenv('KEYWORDS_PER_PAGE', 10))
+
 
 def get_main_module():
     """获取 main 模块"""
@@ -38,6 +50,109 @@ async def get_db_ops():
     if main.db_ops is None:
         main.db_ops = await main.init_db_ops()
     return main.db_ops
+
+
+def load_ai_models():
+    """加载AI模型列表"""
+    try:
+        # 使用正确的路径
+        models_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'ai_models.txt')
+        with open(models_path, 'r', encoding='utf-8') as f:
+            return [line.strip() for line in f if line.strip()]
+    except FileNotFoundError:
+        logger.warning("ai_models.txt 不存在，使用默认模型列表")
+        return ['gpt-3.5-turbo', 'gpt-4', 'gemini-2.0-flash']
+
+AI_MODELS = load_ai_models()
+
+# 添加模型选择按钮创建函数
+def create_model_buttons(rule_id, page=0):
+    """创建模型选择按钮，支持分页
+    
+    Args:
+        rule_id: 规则ID
+        page: 当前页码（从0开始）
+    """
+    buttons = []
+    total_models = len(AI_MODELS)
+    total_pages = (total_models + MODELS_PER_PAGE - 1) // MODELS_PER_PAGE
+    
+    # 计算当前页的模型范围
+    start_idx = page * MODELS_PER_PAGE
+    end_idx = min(start_idx + MODELS_PER_PAGE, total_models)
+    
+    # 添加模型按钮
+    for model in AI_MODELS[start_idx:end_idx]:
+        buttons.append([Button.inline(f"{model}", f"select_model:{rule_id}:{model}")])
+    
+    # 添加导航按钮
+    nav_buttons = []
+    if page > 0:  # 不是第一页，显示"上一页"
+        nav_buttons.append(Button.inline("⬅️ 上一页", f"model_page:{rule_id}:{page-1}"))
+    # 添加页码显示在中间
+    nav_buttons.append(Button.inline(f"{page + 1}/{total_pages}", f"noop:{rule_id}"))
+    if page < total_pages - 1:  # 不是最后一页，显示"下一页"
+        nav_buttons.append(Button.inline("下一页 ➡️", f"model_page:{rule_id}:{page+1}"))
+    if nav_buttons:
+        buttons.append(nav_buttons)
+    
+    # 添加返回按钮
+    buttons.append([Button.inline("返回", f"rule_settings:{rule_id}")])
+    
+    return buttons
+
+
+# 加载时间和时区列表
+def load_summary_times():
+    """加载总结时间列表"""
+    try:
+        times_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'summary_times.txt')
+        with open(times_path, 'r', encoding='utf-8') as f:
+            return [line.strip() for line in f if line.strip()]
+    except FileNotFoundError:
+        logger.warning("summary_times.txt 不存在，使用默认时间")
+        return ["00:00"]
+
+SUMMARY_TIMES = load_summary_times()
+TIMES_PER_PAGE = int(os.getenv('TIMES_PER_PAGE', 10))
+
+def create_summary_time_buttons(rule_id, page=0):
+    """创建时间选择按钮"""
+    buttons = []
+    total_times = len(SUMMARY_TIMES)
+    start_idx = page * TIMES_PER_PAGE
+    end_idx = min(start_idx + TIMES_PER_PAGE, total_times)
+    
+    # 添加时间按钮
+    for time in SUMMARY_TIMES[start_idx:end_idx]:
+        buttons.append([Button.inline(
+            time,
+            f"select_time:{rule_id}:{time}"
+        )])
+    
+    # 添加导航按钮
+    nav_buttons = []
+    if page > 0:
+        nav_buttons.append(Button.inline(
+            "⬅️ 上一页",
+            f"time_page:{rule_id}:{page-1}"
+        ))
+    
+    nav_buttons.append(Button.inline(
+        f"{page + 1}/{(total_times + TIMES_PER_PAGE - 1) // TIMES_PER_PAGE}",
+        "noop:0"
+    ))
+    
+    if end_idx < total_times:
+        nav_buttons.append(Button.inline(
+            "下一页 ➡️",
+            f"time_page:{rule_id}:{page+1}"
+        ))
+    
+    buttons.append(nav_buttons)
+    buttons.append([Button.inline("👈 返回", f"ai_settings:{rule_id}")])
+    
+    return buttons
 
 # 规则配置字段定义
 RULE_SETTINGS = {
@@ -62,8 +177,8 @@ RULE_SETTINGS = {
     'is_replace': {
         'display_name': '替换模式',
         'values': {
-            True: '替换',
-            False: '不替换'
+            True: '开启',
+            False: '关闭'
         },
         'toggle_action': 'toggle_replace',
         'toggle_func': lambda current: not current
@@ -100,6 +215,15 @@ RULE_SETTINGS = {
         'toggle_action': 'toggle_original_link',
         'toggle_func': lambda current: not current
     },
+    'is_delete_original': {
+        'display_name': '删除原始消息',
+        'values': {
+            True: '开启',
+            False: '关闭'
+        },
+        'toggle_action': 'toggle_delete_original',
+        'toggle_func': lambda current: not current
+    },
     'is_ufb': {
         'display_name': 'UFB同步',
         'values': {
@@ -108,6 +232,83 @@ RULE_SETTINGS = {
         },
         'toggle_action': 'toggle_ufb',
         'toggle_func': lambda current: not current
+    },
+    'is_original_sender': {
+        'display_name': '原始发送者',
+        'values': {
+            True: '显示',
+            False: '隐藏'
+        },
+        'toggle_action': 'toggle_original_sender',
+        'toggle_func': lambda current: not current
+    },
+    'is_original_time': {
+        'display_name': '发送时间',
+        'values': {
+            True: '显示',
+            False: '隐藏'
+        },
+        'toggle_action': 'toggle_original_time',
+        'toggle_func': lambda current: not current
+    }
+}
+
+# 添加 AI 设置
+AI_SETTINGS = {
+    'is_ai': {
+        'display_name': 'AI处理',
+        'values': {
+            True: '开启',
+            False: '关闭'
+        },
+        'toggle_action': 'toggle_ai',
+        'toggle_func': lambda current: not current
+    },
+    'ai_model': {
+        'display_name': 'AI模型',
+        'values': {
+            None: '默认',
+            '': '默认',
+            **{model: model for model in AI_MODELS}
+        },
+        'toggle_action': 'change_model',
+        'toggle_func': None
+    },
+    'ai_prompt': {
+        'display_name': 'AI提示词',
+        'values': {
+            None: os.getenv('DEFAULT_AI_PROMPT'),
+            '': os.getenv('DEFAULT_AI_PROMPT'),
+        },
+        'toggle_action': 'set_prompt',
+        'toggle_func': None
+    },
+    'is_summary': {
+        'display_name': 'AI总结',
+        'values': {
+            True: '开启',
+            False: '关闭'
+        },
+        'toggle_action': 'toggle_summary',
+        'toggle_func': lambda current: not current
+    },
+    'summary_time': {
+        'display_name': '总结时间',
+        'values': {
+            None: '00:00',
+            '': '00:00'
+        },
+        'toggle_action': 'set_summary_time',
+        'toggle_func': None
+    },
+    'summary_prompt': {  # 新增配置项
+        'display_name': 'AI总结提示词',
+        'values': {
+            None: os.getenv('DEFAULT_SUMMARY_PROMPT'),
+            '': os.getenv('DEFAULT_SUMMARY_PROMPT'),
+        },
+        'toggle_action': 'set_summary_prompt',
+        'toggle_func': None
     }
 }
 
@@ -128,26 +329,128 @@ def get_max_media_size():
     return float(max_media_size_str) * 1024 * 1024  # 转换为字节，支持小数
 
 def create_buttons(rule):
-    """根据配置创建设置按钮"""
+    """创建规则设置按钮"""
     buttons = []
     
-    # 始终显示的按钮
-    basic_settings = ['mode', 'use_bot']
-    
-    # 为每个配置字段创建按钮
-    for field, config in RULE_SETTINGS.items():
-        # 如果是使用用户账号模式，只显示基本按钮
-        if not rule.use_bot and field not in basic_settings:
-            continue
+    # 获取当前聊天的当前选中规则
+    session = get_session()
+    try:
+        target_chat = rule.target_chat
+        current_add_id = target_chat.current_add_id
+        source_chat = rule.source_chat
+        
+        # 添加规则切换按钮
+        is_current = current_add_id == source_chat.telegram_chat_id
+        buttons.append([
+            Button.inline(
+                f"{'✅ ' if is_current else ''}应用当前规则",
+                f"toggle_current:{rule.id}"
+            )
+        ])
+        
+        # 转发模式和转发方式放在一行
+        buttons.append([
+            Button.inline(
+                f"📥 转发模式: {RULE_SETTINGS['mode']['values'][rule.mode]}",
+                f"toggle_mode:{rule.id}"
+            ),
+            Button.inline(
+                f"🤖 转发方式: {RULE_SETTINGS['use_bot']['values'][rule.use_bot]}",
+                f"toggle_bot:{rule.id}"
+            )
+        ])
+        
+        # 其他设置两两一行
+        if rule.use_bot:  # 只在使用机器人时显示这些设置
+            buttons.append([
+                Button.inline(
+                    f"🔄 替换模式: {RULE_SETTINGS['is_replace']['values'][rule.is_replace]}",
+                    f"toggle_replace:{rule.id}"
+                ),
+                Button.inline(
+                    f"📝 消息格式: {RULE_SETTINGS['message_mode']['values'][rule.message_mode]}",
+                    f"toggle_message_mode:{rule.id}"
+                )
+            ])
             
+            buttons.append([
+                Button.inline(
+                    f"👁 预览模式: {RULE_SETTINGS['is_preview']['values'][rule.is_preview]}",
+                    f"toggle_preview:{rule.id}"
+                ),
+                Button.inline(
+                    f"🔗 原始链接: {RULE_SETTINGS['is_original_link']['values'][rule.is_original_link]}",
+                    f"toggle_original_link:{rule.id}"
+                )
+            ])
+            
+            buttons.append([
+                Button.inline(
+                    f"👤 原始发送者: {RULE_SETTINGS['is_original_sender']['values'][rule.is_original_sender]}",
+                    f"toggle_original_sender:{rule.id}"
+                ),
+                Button.inline(
+                    f"⏰ 发送时间: {RULE_SETTINGS['is_original_time']['values'][rule.is_original_time]}",
+                    f"toggle_original_time:{rule.id}"
+                )
+            ])
+            
+            buttons.append([
+                Button.inline(
+                    f"🗑 删除原消息: {RULE_SETTINGS['is_delete_original']['values'][rule.is_delete_original]}",
+                    f"toggle_delete_original:{rule.id}"
+                ),
+                Button.inline(
+                    f"🔄 UFB同步: {RULE_SETTINGS['is_ufb']['values'][rule.is_ufb]}",
+                    f"toggle_ufb:{rule.id}"
+                )
+            ])
+            
+            # AI设置单独一行
+            buttons.append([
+                Button.inline(
+                    "🤖 AI设置",
+                    f"ai_settings:{rule.id}"
+                )
+            ])
+        
+        # 删除规则和返回按钮
+        buttons.append([
+            Button.inline(
+                "❌ 删除规则",
+                f"delete:{rule.id}"
+            )
+        ])
+        
+        buttons.append([
+            Button.inline(
+                "👈 返回",
+                "settings"
+            )
+        ])
+        
+    finally:
+        session.close()
+    
+    return buttons
+
+def create_ai_settings_buttons(rule):
+    """创建 AI 设置按钮"""
+    buttons = []
+    
+    # 添加 AI 设置按钮
+    for field, config in AI_SETTINGS.items():
         current_value = getattr(rule, field)
-        display_value = config['values'][current_value]
+        if field == 'ai_prompt':
+            display_value = current_value[:20] + '...' if current_value and len(current_value) > 20 else (current_value or os.getenv('DEFAULT_AI_PROMPT'))
+        else:
+            display_value = config['values'].get(current_value, str(current_value))
         button_text = f"{config['display_name']}: {display_value}"
         callback_data = f"{config['toggle_action']}:{rule.id}"
         buttons.append([Button.inline(button_text, callback_data)])
     
-    buttons.append([Button.inline('❌ 删除当前规则', f"delete:{rule.id}")])
-    buttons.append([Button.inline('👈 返回', 'settings')])
+    # 添加返回按钮
+    buttons.append([Button.inline('👈 返回规则设置', f"rule_settings:{rule.id}")])
     
     return buttons
 
@@ -278,35 +581,152 @@ async def handle_command(client, event):
     # 命令处理器字典
     command_handlers = {
         'bind': lambda: handle_bind_command(event, client, parts),
+        'b': lambda: handle_bind_command(event, client, parts),
         'settings': lambda: handle_settings_command(event),
+        's': lambda: handle_settings_command(event),
         'switch': lambda: handle_switch_command(event),
+        'sw': lambda: handle_switch_command(event),
         'add': lambda: handle_add_command(event, command, parts),
+        'a': lambda: handle_add_command(event, command, parts),
         'add_regex': lambda: handle_add_command(event, command, parts),
+        'ar': lambda: handle_add_command(event, 'add_regex', parts),
         'replace': lambda: handle_replace_command(event, parts),
+        'r': lambda: handle_replace_command(event, parts),
         'list_keyword': lambda: handle_list_keyword_command(event),
+        'lk': lambda: handle_list_keyword_command(event),
         'list_replace': lambda: handle_list_replace_command(event),
+        'lr': lambda: handle_list_replace_command(event),
         'remove_keyword': lambda: handle_remove_command(event, command, parts),
+        'rk': lambda: handle_remove_command(event, 'remove_keyword', parts),
         'remove_replace': lambda: handle_remove_command(event, command, parts),
+        'rr': lambda: handle_remove_command(event, 'remove_replace', parts),
         'clear_all': lambda: handle_clear_all_command(event),
+        'ca': lambda: handle_clear_all_command(event),
         'start': lambda: handle_start_command(event),
         'help': lambda: handle_help_command(event),
-        'export_keyword': lambda: handle_export_keyword_command(event, client),
+        'h': lambda: handle_help_command(event),
+        'export_keyword': lambda: handle_export_keyword_command(event, command),
+        'ek': lambda: handle_export_keyword_command(event, command),
         'export_replace': lambda: handle_export_replace_command(event, client),
+        'er': lambda: handle_export_replace_command(event, client),
         'add_all': lambda: handle_add_all_command(event, command, parts),
+        'aa': lambda: handle_add_all_command(event, 'add_all', parts),
         'add_regex_all': lambda: handle_add_all_command(event, command, parts),
+        'ara': lambda: handle_add_all_command(event, 'add_regex_all', parts),
         'replace_all': lambda: handle_replace_all_command(event, parts),
+        'ra': lambda: handle_replace_all_command(event, parts),
         'import_keyword': lambda: handle_import_command(event, command),
+        'ik': lambda: handle_import_command(event, 'import_keyword'),
         'import_regex_keyword': lambda: handle_import_command(event, command),
+        'irk': lambda: handle_import_command(event, 'import_regex_keyword'),
         'import_replace': lambda: handle_import_command(event, command),
+        'ir': lambda: handle_import_command(event, 'import_replace'),
         'ufb_bind': lambda: handle_ufb_bind_command(event, command),
+        'ub': lambda: handle_ufb_bind_command(event, 'ufb_bind'),
         'ufb_unbind': lambda: handle_ufb_unbind_command(event, command),
-        'ufb_item_change': lambda: handle_ufb_item_change_command(event, command)
+        'uu': lambda: handle_ufb_unbind_command(event, 'ufb_unbind'),
+        'ufb_item_change': lambda: handle_ufb_item_change_command(event, command),
+        'uic': lambda: handle_ufb_item_change_command(event, 'ufb_item_change'),
     }
     
     # 执行对应的命令处理器
     handler = command_handlers.get(command)
     if handler:
         await handler()
+
+
+async def handle_import_command(event, command):
+    """处理导入命令"""
+    try:
+        # 检查是否有附件
+        if not event.message.file:
+            await event.reply(f'请将文件和 /{command} 命令一起发送')
+            return
+            
+        # 获取当前规则
+        session = get_session()
+        try:
+            rule_info = await get_current_rule(session, event)
+            if not rule_info:
+                return
+                
+            rule, source_chat = rule_info
+            
+            # 下载文件
+            file_path = await event.message.download_media(TEMP_DIR)
+            
+            try:
+                # 读取文件内容
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    lines = [line.strip() for line in f if line.strip()]
+                
+                # 根据命令类型处理
+                if command == 'import_replace':
+                    success_count = 0
+                    logger.info(f'开始导入替换规则,共 {len(lines)} 行')
+                    for i, line in enumerate(lines, 1):
+                        try:
+                            # 按第一个制表符分割
+                            parts = line.split('\t', 1)
+                            pattern = parts[0].strip()
+                            content = parts[1].strip() if len(parts) > 1 else ''
+                            
+                            logger.info(f'处理第 {i} 行: pattern="{pattern}", content="{content}"')
+                            
+                            # 创建替换规则
+                            replace_rule = ReplaceRule(
+                                rule_id=rule.id,
+                                pattern=pattern,
+                                content=content
+                            )
+                            session.add(replace_rule)
+                            success_count += 1
+                            logger.info(f'成功添加替换规则: pattern="{pattern}", content="{content}"')
+                            
+                            # 确保启用替换模式
+                            if not rule.is_replace:
+                                rule.is_replace = True
+                                logger.info('已启用替换模式')
+                                
+                        except Exception as e:
+                            logger.error(f'处理第 {i} 行替换规则时出错: {str(e)}\n{traceback.format_exc()}')
+                            continue
+                            
+                    session.commit()
+                    logger.info(f'导入完成,成功导入 {success_count} 条替换规则')
+                    await event.reply(f'成功导入 {success_count} 条替换规则\n规则: 来自 {source_chat.name}')
+                    
+                else:
+                    # 处理关键字导入
+                    db_ops = await get_db_ops()
+                    success_count, duplicate_count = await db_ops.add_keywords(
+                        session,
+                        rule.id,
+                        lines,
+                        is_regex=(command == 'import_regex_keyword')
+                    )
+                    
+                    session.commit()
+                    
+                    keyword_type = "正则表达式" if command == "import_regex_keyword" else "关键字"
+                    result_text = f'成功导入 {success_count} 个{keyword_type}'
+                    if duplicate_count > 0:
+                        result_text += f'\n跳过重复: {duplicate_count} 个'
+                    result_text += f'\n规则: 来自 {source_chat.name}'
+                    
+                    await event.reply(result_text)
+                    
+            finally:
+                # 删除临时文件
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+                    
+        finally:
+            session.close()
+            
+    except Exception as e:
+        logger.error(f'导入过程出错: {str(e)}')
+        await event.reply('导入过程出错，请检查日志')
 
 async def handle_ufb_item_change_command(event, command):
     """处理 ufb_item_change 命令"""
@@ -406,11 +826,53 @@ async def handle_ufb_unbind_command(event, command):
         
 async def handle_add_command(event, command, parts):
     """处理 add 和 add_regex 命令"""
-    if len(parts) < 2:
-        await event.reply(f'用法: /{command} <关键字1> [关键字2] [关键字3] ...')
+    message_text = event.message.text
+    if len(message_text.split(None, 1)) < 2:
+        await event.reply(f'用法: /{command} <关键字1> [关键字2] ...\n例如:\n/{command} keyword1 "key word 2" \'key word 3\'')
         return
         
-    keywords = parts[1:]  # 获取所有关键字
+    # 分离命令和参数部分
+    _, args_text = message_text.split(None, 1)
+    
+    keywords = []
+    if command == 'add':
+        # 解析带引号的参数
+        current_word = []
+        in_quotes = False
+        quote_char = None
+        
+        for char in args_text:
+            if char in ['"', "'"]:  # 处理引号
+                if not in_quotes:  # 开始引号
+                    in_quotes = True
+                    quote_char = char
+                elif char == quote_char:  # 结束匹配的引号
+                    in_quotes = False
+                    quote_char = None
+                    if current_word:  # 添加当前词
+                        keywords.append(''.join(current_word))
+                        current_word = []
+            elif char.isspace() and not in_quotes:  # 非引号中的空格
+                if current_word:  # 添加当前词
+                    keywords.append(''.join(current_word))
+                    current_word = []
+            else:  # 普通字符
+                current_word.append(char)
+        
+        # 处理最后一个词
+        if current_word:
+            keywords.append(''.join(current_word))
+            
+        # 过滤空字符串
+        keywords = [k.strip() for k in keywords if k.strip()]
+    else:
+        # add_regex 命令保持原样
+        keywords = parts[1:]
+    
+    if not keywords:
+        await event.reply('请提供至少一个关键字')
+        return
+    
     session = get_session()
     try:
         rule_info = await get_current_rule(session, event)
@@ -675,8 +1137,50 @@ async def callback_rule_settings(event, rule_id, session, message):
         buttons=create_buttons(rule)
     )
 
+async def callback_toggle_current(event, rule_id, session, message):
+    """处理切换当前规则的回调"""
+    rule = session.query(ForwardRule).get(rule_id)
+    if not rule:
+        await event.answer('规则不存在')
+        return
+        
+    target_chat = rule.target_chat
+    source_chat = rule.source_chat
+    
+    # 更新当前选中的源聊天
+    target_chat.current_add_id = source_chat.telegram_chat_id
+    session.commit()
+    
+    # 更新按钮显示
+    await message.edit(
+        create_settings_text(rule),
+        buttons=create_buttons(rule)
+    )
+    
+    await event.answer(f'已切换到: {source_chat.name}')
+
+async def callback_set_summary_prompt(event, rule_id, session, message):
+    """处理设置AI总结提示词的回调"""
+    rule = session.query(ForwardRule).get(rule_id)
+    if not rule:
+        await event.answer('规则不存在')
+        return
+        
+    # 发送提示消息
+    await message.edit(
+        "请发送新的AI总结提示词，或发送 /cancel 取消",
+        buttons=[[Button.inline("取消", f"ai_settings:{rule_id}")]]
+    )
+    
+    # 设置用户状态
+    user_id = event.sender_id
+    chat_id = event.chat_id
+    db_ops = await get_db_ops()
+    await db_ops.set_user_state(user_id, chat_id, f"set_summary_prompt:{rule_id}")
+
 # 回调处理器字典
 CALLBACK_HANDLERS = {
+    'toggle_current': callback_toggle_current,  # 添加新的处理器
     'switch': callback_switch,
     'settings': callback_settings,
     'delete': callback_delete,
@@ -684,6 +1188,7 @@ CALLBACK_HANDLERS = {
     'help': callback_help,
     'start': callback_start,
     'rule_settings': callback_rule_settings,  # 添加规则设置处理器
+    'set_summary_prompt': callback_set_summary_prompt,
 }
 
 async def handle_callback(event):
@@ -692,6 +1197,189 @@ async def handle_callback(event):
         data = event.data.decode()
         logger.info(f'收到回调数据: {data}')
         
+        if data.startswith('select_model:'):
+            # 处理模型选择
+            _, rule_id, model = data.split(':')
+            session = get_session()
+            try:
+                rule = session.query(ForwardRule).get(int(rule_id))
+                if rule:
+                    rule.ai_model = model
+                    session.commit()
+                    logger.info(f"已更新规则 {rule_id} 的AI模型为: {model}")
+                    
+                    # 返回到 AI 设置页面
+                    await event.edit("AI 设置：", buttons=create_ai_settings_buttons(rule))
+            finally:
+                session.close()
+            return
+            
+        if data.startswith('ai_settings:'):
+            # 显示 AI 设置页面
+            rule_id = data.split(':')[1]
+            session = get_session()
+            try:
+                rule = session.query(ForwardRule).get(int(rule_id))
+                if rule:
+                    await event.edit("AI 设置：", buttons=create_ai_settings_buttons(rule))
+            finally:
+                session.close()
+            return
+            
+        # 处理 AI 设置中的切换操作
+        if data.startswith(('toggle_ai:', 'set_prompt:', 'change_model:', 'set_summary_prompt:')):
+            rule_id = data.split(':')[1]
+            session = get_session()
+            try:
+                rule = session.query(ForwardRule).get(int(rule_id))
+                if not rule:
+                    await event.answer('规则不存在')
+                    return
+                    
+                if data.startswith('set_summary_prompt:'):
+                    # 存储当前正在设置总结提示词的规则 ID
+                    event.client.setting_prompt_for_rule = int(rule_id)
+                    
+                    await event.edit(
+                        "请发送新的AI总结提示词\n\n"
+                        "提示：\n"
+                        "1. 可以使用 {Messages} 表示需要总结的所有消息\n"
+                        "2. 例如：'请总结以下内容：{Messages}'\n"
+                        "3. 当前提示词：" + (rule.summary_prompt or os.getenv('DEFAULT_SUMMARY_PROMPT') or "未设置") + "\n\n"
+                        "当前规则ID: " + rule_id + " \n\n"
+                        "输入 /cancel 取消设置",
+                        buttons=None
+                    )
+                    return
+                    
+                if data.startswith('toggle_ai:'):
+                    rule.is_ai = not rule.is_ai
+                    session.commit()
+                    await event.edit("AI 设置：", buttons=create_ai_settings_buttons(rule))
+                    return
+                elif data.startswith('set_prompt:'):
+                    # 存储当前正在设置提示词的规则 ID
+                    event.client.setting_prompt_for_rule = int(rule_id)
+                    
+                    await event.edit(
+                        "请输入新的 AI 提示词\n\n"
+                        "提示：\n"
+                        "1. 可以使用 {Message} 表示原始消息\n"
+                        "2. 例如：'请将以下内容翻译成英文：{Message}'\n"
+                        "3. 当前提示词：" + (rule.ai_prompt or "未设置") + "\n\n"
+                        "当前规则ID: " + rule_id + " \n\n"
+                        "输入 /cancel 取消设置",
+                        buttons=None
+                    )
+                    return
+                elif data.startswith('change_model:'):
+                    await event.edit("请选择AI模型：", buttons=create_model_buttons(rule_id, page=0))
+                    return
+            finally:
+                session.close()
+            return
+            
+        if data.startswith('model_page:'):
+            # 处理翻页
+            _, rule_id, page = data.split(':')
+            page = int(page)
+            await event.edit("请选择AI模型：", buttons=create_model_buttons(rule_id, page=page))
+            return
+            
+        if data.startswith('noop:'):
+            # 用于页码按钮，不做任何操作
+            await event.answer("当前页码")
+            return
+            
+        if data.startswith('select_model:'):
+            # 处理模型选择
+            _, rule_id, model = data.split(':')
+            session = get_session()
+            try:
+                rule = session.query(ForwardRule).get(int(rule_id))
+                if rule:
+                    rule.ai_model = model
+                    session.commit()
+                    logger.info(f"已更新规则 {rule_id} 的AI模型为: {model}")
+                    
+                    # 返回设置页面
+                    text = create_settings_text(rule)
+                    buttons = create_buttons(rule)
+                    await event.edit(text, buttons=buttons)
+            finally:
+                session.close()
+            return
+        if data.startswith('toggle_summary:'):
+            rule_id = data.split(':')[1]
+            session = get_session()
+            try:
+                rule = session.query(ForwardRule).get(int(rule_id))
+                if rule:
+                    rule.is_summary = not rule.is_summary
+                    session.commit()
+                    
+                    # 更新调度任务
+                    main = get_main_module()
+                    if hasattr(main, 'scheduler') and main.scheduler:
+                        await main.scheduler.schedule_rule(rule)
+                    else:
+                        logger.warning("调度器未初始化")
+                    
+                    await event.edit("AI 设置：", buttons=create_ai_settings_buttons(rule))
+            finally:
+                session.close()
+            return
+            
+        if data.startswith('set_summary_time:'):
+            rule_id = data.split(':')[1]
+            await event.edit("请选择总结时间：", buttons=create_summary_time_buttons(rule_id, page=0))
+            return
+            
+        if data.startswith('select_time:'):
+            parts = data.split(':', 2)  # 最多分割2次
+            if len(parts) == 3:
+                _, rule_id, time = parts
+                logger.info(f"设置规则 {rule_id} 的总结时间为: {time}")
+                
+                session = get_session()
+                try:
+                    rule = session.query(ForwardRule).get(int(rule_id))
+                    if rule:
+                        # 记录旧时间
+                        old_time = rule.summary_time
+                        
+                        # 更新时间
+                        rule.summary_time = time
+                        session.commit()
+                        logger.info(f"数据库更新成功: {old_time} -> {time}")
+                        
+                        # 如果总结功能已开启，重新调度任务
+                        if rule.is_summary:
+                            logger.info("规则已启用总结功能，开始更新调度任务")
+                            main = get_main_module()
+                            if hasattr(main, 'scheduler') and main.scheduler:
+                                await main.scheduler.schedule_rule(rule)
+                                logger.info(f"调度任务更新成功，新时间: {time}")
+                            else:
+                                logger.warning("调度器未初始化")
+                        else:
+                            logger.info("规则未启用总结功能，跳过调度任务更新")
+                        
+                        await event.edit("AI 设置：", buttons=create_ai_settings_buttons(rule))
+                        logger.info("界面更新完成")
+                except Exception as e:
+                    logger.error(f"设置总结时间时出错: {str(e)}")
+                    logger.error(f"错误详情: {traceback.format_exc()}")
+                finally:
+                    session.close()
+            return
+            
+        if data.startswith('time_page:'):
+            _, rule_id, page = data.split(':')
+            page = int(page)
+            await event.edit("请选择总结时间：", buttons=create_summary_time_buttons(rule_id, page=page))
+            return
+            
         # 解析回调数据
         parts = data.split(':')
         action = parts[0]
@@ -704,6 +1392,28 @@ async def handle_callback(event):
         # 使用会话
         session = get_session()
         try:
+            # 处理设置提示词的特殊情况
+            if action == 'set_prompt':
+                rule = session.query(ForwardRule).get(int(rule_id))
+                if not rule:
+                    await event.answer('规则不存在')
+                    return
+                    
+                # 存储当前正在设置提示词的规则 ID
+                event.client.setting_prompt_for_rule = int(rule_id)
+                
+                await event.edit(
+                    "请输入新的 AI 提示词\n\n"
+                    "提示：\n"
+                    "1. 可以使用 {Message} 表示原始消息\n"
+                    "2. 例如：'请将以下内容翻译成英文：{Message}'\n"
+                    "3. 当前提示词：" + (rule.ai_prompt or "未设置") + "\n\n"
+                    "当前规则ID: " + rule_id +" \n\n"                                                  
+                    "输入 /cancel 取消设置",
+                    buttons=None
+                )
+                return
+            
             # 获取对应的处理器
             handler = CALLBACK_HANDLERS.get(action)
             if handler:
@@ -819,7 +1529,9 @@ async def create_list_buttons(total_pages, current_page, command):
 
 async def show_list(event, command, items, formatter, title, page=1):
     """显示分页列表"""
-    PAGE_SIZE = 50
+
+    # KEYWORDS_PER_PAGE
+    PAGE_SIZE = KEYWORDS_PER_PAGE
     total_items = len(items)
     total_pages = (total_items + PAGE_SIZE - 1) // PAGE_SIZE
     
@@ -1297,45 +2009,45 @@ async def handle_help_command(event):
     """处理 help 命令"""
     help_text = """
 绑定转发 
-/bind <目标聊天链接或名称> - 名称用引号包裹
+/bind(/b) <目标聊天链接或名称> - 名称用引号包裹
 
 关键字管理
-/add <关键字1> [关键字2] ... - 添加普通关键字到当前规则
-/add_regex <正则1> [正则2] ... - 添加正则表达式关键字到当前规则
-/add_all <关键字1> [关键字2] ... - 添加普通关键字到所有规则
-/add_regex_all <正则1> [正则2] ... - 添加正则表达式关键字到所有规则
-/import_keyword <同时发送文件> - 指令和文件一起发送，一行一个关键字
-/import_regex_keyword <同时发送文件> - 指令和文件一起发送，一行一个正则表达式
-/export_keyword - 导出当前规则的关键字到文件
+/add(/a) <关键字1> [关键字2] ... - 添加普通关键字到当前规则
+/add_regex(/ar) <正则1> [正则2] ... - 添加正则表达式关键字到当前规则
+/add_all(/aa) <关键字1> [关键字2] ... - 添加普通关键字到所有规则
+/add_regex_all(/ara) <正则1> [正则2] ... - 添加正则表达式关键字到所有规则
+/import_keyword(/ik) <同时发送文件> - 指令和文件一起发送，一行一个关键字
+/import_regex_keyword(/irk) <同时发送文件> - 指令和文件一起发送，一行一个正则表达式
+/export_keyword(/ek) - 导出当前规则的关键字到文件
 
 替换规则
-/replace <匹配模式> <替换内容/替换表达式> - 添加替换规则到当前规则
-/replace_all <匹配模式> <替换内容/替换表达式> - 添加替换规则到所有规则
-/import_replace <同时发送文件> - 指令和文件一起发送，一行一个替换规则
-/export_replace - 导出当前规则的替换规则到文件
+/replace(/r) <匹配模式> <替换内容/替换表达式> - 添加替换规则到当前规则
+/replace_all(/ra) <匹配模式> <替换内容/替换表达式> - 添加替换规则到所有规则
+/import_replace(/ir) <同时发送文件> - 指令和文件一起发送，一行一个替换规则
+/export_replace(/er) - 导出当前规则的替换规则到文件
 注意：不填替换内容则删除匹配内容
 
 切换规则
-/switch - 切换当前操作的转发规则
+- 在settings中切换当前操作的转发规则
 
 查看列表
-/list_keyword - 查看当前规则的关键字列表
-/list_replace - 查看当前规则的替换规则列表
+/list_keyword(/lk) - 查看当前规则的关键字列表
+/list_replace(/lr) - 查看当前规则的替换规则列表
 
 设置管理
-/settings - 显示选用的转发规则的设置
+/settings(/s) - 显示选用的转发规则的设置
 
 UFB
-/ufb_bind <域名> - 绑定指定的域名
-/ufb_unbind - 解除域名绑定
-/ufb_item_change - 指定绑定域名下的项目
+/ufb_bind(/ub) <域名> - 绑定指定的域名
+/ufb_unbind(/ub) - 解除域名绑定
+/ufb_item_change(/uc) - 指定绑定域名下的项目
 
 清除数据
-/clear_all - 清空所有数据
+/clear_all(/ca) - 清空所有数据
 """
     await event.reply(help_text) 
 
-async def handle_export_keyword_command(event, client):
+async def handle_export_keyword_command(event, command):
     """处理 export_keyword 命令"""
     session = get_session()
     try:
@@ -1346,35 +2058,56 @@ async def handle_export_keyword_command(event, client):
         rule, source_chat = rule_info
         
         # 获取所有关键字
-        db_ops = await get_db_ops()
-        keywords = await db_ops.get_keywords(session, rule.id)
+        normal_keywords = []
+        regex_keywords = []
         
-        # 分离普通关键字和正则关键字
-        normal_keywords = [kw.keyword for kw in keywords if not kw.is_regex]
-        regex_keywords = [kw.keyword for kw in keywords if kw.is_regex]
+        # 直接从规则对象获取关键字
+        for keyword in rule.keywords:
+            if keyword.is_regex:
+                regex_keywords.append(keyword.keyword)
+            else:
+                normal_keywords.append(keyword.keyword)
         
-        # 创建并写入文件
+        # 创建临时文件
         normal_file = os.path.join(TEMP_DIR, 'keywords.txt')
         regex_file = os.path.join(TEMP_DIR, 'regex_keywords.txt')
         
+        # 写入普通关键字，确保每行一个
         with open(normal_file, 'w', encoding='utf-8') as f:
             f.write('\n'.join(normal_keywords))
-        
+            
+        # 写入正则关键字，确保每行一个
         with open(regex_file, 'w', encoding='utf-8') as f:
             f.write('\n'.join(regex_keywords))
         
+        # 如果两个文件都是空的
+        if not normal_keywords and not regex_keywords:
+            await event.reply("当前规则没有任何关键字")
+            return
+            
         try:
-            # 发送文件
-            await client.send_file(
+            # 先发送文件
+            files = []
+            if normal_keywords:
+                files.append(normal_file)
+            if regex_keywords:
+                files.append(regex_file)
+                
+            await event.client.send_file(
                 event.chat_id,
-                [normal_file, regex_file],
-                caption=f'已导出关键字列表\n规则: 来自 {source_chat.name}'
+                files
             )
+            
+            # 然后单独发送说明文字
+            await event.respond(f"规则: {source_chat.name}")
+            
         finally:
             # 删除临时文件
-            os.remove(normal_file)
-            os.remove(regex_file)
-        
+            if os.path.exists(normal_file):
+                os.remove(normal_file)
+            if os.path.exists(regex_file):
+                os.remove(regex_file)
+                
     except Exception as e:
         logger.error(f'导出关键字时出错: {str(e)}')
         await event.reply('导出关键字时出错，请检查日志')
@@ -1392,41 +2125,94 @@ async def handle_export_replace_command(event, client):
         rule, source_chat = rule_info
         
         # 获取所有替换规则
-        db_ops = await get_db_ops()
-        replace_rules = await db_ops.get_replace_rules(session, rule.id)
+        replace_rules = []
+        for rule in rule.replace_rules:
+            replace_rules.append((rule.pattern, rule.content))
         
+        # 如果没有替换规则
+        if not replace_rules:
+            await event.reply("当前规则没有任何替换规则")
+            return
+            
         # 创建并写入文件
         replace_file = os.path.join(TEMP_DIR, 'replace_rules.txt')
         
+        # 写入替换规则，每行一个规则，用制表符分隔
         with open(replace_file, 'w', encoding='utf-8') as f:
-            for rule in replace_rules:
-                line = f"{rule.pattern}\t{rule.content if rule.content else ''}"
+            for pattern, content in replace_rules:
+                line = f"{pattern}\t{content if content else ''}"
                 f.write(line + '\n')
         
         try:
-            # 发送文件
-            await client.send_file(
+            # 先发送文件
+            await event.client.send_file(
                 event.chat_id,
-                replace_file,
-                caption=f'已导出替换规则列表\n规则: 来自 {source_chat.name}'
+                replace_file
             )
+            
+            # 然后单独发送说明文字
+            await event.respond(f"规则: {source_chat.name}")
+            
         finally:
             # 删除临时文件
-            os.remove(replace_file)
-        
+            if os.path.exists(replace_file):
+                os.remove(replace_file)
+                
     except Exception as e:
         logger.error(f'导出替换规则时出错: {str(e)}')
         await event.reply('导出替换规则时出错，请检查日志')
     finally:
-        session.close() 
+        session.close()
 
 async def handle_add_all_command(event, command, parts):
     """处理 add_all 和 add_regex_all 命令"""
-    if len(parts) < 2:
-        await event.reply(f'用法: /{command} <关键字1> [关键字2] [关键字3] ...')
+    message_text = event.message.text
+    if len(message_text.split(None, 1)) < 2:
+        await event.reply(f'用法: /{command} <关键字1> [关键字2] ...\n例如:\n/{command} keyword1 "key word 2" \'key word 3\'')
         return
         
-    keywords = parts[1:]  # 获取所有关键字
+    # 分离命令和参数部分
+    _, args_text = message_text.split(None, 1)
+    
+    keywords = []
+    if command == 'add_all':
+        # 解析带引号的参数
+        current_word = []
+        in_quotes = False
+        quote_char = None
+        
+        for char in args_text:
+            if char in ['"', "'"]:  # 处理引号
+                if not in_quotes:  # 开始引号
+                    in_quotes = True
+                    quote_char = char
+                elif char == quote_char:  # 结束匹配的引号
+                    in_quotes = False
+                    quote_char = None
+                    if current_word:  # 添加当前词
+                        keywords.append(''.join(current_word))
+                        current_word = []
+            elif char.isspace() and not in_quotes:  # 非引号中的空格
+                if current_word:  # 添加当前词
+                    keywords.append(''.join(current_word))
+                    current_word = []
+            else:  # 普通字符
+                current_word.append(char)
+        
+        # 处理最后一个词
+        if current_word:
+            keywords.append(''.join(current_word))
+            
+        # 过滤空字符串
+        keywords = [k.strip() for k in keywords if k.strip()]
+    else:
+        # add_regex_all 命令保持原样
+        keywords = parts[1:]
+    
+    if not keywords:
+        await event.reply('请提供至少一个关键字')
+        return
+        
     session = get_session()
     try:
         rules = await get_all_rules(session, event)
@@ -1455,7 +2241,7 @@ async def handle_add_all_command(event, command, parts):
         keywords_text = '\n'.join(f'- {k}' for k in keywords)
         result_text = f'已添加 {success_count} 个{keyword_type}\n'
         if duplicate_count > 0:
-            result_text += f'跳过重复: {duplicate_count} 个'
+            result_text += f'跳过重复: {duplicate_count} 个\n'
         result_text += f'关键字列表:\n{keywords_text}'
         
         await event.reply(result_text)
@@ -1465,7 +2251,7 @@ async def handle_add_all_command(event, command, parts):
         logger.error(f'批量添加关键字时出错: {str(e)}')
         await event.reply('添加关键字时出错，请检查日志')
     finally:
-        session.close() 
+        session.close()
 
 async def handle_replace_all_command(event, parts):
     """处理 replace_all 命令"""
@@ -1525,95 +2311,6 @@ async def handle_replace_all_command(event, parts):
         await event.reply('添加替换规则时出错，请检查日志')
     finally:
         session.close() 
-
-async def handle_import_command(event, command):
-    """处理导入命令（import_keyword, import_regex_keyword, import_replace）"""
-    session = get_session()
-    try:
-        rule_info = await get_current_rule(session, event)
-        if not rule_info:
-            return
-            
-        rule, source_chat = rule_info
-        
-        # 检查是否有附带文件
-        if not event.message.file:
-            if command == 'import_keyword':
-                await event.reply('请在命令中附带包含关键字的文本文件（每行一个关键字）')
-            elif command == 'import_regex_keyword':
-                await event.reply('请在命令中附带包含正则表达式的文本文件（每行一个正则表达式）')
-            else:  # import_replace
-                await event.reply('请在命令中附带包含替换规则的文本文件（每行一个规则，使用制表符分隔匹配模式和替换内容）')
-            return
-        
-        # 下载文件
-        file_path = os.path.join(TEMP_DIR, 'import_temp.txt')
-        await event.message.download_media(file_path)
-        
-        try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                lines = [line.strip() for line in f.readlines() if line.strip()]
-            
-            if command in ['import_keyword', 'import_regex_keyword']:
-                # 导入关键字
-                db_ops = await get_db_ops()
-                success_count, duplicate_count = await db_ops.add_keywords(
-                    session,
-                    rule.id,
-                    lines,
-                    is_regex=(command == 'import_regex_keyword')
-                )
-            else:
-                # 导入替换规则
-                replace_rules = []
-                for line in lines:
-                    parts = line.split('\t', 1)
-                    if len(parts) == 2:
-                        pattern, content = parts
-                    else:
-                        pattern = parts[0]
-                        content = ''
-                    replace_rules.append((pattern, content))
-                
-                db_ops = await get_db_ops()
-                success_count, duplicate_count = await db_ops.add_replace_rules(
-                    session,
-                    rule.id,
-                    replace_rules
-                )
-                
-                # 如果成功导入了替换规则，确保启用替换模式
-                if success_count > 0 and not rule.is_replace:
-                    rule.is_replace = True
-            
-            session.commit()
-            
-            # 构建回复消息
-            rule_type = {
-                'import_keyword': '关键字',
-                'import_regex_keyword': '正则表达式',
-                'import_replace': '替换规则'
-            }[command]
-            
-            result_text = f'导入完成\n成功导入: {success_count} 个{rule_type}\n'
-            if duplicate_count > 0:
-                result_text += f'跳过重复: {duplicate_count} 个'
-            
-            await event.reply(result_text)
-            
-        finally:
-            # 清理临时文件
-            try:
-                os.remove(file_path)
-            except:
-                pass
-                
-    except Exception as e:
-        session.rollback()
-        logger.error(f'导入过程出错: {str(e)}')
-        await event.reply('导入过程出错，请检查日志')
-    finally:
-        session.close() 
         
 async def process_forward_rule(client, event, chat_id, rule):
     """处理转发规则（机器人模式）"""
@@ -1621,6 +2318,8 @@ async def process_forward_rule(client, event, chat_id, rule):
     message_text = event.message.text or ''
     MAX_MEDIA_SIZE = get_max_media_size()
     check_message_text = pre_handle(message_text)
+    
+    logger.info(f"处理后的消息文本: {check_message_text}")
     # 添加日志
     logger.info(f'处理规则 ID: {rule.id}')
     logger.info(f'消息内容: {message_text}')
@@ -1693,15 +2392,43 @@ async def process_forward_rule(client, event, chat_id, rule):
                                 logger.error(f'替换规则格式错误: {replace_rule.pattern}')
                 except Exception as e:
                     logger.error(f'应用替换规则时出错: {str(e)}')
-            
+
             # 设置消息格式
             parse_mode = rule.message_mode.value  # 使用枚举的值（字符串）
             logger.info(f'使用消息格式: {parse_mode}')
+            
+            if not event.message.grouped_id:
+                # 使用AI处理消息
+                message_text = await ai_handle(message_text, rule)
+                
             
             # 如果启用了原始链接，生成链接
             original_link = ''
             if rule.is_original_link:
                 original_link = f"\n\n原始消息: https://t.me/c/{str(event.chat_id)[4:]}/{event.message.id}"
+            
+                        # 获取发送者信息
+            sender_info = ""
+            if rule.is_original_sender and event.sender:
+                sender_name = (
+                    event.sender.title if hasattr(event.sender, 'title')
+                    else f"{event.sender.first_name or ''} {event.sender.last_name or ''}".strip()
+                )
+                sender_info = f"{sender_name}\n\n"
+            
+            # 获取发送时间
+            time_info = ""
+            if rule.is_original_time:
+                try:
+                    # 创建时区对象
+                    timezone = pytz.timezone(os.getenv('DEFAULT_TIMEZONE', 'Asia/Shanghai'))
+                    local_time = event.message.date.astimezone(timezone)
+                    time_info = f"\n\n{local_time.strftime('%Y-%m-%d %H:%M:%S')}"
+                except Exception as e:
+                    logger.error(f'处理时间信息时出错: {str(e)}')
+                    time_info = ""  # 如果出错，不添加时间信息
+            
+         
             
             # 获取原消息的按钮
             buttons = event.message.buttons if hasattr(event.message, 'buttons') else None
@@ -1763,13 +2490,17 @@ async def process_forward_rule(client, event, chat_id, rule):
                 
                 logger.info(f'共找到 {len(messages)} 条媒体组消息，{len(skipped_media)} 条超限')
                 
+                caption = await ai_handle(caption, rule)
+
                 # 如果所有媒体都超限了，但有文本，就发送文本和提示
                 if not messages and caption:
                     # 构建提示信息
                     skipped_info = "\n".join(f"- {size/1024/1024:.1f}MB" for _, size in skipped_media)
-                    original_link = f"https://t.me/c/{str(event.chat_id)[4:]}/{event.message.id}"
+                    original_link = f"\n\n原始消息: https://t.me/c/{str(event.chat_id)[4:]}/{event.message.id}"
                     text_to_send = f"{caption}\n\n⚠️ {len(skipped_media)} 个媒体文件超过大小限制 ({MAX_MEDIA_SIZE/1024/1024:.1f}MB):\n{skipped_info}\n原始消息: {original_link}"
-                    
+                    text_to_send = sender_info + text_to_send + time_info
+                    if rule.is_original_link:
+                        text_to_send += original_link
                     await client.send_message(
                         target_chat_id,
                         text_to_send,
@@ -1792,7 +2523,9 @@ async def process_forward_rule(client, event, chat_id, rule):
                     if files:
                         try:
                             # 添加原始链接
-                            caption_text = caption + original_link if caption else original_link
+                            caption_text = sender_info + caption + time_info 
+                            if rule.is_original_link:
+                                caption_text += original_link
                             
                             # 作为一个组发送所有文件
                             await client.send_file(
@@ -1876,7 +2609,7 @@ async def process_forward_rule(client, event, chat_id, rule):
                                 await client.send_file(
                                     target_chat_id,
                                     file_path,
-                                    caption=(message_text + original_link) if message_text else original_link,
+                                    caption=(sender_info + message_text + time_info + original_link) if message_text else original_link,
                                     parse_mode=parse_mode,
                                     buttons=buttons, 
                                     link_preview={
@@ -1904,9 +2637,15 @@ async def process_forward_rule(client, event, chat_id, rule):
                             PreviewMode.FOLLOW: event.message.media is not None  # 跟随原消息
                         }[rule.is_preview]
                         
+                        # 组合消息文本
+                        if message_text:
+                            message_text = sender_info + message_text + time_info
+                        if rule.is_original_link:
+                            message_text += original_link
+
                         await client.send_message(
                             target_chat_id,
-                            message_text + original_link,  # 添加原始链接
+                            message_text,
                             parse_mode=parse_mode,
                             link_preview=link_preview,
                             buttons=buttons 
@@ -1916,6 +2655,45 @@ async def process_forward_rule(client, event, chat_id, rule):
                             f'{target_chat.name} ({target_chat_id})'
                         )
                 
+            # 转发成功后，如果启用了删除原消息
+            if rule.is_delete_original:
+                try:
+                    await event.message.delete()
+                    logger.info(f'已删除原始消息 ID: {event.message.id}')
+                except Exception as e:
+                    logger.error(f'删除原始消息时出错: {str(e)}')
+                    
+
+            
+            
         except Exception as e:
-            logger.error(f'发送消息时出错: {str(e)}')
-            logger.exception(e)
+            logger.error(f'转发消息时出错: {str(e)}')
+
+async def send_welcome_message(client):
+    """发送欢迎消息"""
+    try:
+        user_id = get_user_id()
+        welcome_text = (
+            "** 🎉 欢迎使用 TelegramForwarder ! **\n\n"
+            "更新日志请查看：https://github.com/Heavrnl/TelegramForwarder/releases\n\n"
+            "如果您觉得这个项目对您有帮助，欢迎通过以下方式支持我:\n\n" 
+            "⭐ **给项目点个小小的 Star:** [TelegramForwarder](https://github.com/Heavrnl/TelegramForwarder)\n"
+            "☕ **请我喝杯咖啡:** [Ko-fi](https://ko-fi.com/0heavrnl)\n\n"
+            "感谢您的支持!"
+        )
+        
+        await client.send_message(
+            user_id,
+            welcome_text,
+            parse_mode='markdown',
+            link_preview=True
+        )
+        logger.info("已发送欢迎消息")
+    except Exception as e:
+        logger.error(f"发送欢迎消息失败: {str(e)}")
+
+
+
+
+
+
