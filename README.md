@@ -292,42 +292,54 @@ TG频道的部分消息由于文字嵌入链接，点击会让你确认再跳转
 ## 完整指令, 支持缩写
 
 ```bash
-绑定转发 
-/bind(/b) <目标聊天链接或名称> - 名称用引号包裹
+命令列表
+
+基础命令
+/start - 开始使用
+/help(/h) - 显示此帮助信息
+
+绑定和设置
+/bind(/b) - 绑定源聊天
+/settings(/s) - 管理转发规则
+/switch(/sw) - 切换当前需要设置的聊天规则
 
 关键字管理
-/add(/a) <关键字1> [关键字2] ... - 添加普通关键字到当前规则
-/add_regex(/ar) <正则1> [正则2] ... - 添加正则表达式关键字到当前规则
-/add_all(/aa) <关键字1> [关键字2] ... - 添加普通关键字到所有规则
-/add_regex_all(/ara) <正则1> [正则2] ... - 添加正则表达式关键字到所有规则
-/import_keyword(/ik) <同时发送文件> - 指令和文件一起发送，一行一个关键字
-/import_regex_keyword(/irk) <同时发送文件> - 指令和文件一起发送，一行一个正则表达式
-/export_keyword(/ek) - 导出当前规则的关键字到文件
+/add(/a) <关键字> - 添加普通关键字
+/add_regex(/ar) <正则表达式> - 添加正则表达式
+/add_all(/aa) <关键字> - 添加普通关键字到所有规则
+/add_regex_all(/ara) <正则表达式> - 添加正则表达式到所有规则
+/list_keyword(/lk) - 列出所有关键字
+/remove_keyword(/rk) <序号> - 删除关键字
+/clear_all_keywords(/cak) - 清除当前规则的所有关键字
+/clear_all_keywords_regex(/cakr) - 清除当前规则的所有正则关键字
+/copy_keywords(/ck) <规则ID> - 复制指定规则的关键字到当前规则
+/copy_keywords_regex(/ckr) <规则ID> - 复制指定规则的正则关键字到当前规则
 
-替换规则
-/replace(/r) <匹配模式> <替换内容/替换表达式> - 添加替换规则到当前规则
-/replace_all(/ra) <匹配模式> <替换内容/替换表达式> - 添加替换规则到所有规则
-/import_replace(/ir) <同时发送文件> - 指令和文件一起发送，一行一个替换规则
-/export_replace(/er) - 导出当前规则的替换规则到文件
-注意：不填替换内容则删除匹配内容
+替换规则管理
+/replace(/r) <模式> [替换内容] - 添加替换规则
+/replace_all(/ra) <模式> [替换内容] - 添加替换规则到所有规则
+/list_replace(/lr) - 列出所有替换规则
+/remove_replace(/rr) <序号> - 删除替换规则
+/clear_all_replace(/car) - 清除当前规则的所有替换规则
+/copy_replace(/cr) <规则ID> - 复制指定规则的替换规则到当前规则
 
-切换规则
-- 在settings中切换当前操作的转发规则
+导入导出
+/export_keyword(/ek) - 导出当前规则的关键字
+/export_replace(/er) - 导出当前规则的替换规则
+/import_keyword(/ik) <同时发送文件> - 导入普通关键字
+/import_regex_keyword(/irk) <同时发送文件> - 导入正则关键字
+/import_replace(/ir) <同时发送文件> - 导入替换规则
 
-查看列表
-/list_keyword(/lk) - 查看当前规则的关键字列表
-/list_replace(/lr) - 查看当前规则的替换规则列表
+UFB相关
+/ufb_bind(/ub) <域名> - 绑定UFB域名
+/ufb_unbind(/uu) - 解绑UFB域名
+/ufb_item_change(/uic) - 切换UFB同步配置类型
 
-设置管理
-/settings(/s) - 显示选用的转发规则的设置
-
-UFB
-/ufb_bind(/ub) <域名> - 绑定指定的域名
-/ufb_unbind(/ub) - 解除域名绑定
-/ufb_item_change(/uc) - 指定绑定域名下的项目
-
-清除数据
-/clear_all(/ca) - 清空所有数据
+提示
+• 括号内为命令的简写形式
+• 尖括号 <> 表示必填参数
+• 方括号 [] 表示可选参数
+• 导入命令需要同时发送文件
 ```
 
 ## 捐赠

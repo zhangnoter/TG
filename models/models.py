@@ -45,7 +45,8 @@ class ForwardRule(Base):
     is_summary = Column(Boolean, default=False)  # 是否启用AI总结
     summary_time = Column(String(5), default=os.getenv('DEFAULT_SUMMARY_TIME', '07:00'))
     summary_prompt = Column(String, nullable=True)  # AI总结的prompt
-
+    is_keyword_after_ai = Column(Boolean, default=False) # AI处理后是否再次执行关键字过滤
+   
     # 添加唯一约束
     __table_args__ = (
         UniqueConstraint('source_chat_id', 'target_chat_id', name='unique_source_target'),
@@ -107,7 +108,8 @@ def migrate_db(engine):
         'summary_prompt': 'ALTER TABLE forward_rules ADD COLUMN summary_prompt VARCHAR DEFAULT NULL',
         'is_delete_original': 'ALTER TABLE forward_rules ADD COLUMN is_delete_original BOOLEAN DEFAULT FALSE',
         'is_original_sender': 'ALTER TABLE forward_rules ADD COLUMN is_original_sender BOOLEAN DEFAULT FALSE',
-        'is_original_time': 'ALTER TABLE forward_rules ADD COLUMN is_original_time BOOLEAN DEFAULT FALSE'
+        'is_original_time': 'ALTER TABLE forward_rules ADD COLUMN is_original_time BOOLEAN DEFAULT FALSE',
+        'is_keyword_after_ai': 'ALTER TABLE forward_rules ADD COLUMN is_keyword_after_ai BOOLEAN DEFAULT FALSE',
     }
 
     # 添加缺失的列

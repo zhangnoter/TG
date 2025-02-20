@@ -17,6 +17,7 @@ import pytz
 import tempfile
 
 
+
 logger = logging.getLogger(__name__)
 
 TEMP_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'temp')
@@ -283,6 +284,15 @@ AI_SETTINGS = {
         'toggle_action': 'set_prompt',
         'toggle_func': None
     },
+    'is_keyword_after_ai': {
+        'display_name': 'AI处理后再次执行关键字过滤',
+        'values': {
+            True: '开启',
+            False: '关闭'
+        },
+        'toggle_action': 'toggle_keyword_after_ai',
+        'toggle_func': lambda current: not current
+    },
     'is_summary': {
         'display_name': 'AI总结',
         'values': {
@@ -456,7 +466,12 @@ def create_ai_settings_buttons(rule):
 
 def create_settings_text(rule):
     """创建设置信息文本"""
-    text = f'管理转发规则\n目标聊天: {rule.target_chat.name}\n'
+    text = (
+        "📋 管理转发规则\n\n"
+        f"规则ID: `{rule.id}`\n" 
+        f"目标聊天: {rule.target_chat.name}\n"
+        f"源聊天: {rule.source_chat.name}"
+    )
     return text
 
 async def get_current_rule(session, event):
@@ -603,8 +618,8 @@ async def handle_command(client, event):
         'clear_all': lambda: handle_clear_all_command(event),
         'ca': lambda: handle_clear_all_command(event),
         'start': lambda: handle_start_command(event),
-        'help': lambda: handle_help_command(event),
-        'h': lambda: handle_help_command(event),
+        'help': lambda: handle_help_command(event,'help'),
+        'h': lambda: handle_help_command(event,'help'),
         'export_keyword': lambda: handle_export_keyword_command(event, command),
         'ek': lambda: handle_export_keyword_command(event, command),
         'export_replace': lambda: handle_export_replace_command(event, client),
@@ -627,6 +642,18 @@ async def handle_command(client, event):
         'uu': lambda: handle_ufb_unbind_command(event, 'ufb_unbind'),
         'ufb_item_change': lambda: handle_ufb_item_change_command(event, command),
         'uic': lambda: handle_ufb_item_change_command(event, 'ufb_item_change'),
+        'clear_all_keywords': lambda: handle_clear_all_keywords_command(event, command),
+        'cak': lambda: handle_clear_all_keywords_command(event, 'clear_all_keywords'),
+        'clear_all_keywords_regex': lambda: handle_clear_all_keywords_regex_command(event, command),
+        'cakr': lambda: handle_clear_all_keywords_regex_command(event, 'clear_all_keywords_regex'),
+        'clear_all_replace': lambda: handle_clear_all_replace_command(event, command),
+        'car': lambda: handle_clear_all_replace_command(event, 'clear_all_replace'),
+        'copy_keywords': lambda: handle_copy_keywords_command(event, command),
+        'ck': lambda: handle_copy_keywords_command(event, 'copy_keywords'),
+        'copy_keywords_regex': lambda: handle_copy_keywords_regex_command(event, command),
+        'ckr': lambda: handle_copy_keywords_regex_command(event, 'copy_keywords_regex'),
+        'copy_replace': lambda: handle_copy_replace_command(event, command),
+        'cr': lambda: handle_copy_replace_command(event, 'copy_replace'),
     }
     
     # 执行对应的命令处理器
@@ -644,20 +671,20 @@ async def handle_import_command(event, command):
             return
             
         # 获取当前规则
-        session = get_session()
-        try:
-            rule_info = await get_current_rule(session, event)
-            if not rule_info:
-                return
-                
-            rule, source_chat = rule_info
-            
-            # 下载文件
+    session = get_session()
+    try:
+        rule_info = await get_current_rule(session, event)
+        if not rule_info:
+            return
+
+        rule, source_chat = rule_info
+
+        # 下载文件
             file_path = await event.message.download_media(TEMP_DIR)
-            
-            try:
+
+        try:
                 # 读取文件内容
-                with open(file_path, 'r', encoding='utf-8') as f:
+            with open(file_path, 'r', encoding='utf-8') as f:
                     lines = [line.strip() for line in f if line.strip()]
                 
                 # 根据命令类型处理
@@ -698,32 +725,32 @@ async def handle_import_command(event, command):
                     
                 else:
                     # 处理关键字导入
-                    db_ops = await get_db_ops()
-                    success_count, duplicate_count = await db_ops.add_keywords(
-                        session,
-                        rule.id,
-                        lines,
-                        is_regex=(command == 'import_regex_keyword')
-                    )
-                    
-                    session.commit()
-                    
+                db_ops = await get_db_ops()
+                success_count, duplicate_count = await db_ops.add_keywords(
+                    session,
+                    rule.id,
+                    lines,
+                    is_regex=(command == 'import_regex_keyword')
+                )
+
+            session.commit()
+
                     keyword_type = "正则表达式" if command == "import_regex_keyword" else "关键字"
                     result_text = f'成功导入 {success_count} 个{keyword_type}'
-                    if duplicate_count > 0:
+            if duplicate_count > 0:
                         result_text += f'\n跳过重复: {duplicate_count} 个'
                     result_text += f'\n规则: 来自 {source_chat.name}'
-                    
-                    await event.reply(result_text)
-                    
-            finally:
+
+            await event.reply(result_text)
+
+        finally:
                 # 删除临时文件
                 if os.path.exists(file_path):
-                    os.remove(file_path)
+                os.remove(file_path)
                     
         finally:
             session.close()
-            
+
     except Exception as e:
         logger.error(f'导入过程出错: {str(e)}')
         await event.reply('导入过程出错，请检查日志')
@@ -1227,7 +1254,7 @@ async def handle_callback(event):
             return
             
         # 处理 AI 设置中的切换操作
-        if data.startswith(('toggle_ai:', 'set_prompt:', 'change_model:', 'set_summary_prompt:')):
+        if data.startswith(('toggle_ai:', 'set_prompt:', 'change_model:', 'set_summary_prompt:', 'toggle_keyword_after_ai:')):
             rule_id = data.split(':')[1]
             session = get_session()
             try:
@@ -1250,6 +1277,14 @@ async def handle_callback(event):
                         "输入 /cancel 取消设置",
                         buttons=None
                     )
+                    return
+                
+                if data.startswith('toggle_keyword_after_ai:'):
+                
+                    rule.is_keyword_after_ai = not rule.is_keyword_after_ai
+                    session.commit()
+                    await event.edit("AI 设置：", buttons=create_ai_settings_buttons(rule))
+                    await event.answer(f'AI处理后关键字过滤已{"开启" if rule.is_keyword_after_ai else "关闭"}')
                     return
                     
                 if data.startswith('toggle_ai:'):
@@ -2005,47 +2040,60 @@ async def handle_start_command(event):
 """
     await event.reply(welcome_text)
 
-async def handle_help_command(event):
-    """处理 help 命令"""
-    help_text = """
-绑定转发 
-/bind(/b) <目标聊天链接或名称> - 名称用引号包裹
-
-关键字管理
-/add(/a) <关键字1> [关键字2] ... - 添加普通关键字到当前规则
-/add_regex(/ar) <正则1> [正则2] ... - 添加正则表达式关键字到当前规则
-/add_all(/aa) <关键字1> [关键字2] ... - 添加普通关键字到所有规则
-/add_regex_all(/ara) <正则1> [正则2] ... - 添加正则表达式关键字到所有规则
-/import_keyword(/ik) <同时发送文件> - 指令和文件一起发送，一行一个关键字
-/import_regex_keyword(/irk) <同时发送文件> - 指令和文件一起发送，一行一个正则表达式
-/export_keyword(/ek) - 导出当前规则的关键字到文件
-
-替换规则
-/replace(/r) <匹配模式> <替换内容/替换表达式> - 添加替换规则到当前规则
-/replace_all(/ra) <匹配模式> <替换内容/替换表达式> - 添加替换规则到所有规则
-/import_replace(/ir) <同时发送文件> - 指令和文件一起发送，一行一个替换规则
-/export_replace(/er) - 导出当前规则的替换规则到文件
-注意：不填替换内容则删除匹配内容
-
-切换规则
-- 在settings中切换当前操作的转发规则
-
-查看列表
-/list_keyword(/lk) - 查看当前规则的关键字列表
-/list_replace(/lr) - 查看当前规则的替换规则列表
-
-设置管理
-/settings(/s) - 显示选用的转发规则的设置
-
-UFB
-/ufb_bind(/ub) <域名> - 绑定指定的域名
-/ufb_unbind(/ub) - 解除域名绑定
-/ufb_item_change(/uc) - 指定绑定域名下的项目
-
-清除数据
-/clear_all(/ca) - 清空所有数据
-"""
-    await event.reply(help_text) 
+async def handle_help_command(event, command):
+    """处理帮助命令"""
+    help_text = (
+        "🤖 **命令列表**\n\n"
+        
+        "**基础命令**\n"
+        "/start - 开始使用\n"
+        "/help(/h) - 显示此帮助信息\n\n"
+        
+        "**绑定和设置**\n"
+        "/bind(/b) - 绑定源聊天\n"
+        "/settings(/s) - 管理转发规则\n"
+        "/switch(/sw) - 切换当前需要设置的聊天规则\n\n"
+        
+        "**关键字管理**\n"
+        "/add(/a) <关键字> - 添加普通关键字\n"
+        "/add_regex(/ar) <正则表达式> - 添加正则表达式\n"
+        "/add_all(/aa) <关键字> - 添加普通关键字到所有规则\n"
+        "/add_regex_all(/ara) <正则表达式> - 添加正则表达式到所有规则\n"
+        "/list_keyword(/lk) - 列出所有关键字\n"
+        "/remove_keyword(/rk) <序号> - 删除关键字\n"
+        "/clear_all_keywords(/cak) - 清除当前规则的所有关键字\n"
+        "/clear_all_keywords_regex(/cakr) - 清除当前规则的所有正则关键字\n"
+        "/copy_keywords(/ck) <规则ID> - 复制指定规则的关键字到当前规则\n"
+        "/copy_keywords_regex(/ckr) <规则ID> - 复制指定规则的正则关键字到当前规则\n\n"
+        
+        "**替换规则管理**\n"
+        "/replace(/r) <模式> [替换内容] - 添加替换规则\n"
+        "/replace_all(/ra) <模式> [替换内容] - 添加替换规则到所有规则\n"
+        "/list_replace(/lr) - 列出所有替换规则\n"
+        "/remove_replace(/rr) <序号> - 删除替换规则\n"
+        "/clear_all_replace(/car) - 清除当前规则的所有替换规则\n"
+        "/copy_replace(/cr) <规则ID> - 复制指定规则的替换规则到当前规则\n\n"
+        
+        "**导入导出**\n"
+        "/export_keyword(/ek) - 导出当前规则的关键字\n"
+        "/export_replace(/er) - 导出当前规则的替换规则\n"
+        "/import_keyword(/ik) <同时发送文件> - 导入普通关键字\n"
+        "/import_regex_keyword(/irk) <同时发送文件> - 导入正则关键字\n"
+        "/import_replace(/ir) <同时发送文件> - 导入替换规则\n\n"
+        
+        "**UFB相关**\n"
+        "/ufb_bind(/ub) <域名> - 绑定UFB域名\n"
+        "/ufb_unbind(/uu) - 解绑UFB域名\n"
+        "/ufb_item_change(/uic) - 切换UFB同步配置类型\n\n"
+        
+        "💡 **提示**\n"
+        "• 括号内为命令的简写形式\n"
+        "• 尖括号 <> 表示必填参数\n"
+        "• 方括号 [] 表示可选参数\n"
+        "• 导入命令需要同时发送文件"
+    )
+    
+    await event.reply(help_text, parse_mode='markdown')
 
 async def handle_export_keyword_command(event, command):
     """处理 export_keyword 命令"""
@@ -2075,7 +2123,7 @@ async def handle_export_keyword_command(event, command):
         # 写入普通关键字，确保每行一个
         with open(normal_file, 'w', encoding='utf-8') as f:
             f.write('\n'.join(normal_keywords))
-            
+        
         # 写入正则关键字，确保每行一个
         with open(regex_file, 'w', encoding='utf-8') as f:
             f.write('\n'.join(regex_keywords))
@@ -2104,10 +2152,10 @@ async def handle_export_keyword_command(event, command):
         finally:
             # 删除临时文件
             if os.path.exists(normal_file):
-                os.remove(normal_file)
+            os.remove(normal_file)
             if os.path.exists(regex_file):
-                os.remove(regex_file)
-                
+            os.remove(regex_file)
+        
     except Exception as e:
         logger.error(f'导出关键字时出错: {str(e)}')
         await event.reply('导出关键字时出错，请检查日志')
@@ -2133,7 +2181,7 @@ async def handle_export_replace_command(event, client):
         if not replace_rules:
             await event.reply("当前规则没有任何替换规则")
             return
-            
+        
         # 创建并写入文件
         replace_file = os.path.join(TEMP_DIR, 'replace_rules.txt')
         
@@ -2156,13 +2204,13 @@ async def handle_export_replace_command(event, client):
         finally:
             # 删除临时文件
             if os.path.exists(replace_file):
-                os.remove(replace_file)
-                
+            os.remove(replace_file)
+        
     except Exception as e:
         logger.error(f'导出替换规则时出错: {str(e)}')
         await event.reply('导出替换规则时出错，请检查日志')
     finally:
-        session.close()
+        session.close() 
 
 async def handle_add_all_command(event, command, parts):
     """处理 add_all 和 add_regex_all 命令"""
@@ -2251,7 +2299,7 @@ async def handle_add_all_command(event, command, parts):
         logger.error(f'批量添加关键字时出错: {str(e)}')
         await event.reply('添加关键字时出错，请检查日志')
     finally:
-        session.close()
+        session.close() 
 
 async def handle_replace_all_command(event, parts):
     """处理 replace_all 命令"""
@@ -2312,61 +2360,56 @@ async def handle_replace_all_command(event, parts):
     finally:
         session.close() 
         
+def check_keywords(rule, message_text, is_whitelist=True):
+    """
+    检查消息是否匹配关键字规则
+    
+    Args:
+        rule: 转发规则对象
+        message_text: 要检查的消息文本
+        is_whitelist: 是否为白名单模式，默认为True
+        
+    Returns:
+        bool: 是否应该转发消息
+    """
+    should_forward = not is_whitelist  # 白名单模式默认不转发，黑名单模式默认转发
+    
+        for keyword in rule.keywords:
+        logger.info(f'检查{"白名单" if is_whitelist else "黑名单"}关键字: {keyword.keyword} (正则: {keyword.is_regex})')
+        matched = False
+        
+            if keyword.is_regex:
+                # 正则表达式匹配
+                try:
+                if re.search(keyword.keyword, message_text):
+                    matched = True
+                        logger.info(f'正则匹配成功: {keyword.keyword}')
+                except re.error:
+                    logger.error(f'正则表达式错误: {keyword.keyword}')
+            else:
+                # 普通关键字匹配（包含即可，不区分大小写）
+            if keyword.keyword.lower() in message_text.lower():
+                matched = True
+                    logger.info(f'关键字匹配成功: {keyword.keyword}')
+                
+        if matched:
+            should_forward = is_whitelist  # 白名单模式匹配则转发，黑名单模式匹配则不转发
+                    break
+    
+    logger.info(f'关键字检查结果: {"转发" if should_forward else "不转发"}')
+    return should_forward
+
 async def process_forward_rule(client, event, chat_id, rule):
     """处理转发规则（机器人模式）"""
-    should_forward = False
     message_text = event.message.text or ''
-    MAX_MEDIA_SIZE = get_max_media_size()
     check_message_text = pre_handle(message_text)
     
-    logger.info(f"处理后的消息文本: {check_message_text}")
-    # 添加日志
-    logger.info(f'处理规则 ID: {rule.id}')
-    logger.info(f'消息内容: {message_text}')
-    logger.info(f'规则模式: {rule.mode.value}')
-    
-    # 处理关键字规则
-    if rule.mode == ForwardMode.WHITELIST:
-        # 白名单模式：必须匹配任一关键字
-        for keyword in rule.keywords:
-            logger.info(f'检查白名单关键字: {keyword.keyword} (正则: {keyword.is_regex})')
-            if keyword.is_regex:
-                # 正则表达式匹配
-                try:
-                    if re.search(keyword.keyword, check_message_text):
-                        should_forward = True
-                        logger.info(f'正则匹配成功: {keyword.keyword}')
-                        break
-                except re.error:
-                    logger.error(f'正则表达式错误: {keyword.keyword}')
-            else:
-                # 普通关键字匹配（包含即可，不区分大小写）
-                if keyword.keyword.lower() in check_message_text.lower():
-                    should_forward = True
-                    logger.info(f'关键字匹配成功: {keyword.keyword}')
-                    break
-    else:
-        # 黑名单模式：不能匹配任何关键字
-        should_forward = True
-        for keyword in rule.keywords:
-            logger.info(f'检查黑名单关键字: {keyword.keyword} (正则: {keyword.is_regex})')
-            if keyword.is_regex:
-                # 正则表达式匹配
-                try:
-                    if re.search(keyword.keyword, check_message_text):
-                        should_forward = False
-                        logger.info(f'正则匹配成功，不转发: {keyword.keyword}')
-                        break
-                except re.error:
-                    logger.error(f'正则表达式错误: {keyword.keyword}')
-            else:
-                # 普通关键字匹配（包含即可，不区分大小写）
-                if keyword.keyword.lower() in check_message_text.lower():
-                    should_forward = False
-                    logger.info(f'关键字匹配成功，不转发: {keyword.keyword}')
-                    break
-    
-    logger.info(f'最终决定: {"转发" if should_forward else "不转发"}')
+    # 使用提取的方法进行关键字检查
+    should_forward = check_keywords(
+        rule,
+        check_message_text,
+        is_whitelist=(rule.mode == ForwardMode.WHITELIST)
+    )
     
     if should_forward:
         target_chat = rule.target_chat
@@ -2400,7 +2443,16 @@ async def process_forward_rule(client, event, chat_id, rule):
             if not event.message.grouped_id:
                 # 使用AI处理消息
                 message_text = await ai_handle(message_text, rule)
-                
+                if rule.is_keyword_after_ai:
+                    # 对AI处理后的文本再次进行关键字检查
+                    should_forward = check_keywords(
+                        rule,
+                        message_text,
+                        is_whitelist=(rule.mode == ForwardMode.WHITELIST)
+                    )
+                    if not should_forward:
+                        logger.info('AI处理后的文本未通过关键字检查，取消转发')
+                        return
             
             # 如果启用了原始链接，生成链接
             original_link = ''
@@ -2491,7 +2543,16 @@ async def process_forward_rule(client, event, chat_id, rule):
                 logger.info(f'共找到 {len(messages)} 条媒体组消息，{len(skipped_media)} 条超限')
                 
                 caption = await ai_handle(caption, rule)
-
+                if rule.is_keyword_after_ai:
+                    # 对AI处理后的文本再次进行关键字检查
+                    should_forward = check_keywords(
+                        rule,
+                        caption,
+                        is_whitelist=(rule.mode == ForwardMode.WHITELIST)
+                    )
+                    if not should_forward:
+                        logger.info('AI处理后的文本未通过关键字检查，取消转发')
+                        return
                 # 如果所有媒体都超限了，但有文本，就发送文本和提示
                 if not messages and caption:
                     # 构建提示信息
@@ -2642,7 +2703,7 @@ async def process_forward_rule(client, event, chat_id, rule):
                             message_text = sender_info + message_text + time_info
                         if rule.is_original_link:
                             message_text += original_link
-
+                        
                         await client.send_message(
                             target_chat_id,
                             message_text,
@@ -2660,7 +2721,7 @@ async def process_forward_rule(client, event, chat_id, rule):
                 try:
                     await event.message.delete()
                     logger.info(f'已删除原始消息 ID: {event.message.id}')
-                except Exception as e:
+        except Exception as e:
                     logger.error(f'删除原始消息时出错: {str(e)}')
                     
 
@@ -2694,6 +2755,315 @@ async def send_welcome_message(client):
 
 
 
+async def handle_clear_all_keywords_command(event, command):
+    """处理清除所有关键字命令"""
+    session = get_session()
+    try:
+        rule_info = await get_current_rule(session, event)
+        if not rule_info:
+            return
+            
+        rule, source_chat = rule_info
+        
+        # 获取当前规则的关键字数量
+        keyword_count = len(rule.keywords)
+        
+        if keyword_count == 0:
+            await event.reply("当前规则没有任何关键字")
+            return
+            
+        # 删除所有关键字
+        for keyword in rule.keywords:
+            session.delete(keyword)
+            
+        session.commit()
+        
+        # 发送成功消息
+        await event.reply(
+            f"✅ 已清除规则 `{rule.id}` 的所有关键字\n"
+            f"源聊天: {source_chat.name}\n"
+            f"共删除: {keyword_count} 个关键字",
+            parse_mode='markdown'
+        )
+        
+    except Exception as e:
+        session.rollback()
+        logger.error(f'清除关键字时出错: {str(e)}')
+        await event.reply('清除关键字时出错，请检查日志')
+    finally:
+        session.close()
+
+
+async def handle_clear_all_keywords_regex_command(event, command):
+    """处理清除所有正则关键字命令"""
+    session = get_session()
+    try:
+        rule_info = await get_current_rule(session, event)
+        if not rule_info:
+            return
+            
+        rule, source_chat = rule_info
+        
+        # 获取当前规则的正则关键字数量
+        regex_keywords = [kw for kw in rule.keywords if kw.is_regex]
+        keyword_count = len(regex_keywords)
+        
+        if keyword_count == 0:
+            await event.reply("当前规则没有任何正则关键字")
+            return
+            
+        # 删除所有正则关键字
+        for keyword in regex_keywords:
+            session.delete(keyword)
+            
+        session.commit()
+        
+        # 发送成功消息
+        await event.reply(
+            f"✅ 已清除规则 `{rule.id}` 的所有正则关键字\n"
+            f"源聊天: {source_chat.name}\n"
+            f"共删除: {keyword_count} 个正则关键字",
+            parse_mode='markdown'
+        )
+        
+    except Exception as e:
+        session.rollback()
+        logger.error(f'清除正则关键字时出错: {str(e)}')
+        await event.reply('清除正则关键字时出错，请检查日志')
+    finally:
+        session.close()
+
+async def handle_clear_all_replace_command(event, command):
+    """处理清除所有替换规则命令"""
+    session = get_session()
+    try:
+        rule_info = await get_current_rule(session, event)
+        if not rule_info:
+            return
+            
+        rule, source_chat = rule_info
+        
+        # 获取当前规则的替换规则数量
+        replace_count = len(rule.replace_rules)
+        
+        if replace_count == 0:
+            await event.reply("当前规则没有任何替换规则")
+            return
+            
+        # 删除所有替换规则
+        for replace_rule in rule.replace_rules:
+            session.delete(replace_rule)
+            
+        # 如果没有替换规则了，关闭替换模式
+        rule.is_replace = False
+        
+        session.commit()
+        
+        # 发送成功消息
+        await event.reply(
+            f"✅ 已清除规则 `{rule.id}` 的所有替换规则\n"
+            f"源聊天: {source_chat.name}\n"
+            f"共删除: {replace_count} 个替换规则\n"
+            "已自动关闭替换模式",
+            parse_mode='markdown'
+        )
+        
+    except Exception as e:
+        session.rollback()
+        logger.error(f'清除替换规则时出错: {str(e)}')
+        await event.reply('清除替换规则时出错，请检查日志')
+    finally:
+        session.close()
 
 
 
+async def handle_copy_keywords_command(event, command):
+    """处理复制关键字命令"""
+    parts = event.message.text.split()
+    if len(parts) != 2:
+        await event.reply('用法: /copy_keywords <规则ID>')
+        return
+        
+    try:
+        source_rule_id = int(parts[1])
+    except ValueError:
+        await event.reply('规则ID必须是数字')
+        return
+        
+    session = get_session()
+    try:
+        # 获取当前规则
+        rule_info = await get_current_rule(session, event)
+        if not rule_info:
+            return
+        target_rule, source_chat = rule_info
+        
+        # 获取源规则
+        source_rule = session.query(ForwardRule).get(source_rule_id)
+        if not source_rule:
+            await event.reply(f'找不到规则ID: {source_rule_id}')
+            return
+            
+        # 复制关键字
+        success_count = 0
+        skip_count = 0
+        
+        for keyword in source_rule.keywords:
+            if not keyword.is_regex:  # 只复制普通关键字
+                # 检查是否已存在
+                exists = any(k.keyword == keyword.keyword and not k.is_regex 
+                           for k in target_rule.keywords)
+                if not exists:
+                    new_keyword = Keyword(
+                        rule_id=target_rule.id,
+                        keyword=keyword.keyword,
+                        is_regex=False
+                    )
+                    session.add(new_keyword)
+                    success_count += 1
+                else:
+                    skip_count += 1
+                    
+        session.commit()
+        
+        # 发送结果消息
+        await event.reply(
+            f"✅ 已从规则 `{source_rule_id}` 复制关键字到规则 `{target_rule.id}`\n"
+            f"成功复制: {success_count} 个\n"
+            f"跳过重复: {skip_count} 个",
+            parse_mode='markdown'
+        )
+        
+    except Exception as e:
+        session.rollback()
+        logger.error(f'复制关键字时出错: {str(e)}')
+        await event.reply('复制关键字时出错，请检查日志')
+    finally:
+        session.close()
+
+async def handle_copy_keywords_regex_command(event, command):
+    """处理复制正则关键字命令"""
+    parts = event.message.text.split()
+    if len(parts) != 2:
+        await event.reply('用法: /copy_keywords_regex <规则ID>')
+        return
+        
+    try:
+        source_rule_id = int(parts[1])
+    except ValueError:
+        await event.reply('规则ID必须是数字')
+        return
+        
+    session = get_session()
+    try:
+        # 获取当前规则
+        rule_info = await get_current_rule(session, event)
+        if not rule_info:
+            return
+        target_rule, source_chat = rule_info
+        
+        # 获取源规则
+        source_rule = session.query(ForwardRule).get(source_rule_id)
+        if not source_rule:
+            await event.reply(f'找不到规则ID: {source_rule_id}')
+            return
+            
+        # 复制正则关键字
+        success_count = 0
+        skip_count = 0
+        
+        for keyword in source_rule.keywords:
+            if keyword.is_regex:  # 只复制正则关键字
+                # 检查是否已存在
+                exists = any(k.keyword == keyword.keyword and k.is_regex 
+                           for k in target_rule.keywords)
+                if not exists:
+                    new_keyword = Keyword(
+                        rule_id=target_rule.id,
+                        keyword=keyword.keyword,
+                        is_regex=True
+                    )
+                    session.add(new_keyword)
+                    success_count += 1
+                else:
+                    skip_count += 1
+                    
+        session.commit()
+        
+        # 发送结果消息
+        await event.reply(
+            f"✅ 已从规则 `{source_rule_id}` 复制正则关键字到规则 `{target_rule.id}`\n"
+            f"成功复制: {success_count} 个\n"
+            f"跳过重复: {skip_count} 个",
+            parse_mode='markdown'
+        )
+        
+    except Exception as e:
+        session.rollback()
+        logger.error(f'复制正则关键字时出错: {str(e)}')
+        await event.reply('复制正则关键字时出错，请检查日志')
+    finally:
+        session.close()
+
+async def handle_copy_replace_command(event, command):
+    """处理复制替换规则命令"""
+    parts = event.message.text.split()
+    if len(parts) != 2:
+        await event.reply('用法: /copy_replace <规则ID>')
+        return
+        
+    try:
+        source_rule_id = int(parts[1])
+    except ValueError:
+        await event.reply('规则ID必须是数字')
+        return
+        
+    session = get_session()
+    try:
+        # 获取当前规则
+        rule_info = await get_current_rule(session, event)
+        if not rule_info:
+            return
+        target_rule, source_chat = rule_info
+        
+        # 获取源规则
+        source_rule = session.query(ForwardRule).get(source_rule_id)
+        if not source_rule:
+            await event.reply(f'找不到规则ID: {source_rule_id}')
+            return
+            
+        # 复制替换规则
+        success_count = 0
+        skip_count = 0
+        
+        for replace_rule in source_rule.replace_rules:
+            # 检查是否已存在
+            exists = any(r.pattern == replace_rule.pattern 
+                       for r in target_rule.replace_rules)
+            if not exists:
+                new_rule = ReplaceRule(
+                    rule_id=target_rule.id,
+                    pattern=replace_rule.pattern,
+                    content=replace_rule.content
+                )
+                session.add(new_rule)
+                success_count += 1
+            else:
+                skip_count += 1
+                
+        session.commit()
+        
+        # 发送结果消息
+        await event.reply(
+            f"✅ 已从规则 `{source_rule_id}` 复制替换规则到规则 `{target_rule.id}`\n"
+            f"成功复制: {success_count} 个\n"
+            f"跳过重复: {skip_count} 个\n",
+            parse_mode='markdown'
+        )
+        
+    except Exception as e:
+        session.rollback()
+        logger.error(f'复制替换规则时出错: {str(e)}')
+        await event.reply('复制替换规则时出错，请检查日志')
+    finally:
+        session.close()

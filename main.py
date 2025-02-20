@@ -210,9 +210,34 @@ async def register_bot_commands(bot):
             description='切换ufb同步配置类型'
         ),
         BotCommand(
-            command='clear_all',
-            description='慎用！清空所有数据'
+            command='clear_all_keywords',
+            description='清除当前规则的所有关键字'
         ),
+        BotCommand(
+            command='clear_all_keywords_regex',
+            description='清除当前规则的所有正则关键字'
+        ),
+        BotCommand(
+            command='clear_all_replace',
+            description='清除当前规则的所有替换规则'
+        ),
+        BotCommand(
+            command='copy_keywords',
+            description='复制参数规则的关键字到当前规则'
+        ),
+        BotCommand(
+            command='copy_keywords_regex',
+            description='复制参数规则的正则关键字到当前规则'
+        ),
+        BotCommand(
+            command='copy_replace',
+            description='复制参数规则的替换规则到当前规则'
+        ),
+
+        # BotCommand(
+        #     command='clear_all',
+        #     description='慎用！清空所有数据'
+        # ),
     ]
 
     try:
