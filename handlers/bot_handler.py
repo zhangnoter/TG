@@ -2039,7 +2039,7 @@ async def handle_start_command(event):
 """
     await event.reply(welcome_text)
 
-async def handle_help_command(event):
+async def handle_help_command(event, command):
     """处理 help 命令"""
     help_text = """
 绑定转发 
