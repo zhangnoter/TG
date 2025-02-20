@@ -79,11 +79,11 @@ async def start_clients():
         # 创建并启动调度器
         scheduler = SummaryScheduler(user_client, bot_client)
         await scheduler.start()
-        
+
         # 发送欢迎消息
         from handlers.bot_handler import send_welcome_message
         await send_welcome_message(bot_client)
-        
+
         # 等待两个客户端都断开连接
         await asyncio.gather(
             user_client.run_until_disconnected(),
