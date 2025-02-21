@@ -17,6 +17,11 @@ class SummaryScheduler:
         self.timezone = pytz.timezone(os.getenv('DEFAULT_TIMEZONE', 'Asia/Shanghai'))
         self.user_client = user_client
         self.bot_client = bot_client
+        # 添加信号量来限制并发请求
+        self.request_semaphore = asyncio.Semaphore(2)  # 最多同时执行2个请求
+        # 从环境变量获取配置
+        self.batch_size = int(os.getenv('SUMMARY_BATCH_SIZE', 20))
+        self.batch_delay = int(os.getenv('SUMMARY_BATCH_DELAY', 2))
         
     async def schedule_rule(self, rule):
         """为规则创建或更新定时任务"""
@@ -61,7 +66,7 @@ class SummaryScheduler:
                 await asyncio.sleep(wait_seconds)
                 
                 # 执行总结任务
-                await self._execute_summary(rule)
+                await self._execute_summary(rule.id)
                 
             except asyncio.CancelledError:
                 logger.info(f"规则 {rule.id} 的旧任务已取消")
@@ -80,101 +85,121 @@ class SummaryScheduler:
             
         return next_time
         
-    async def _execute_summary(self, rule):
-        """执行总结任务"""
+    async def _execute_summary(self, rule_id):
+        """执行单个规则的总结任务"""
+        session = get_session()
         try:
-            # 获取源聊天和目标聊天
-            source_chat_id = int(rule.source_chat.telegram_chat_id)
-            target_chat_id = int(rule.target_chat.telegram_chat_id)
-            
-            # 计算时间范围（从上次执行到现在）
-            now = datetime.now(self.timezone)
-            yesterday = now - timedelta(days=1)
-            
-            # 获取消息
-            messages = []
-            logger.info(f"\n开始获取 {rule.source_chat.name} 的消息...")
-            
-            async for message in self.user_client.iter_messages(
-                source_chat_id,
-                offset_date=yesterday,
-                reverse=True
-            ):
-                if message.text:
-                    # 获取发送时间
-                    shanghai_time = message.date.astimezone(self.timezone)
-                    formatted_time = shanghai_time.strftime('%Y-%m-%d %H:%M:%S')
+            rule = session.query(ForwardRule).get(rule_id)
+            if not rule or not rule.is_summary:
+                return
+                
+            try:
+                source_chat_id = int(rule.source_chat.telegram_chat_id)
+                target_chat_id = int(rule.target_chat.telegram_chat_id)
+                
+                messages = []
+                
+                # 计算时间范围
+                now = datetime.now(self.timezone)
+                summary_hour, summary_minute = map(int, rule.summary_time.split(':'))
+                
+                # 设置结束时间为当前时间
+                end_time = now
+                
+                # 设置开始时间为前一天的总结时间
+                start_time = now.replace(
+                    hour=summary_hour,
+                    minute=summary_minute,
+                    second=0,
+                    microsecond=0
+                ) - timedelta(days=1)
+                
+                logger.info(f'规则 {rule_id} 获取消息时间范围: {start_time} 到 {end_time}')
+                
+                async with self.request_semaphore:
+                    messages = []
+                    current_offset = 0
                     
-                    # 获取发送者信息
-                    if message.sender:
-                        sender_name = (
-                            message.sender.title if hasattr(message.sender, 'title')
-                            else f"{message.sender.first_name or ''} {message.sender.last_name or ''}".strip()
+                    while True:
+                        batch = []  # 移到循环外部
+                        messages_batch = await self.user_client.get_messages(
+                            source_chat_id,
+                            limit=self.batch_size,
+                            offset_date=end_time,
+                            offset_id=current_offset,
+                            reverse=False
                         )
-                    else:
-                        sender_name = "Unknown"
-                    
-                    # 组合消息
-                    formatted_message = f"[{formatted_time}] {sender_name}:\n{message.text}"
-                    messages.append(formatted_message)
-                    
-                    # 日志输出
-                    logger.info(f"\n发送时间: {formatted_time}")
-                    logger.info(f"发送者: {sender_name}")
-                    logger.info(f"消息内容: {formatted_message[:50]}")
-            
-            logger.info(f"\n共获取到 {len(messages)} 条消息")
-            
-            if not messages:
-                logger.info(f"规则 {rule.id} 没有需要总结的消息")
-                return
+                        
+                        if not messages_batch:
+                            logger.info(f'规则 {rule_id} 没有获取到新消息，退出循环')
+                            break
+                            
+                        logger.info(f'规则 {rule_id} 获取到批次消息数量: {len(messages_batch)}')
+                        
+                        should_break = False
+                        for message in messages_batch:
+                            msg_time = message.date.astimezone(self.timezone)
+                            preview = message.text[:20] + '...' if message.text else 'None'
+                            logger.info(f'规则 {rule_id} 处理消息 - 时间: {msg_time}, 预览: {preview}, 长度: {len(message.text) if message.text else 0}')
+                            
+                            # 跳过未来时间的消息
+                            if msg_time > end_time:
+                                continue
+                                
+                            # 如果消息在有效时间范围内，添加到批次
+                            if start_time <= msg_time <= end_time and message.text:
+                                batch.append(message.text)
+                                
+                            # 如果遇到早于开始时间的消息，标记退出
+                            if msg_time < start_time:
+                                logger.info(f'规则 {rule_id} 消息时间 {msg_time} 早于开始时间 {start_time}，停止获取')
+                                should_break = True
+                                break
+                        
+                        # 如果当前批次有消息，添加到总消息列表
+                        if batch:
+                            messages.extend(batch)
+                            logger.info(f'规则 {rule_id} 当前批次添加了 {len(batch)} 条消息，总消息数: {len(messages)}')
+                        
+                        # 更新offset为最后一条消息的ID
+                        current_offset = messages_batch[-1].id
+                        
+                        # 如果需要退出循环
+                        if should_break:
+                            break
+                            
+                        # 在批次之间等待
+                        await asyncio.sleep(self.batch_delay)
                 
-            # 准备AI总结
-            all_messages = "\n".join(messages)
-            
-            # 获取数据库里的ai总结提示词
-            prompt = rule.summary_prompt or os.getenv('DEFAULT_SUMMARY_PROMPT')
-            
-            # 如果提示词中有 {Messages} 占位符,替换为实际消息
-            if prompt and '{Messages}' in prompt:
-                prompt = prompt.replace('{Messages}', '\n'.join(messages))
-                logger.info(f"处理后的总结提示词: {prompt}")
-
-            logger.info("\n开始生成AI总结...")
-            
-            # 获取AI提供者
-            ai_provider = get_ai_provider(rule.ai_model)
-            await ai_provider.initialize()
-            
-            # 生成总结
-            summary = await ai_provider.process_message(all_messages, prompt=prompt)
-            
-            if not summary:
-                logger.error(f"规则 {rule.id} 生成总结失败")
-                return
+                if not messages:
+                    logger.info(f'规则 {rule_id} 没有需要总结的消息')
+                    return
+                    
+                all_messages = '\n'.join(messages)
                 
-            logger.info("\nAI总结内容:")
-            logger.info("=" * 50)
-            logger.info(summary)
-            logger.info("=" * 50)
-            
-            # 发送总结到目标聊天
-            message_text = f"📋 {rule.source_chat.name} 24小时消息总结：\n\n{summary}"
-            
-            # 使用机器人发送
-            await self.bot_client.send_message(
-                target_chat_id,  # 直接使用 ID
-                message_text,
-                link_preview=False
-            )
-            
-            logger.info(f"\n总结已发送到目标聊天: {rule.target_chat.name}")
-            logger.info(f"规则 {rule.id} 的总结任务执行完成")
-            
-        except Exception as e:
-            logger.error(f"执行规则 {rule.id} 的总结任务时出错: {str(e)}")
-            logger.error(f"错误详情: {traceback.format_exc()}")
-            
+                # 获取AI提供者并处理总结
+                ai_provider = get_ai_provider(rule.ai_model)
+                await ai_provider.initialize()
+                summary = await ai_provider.process_message(
+                    all_messages,
+                    prompt=rule.summary_prompt or os.getenv('DEFAULT_SUMMARY_PROMPT')
+                )
+                
+                if summary:
+                    await self.bot_client.send_message(
+                        target_chat_id,
+                        f"📋 {rule.source_chat.name} - 24小时消息总结\n\n{summary}",
+                        parse_mode='markdown'
+                    )
+                    logger.info(f'规则 {rule_id} 总结完成，共处理 {len(messages)} 条消息')
+                    
+            except Exception as e:
+                logger.error(f'执行规则 {rule_id} 的总结任务时出错: {str(e)}')
+                logger.error(f'错误详情: {traceback.format_exc()}')
+                
+        finally:
+            session.close()
+        
     async def start(self):
         """启动调度器"""
         logger.info("开始启动调度器...")
@@ -219,15 +244,12 @@ class SummaryScheduler:
         session = get_session()
         try:
             rules = session.query(ForwardRule).filter_by(is_summary=True).all()
-            logger.info(f"开始执行 {len(rules)} 个总结任务")
-            
-            for rule in rules:
-                try:
-                    await self._execute_summary(rule)
-                except Exception as e:
-                    logger.error(f"执行规则 {rule.id} 的总结任务时出错: {str(e)}")
-                    continue
-                    
-            logger.info("所有总结任务执行完成")
+            # 使用 gather 但限制并发数
+            tasks = [self._execute_summary(rule.id) for rule in rules]
+            for i in range(0, len(tasks), 2):  # 每次执行2个任务
+                batch = tasks[i:i+2]
+                await asyncio.gather(*batch)
+                await asyncio.sleep(1)  # 每批次之间稍微暂停
+                
         finally:
             session.close() 

@@ -25,3 +25,4 @@ ufb/config/config.json
 /logo/svg
 /test
 db/forward.db1
+handlers/bot_handler copy.py

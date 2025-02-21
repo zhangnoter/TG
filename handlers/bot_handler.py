@@ -118,17 +118,37 @@ TIMES_PER_PAGE = int(os.getenv('TIMES_PER_PAGE', 10))
 
 def create_summary_time_buttons(rule_id, page=0):
     """创建时间选择按钮"""
+    # 从环境变量获取布局设置
+    rows = int(os.getenv('SUMMARY_TIME_ROWS', 4))  # 默认4行
+    cols = int(os.getenv('SUMMARY_TIME_COLS', 3))  # 默认3列
+    times_per_page = rows * cols
+
     buttons = []
     total_times = len(SUMMARY_TIMES)
-    start_idx = page * TIMES_PER_PAGE
-    end_idx = min(start_idx + TIMES_PER_PAGE, total_times)
+    start_idx = page * times_per_page
+    end_idx = min(start_idx + times_per_page, total_times)
+
+    # 检查是否是频道消息
+    buttons = []
+    total_times = len(SUMMARY_TIMES)
+
     
     # 添加时间按钮
-    for time in SUMMARY_TIMES[start_idx:end_idx]:
-        buttons.append([Button.inline(
+    current_row = []
+    for i, time in enumerate(SUMMARY_TIMES[start_idx:end_idx], start=1):
+        current_row.append(Button.inline(
             time,
             f"select_time:{rule_id}:{time}"
-        )])
+        ))
+        
+        # 当达到每行的列数时，添加当前行并重置
+        if i % cols == 0:
+            buttons.append(current_row)
+            current_row = []
+    
+    # 添加最后一个不完整的行
+    if current_row:
+        buttons.append(current_row)
     
     # 添加导航按钮
     nav_buttons = []
@@ -139,7 +159,7 @@ def create_summary_time_buttons(rule_id, page=0):
         ))
     
     nav_buttons.append(Button.inline(
-        f"{page + 1}/{(total_times + TIMES_PER_PAGE - 1) // TIMES_PER_PAGE}",
+        f"{page + 1}/{(total_times + times_per_page - 1) // times_per_page}",
         "noop:0"
     ))
     
