@@ -3100,6 +3100,3 @@ async def handle_copy_replace_command(event, command):
         await event.reply('复制替换规则时出错，请检查日志')
     finally:
         session.close()
-
-
-

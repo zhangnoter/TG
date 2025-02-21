@@ -7,11 +7,12 @@ from .grok_provider import GrokProvider
 from .claude_provider import ClaudeProvider
 import os
 
+
 def get_ai_provider(model=None):
     """获取AI提供者实例"""
     if not model:
         model = os.getenv('DEFAULT_AI_MODEL', 'gemini-2.0-flash')
-        
+
     # 根据模型名称选择对应的提供者
     provider = None
     if any(model.startswith(prefix) for prefix in ('gpt-', 'o1', 'o3', 'chatgpt')):
@@ -28,8 +29,9 @@ def get_ai_provider(model=None):
         provider = ClaudeProvider()
     else:
         raise ValueError(f"不支持的模型: {model}")
-        
+
     return provider
+
 
 __all__ = [
     'BaseAIProvider',

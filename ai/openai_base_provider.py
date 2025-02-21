@@ -35,6 +35,8 @@ class OpenAIBaseProvider(BaseAIProvider):
             api_key=api_key,
             base_url=self.api_base
         )
+        logger.info(f"初始化OpenAI模型: {kwargs.get('model')}")
+        
         self.model = kwargs.get('model', self.default_model)
         
     async def process_message(self, 
@@ -50,6 +52,8 @@ class OpenAIBaseProvider(BaseAIProvider):
             if prompt:
                 messages.append({"role": "system", "content": prompt})
             messages.append({"role": "user", "content": message})
+
+            logger.info(f"实际使用的OpenAI模型: {self.model}")
             
             completion = self.client.chat.completions.create(
                 model=self.model,

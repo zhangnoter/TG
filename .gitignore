@@ -26,3 +26,4 @@ ufb/config/config.json
 /test
 db/forward.db1
 handlers/bot_handler copy.py
+/temp

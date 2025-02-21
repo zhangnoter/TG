@@ -61,7 +61,8 @@ async def ai_handle(message: str, rule) -> str:
         logger.info(f"提示词: {rule.ai_prompt}")
         processed_text = await provider.process_message(
             message=message,
-            prompt=rule.ai_prompt
+            prompt=rule.ai_prompt,
+            model=rule.ai_model
         )
         logger.info(f"AI处理完成: {processed_text}")
         return processed_text
@@ -69,4 +70,3 @@ async def ai_handle(message: str, rule) -> str:
     except Exception as e:
         logger.error(f"AI处理消息时出错: {str(e)}")
         return message  # 出错时返回原始消息
-
