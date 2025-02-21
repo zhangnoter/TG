@@ -2602,7 +2602,14 @@ async def process_forward_rule(client, event, chat_id, rule):
                         buttons=first_buttons
                     )
                     logger.info(f'[机器人] 媒体组所有文件超限，已发送文本和提示')
-                    return
+                    # 转发成功后，如果启用了删除原消息
+                    if rule.is_delete_original:
+                        try:
+                            await event.message.delete()
+                            logger.info(f'已删除原始消息 ID: {event.message.id}')
+                        except Exception as e:
+                            logger.error(f'删除原始消息时出错: {str(e)}')
+                            return
 
                 # 如果有可以发送的媒体，作为一个组发送
                 try:
@@ -2692,7 +2699,15 @@ async def process_forward_rule(client, event, chat_id, rule):
                             buttons=buttons
                         )
                         logger.info(f'[机器人] 媒体文件超过大小限制，仅转发文本')
-                        return  # 重要：立即返回，不继续处理
+                        # 转发成功后，如果启用了删除原消息
+                        if rule.is_delete_original:
+                            try:
+                                await event.message.delete()
+                                logger.info(f'已删除原始消息 ID: {event.message.id}')
+                            except Exception as e:
+                                logger.error(f'删除原始消息时出错: {str(e)}')
+                        return  # 立即返回，不继续处理
+
 
                     # 如果没有超过大小限制，继续处理...
                     try:
@@ -2712,10 +2727,38 @@ async def process_forward_rule(client, event, chat_id, rule):
                                     }[rule.is_preview]
                                 )
                                 logger.info(f'[机器人] 媒体消息已发送到: {target_chat.name} ({target_chat_id})')
+                                # 转发成功后，如果启用了删除原消息
+                                # 之后可单独提取出一个方法
+                                if rule.is_delete_original and event.message.grouped_id:
+                                    try:
+                                        # 获取 main.py 中的用户客户端
+                                        main = get_main_module()
+                                        user_client = main.user_client  # 获取用户客户端
+
+                                        # 使用用户客户端获取并删除媒体组消息
+                                        async for message in user_client.iter_messages(
+                                                event.chat_id,
+                                                min_id=event.message.id - 10,
+                                                max_id=event.message.id + 10,
+                                                reverse=True
+                                        ):
+                                            if message.grouped_id == event.message.grouped_id:
+                                                await message.delete()
+                                                logger.info(f'已删除媒体组消息 ID: {message.id}')
+                                    except Exception as e:
+                                        logger.error(f'删除媒体组消息时出错: {str(e)}')
+                                elif rule.is_delete_original:
+                                    # 单条消息的删除逻辑保持不变
+                                    try:
+                                        await event.message.delete()
+                                        logger.info(f'已删除原始消息 ID: {event.message.id}')
+                                    except Exception as e:
+                                        logger.error(f'删除原始消息时出错: {str(e)}')
                             finally:
                                 # 删除临时文件
                                 try:
                                     os.remove(file_path)
+                                    
                                 except Exception as e:
                                     logger.error(f'删除临时文件失败: {str(e)}')
                     except Exception as e:
@@ -2749,16 +2792,32 @@ async def process_forward_rule(client, event, chat_id, rule):
                         )
 
             # 转发成功后，如果启用了删除原消息
-            if rule.is_delete_original:
+            if rule.is_delete_original and event.message.grouped_id:
+                try:
+                    # 获取 main.py 中的用户客户端
+                    main = get_main_module()
+                    user_client = main.user_client  # 获取用户客户端
+                    
+                    # 使用用户客户端获取并删除媒体组消息
+                    async for message in user_client.iter_messages(
+                            event.chat_id,
+                            min_id=event.message.id - 10,
+                            max_id=event.message.id + 10,
+                            reverse=True
+                    ):
+                        if message.grouped_id == event.message.grouped_id:
+                            await message.delete()
+                            logger.info(f'已删除媒体组消息 ID: {message.id}')
+                except Exception as e:
+                    logger.error(f'删除媒体组消息时出错: {str(e)}')
+            elif rule.is_delete_original:
+                # 单条消息的删除逻辑保持不变
                 try:
                     await event.message.delete()
                     logger.info(f'已删除原始消息 ID: {event.message.id}')
                 except Exception as e:
                     logger.error(f'删除原始消息时出错: {str(e)}')
-                    
 
-            
-            
         except Exception as e:
             logger.error(f'转发消息时出错: {str(e)}')
 
