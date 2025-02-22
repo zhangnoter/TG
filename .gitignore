@@ -22,7 +22,7 @@ ENV/
 /config
 /ufb/.idea
 ufb/config/config.json
-/logo/svg
+/images/logo/svg
 /test
 db/forward.db1
 handlers/bot_handler copy.py
