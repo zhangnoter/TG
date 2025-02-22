@@ -219,7 +219,7 @@ async def handle_user_message(event, user_client, bot_client):
             logger.info(f'处理转发规则 ID: {rule.id} (从 {source_chat.name} 转发到: {target_chat.name})')
             if rule.use_bot:
                 await bot_handler.process_forward_rule(bot_client, event, str(chat_id), rule)
-                await bot_handler.process_edit_message(bot_client, event, str(chat_id), rule)
+                # await bot_handler.process_edit_message(bot_client, event, str(chat_id), rule)
             else:
                 await user_handler.process_forward_rule(user_client, event, str(chat_id), rule)
         
