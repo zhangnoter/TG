@@ -182,6 +182,8 @@ docker-compose up -d
    /bind https://t.me/tgnews 或者 /bind "TG 新闻"
    /bind https://t.me/tgread 或者 /bind "TG 阅读"
    ```
+> 注意：如果绑定的是群组话题，需要使用/bind "群组名字{话题名字}" 或者 /bind 话题链接 的格式
+
 4. 设置消息处理模式：
    ```bash
    /settings
@@ -306,7 +308,7 @@ TG频道的部分消息由于文字嵌入链接，点击会让你确认再跳转
 /help(/h) - 显示此帮助信息
 
 绑定和设置
-/bind(/b) - 绑定源聊天
+/bind(/b) <聊天窗口链接/聊天窗口名字/群组名字{话题名字}> - 绑定源聊天
 /settings(/s) - 管理转发规则
 /switch(/sw) - 切换当前需要设置的聊天规则
 
