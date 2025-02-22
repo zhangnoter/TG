@@ -607,7 +607,7 @@ async def handle_help_command(event, command):
         "/help(/h) - 显示此帮助信息\n\n"
 
         "**绑定和设置**\n"
-        "/bind(/b) - 绑定源聊天\n"
+        "/bind(/b) <聊天窗口链接/聊天窗口名字/群组名字{话题名字}>  - 绑定源聊天\n"
         "/settings(/s) - 管理转发规则\n"
         "/switch(/sw) - 切换当前需要设置的聊天规则\n\n"
 
