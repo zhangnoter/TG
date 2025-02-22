@@ -15,6 +15,7 @@ class Chat(Base):
     telegram_chat_id = Column(String, unique=True, nullable=False)
     name = Column(String, nullable=True)
     current_add_id = Column(String, nullable=True)
+    topic_id = Column(String, nullable=True)
 
     # 关系
     source_rules = relationship('ForwardRule', foreign_keys='ForwardRule.source_chat_id', back_populates='source_chat')
@@ -98,11 +99,18 @@ def migrate_db(engine):
     """数据库迁移函数，确保新字段的添加"""
     inspector = inspect(engine)
 
+    # 检查Chat表的现有列
+    chat_columns = {column['name'] for column in inspector.get_columns('chats')}
+
     # 检查forward_rules表的现有列
     forward_rules_columns = {column['name'] for column in inspector.get_columns('forward_rules')}
 
     # 检查Keyword表的现有列
     keyword_columns = {column['name'] for column in inspector.get_columns('keywords')}
+
+    chat_new_columns = {
+        'topic_id': 'ALTER TABLE chats ADD COLUMN topic_id VARCHAR DEFAULT NULL',
+    }
 
     # 需要添加的新列及其默认值
     forward_rules_new_columns = {
@@ -127,6 +135,15 @@ def migrate_db(engine):
 
     # 添加缺失的列
     with engine.connect() as connection:
+        # 添加Chat表的列
+        for column, sql in chat_new_columns.items():
+            if column not in chat_columns:
+                try:
+                    connection.execute(text(sql))
+                    logging.info(f'已添加列: {column}')
+                except Exception as e:
+                    logging.error(f'添加列 {column} 时出错: {str(e)}')
+
         # 添加forward_rules表的列
         for column, sql in forward_rules_new_columns.items():
             if column not in forward_rules_columns:

@@ -1,5 +1,6 @@
 from sqlalchemy.exc import IntegrityError
 from telethon import Button
+from telethon.tl.types import InputMessagesFilterEmpty
 
 from enums.enums import AddMode
 from models.models import get_session, Keyword, ReplaceRule
@@ -16,7 +17,11 @@ async def handle_bind_command(event, client, parts):
     # 重新解析命令，支持带引号的名称
     message_text = event.message.text
     if len(message_text.split(None, 1)) != 2:
-        await event.reply('用法: /bind <目标聊天链接或名称>\n例如:\n/bind https://t.me/channel_name\n/bind "频道 名称"')
+        await event.reply('用法: /bind <目标聊天链接或名称>\n'
+                         '例如:\n'
+                         '/bind https://t.me/channel_name\n'
+                         '/bind "频道 名称"\n'
+                         '/bind "群组名称{话题名称}" - 绑定指定话题')
         return
 
     # 分离命令和参数
@@ -37,16 +42,62 @@ async def handle_bind_command(event, client, parts):
         main = await get_main_module()
         user_client = main.user_client
 
-        # 使用用户客户端获取目标聊天的实体信息
         try:
+            topic_id = None
+            target_chat = None
+            
             if is_link:
-                # 如果是链接，直接获取实体
-                target_chat = await user_client.get_entity(target)
+                # 处理链接形式
+                if '/c/' in target:
+                    try:
+                        parts = target.split('/c/')[1].split('/')
+                        if len(parts) >= 2:
+                            channel_id = int('-100' + parts[0])
+                            topic_id = int(parts[1])
+                            target_chat = await user_client.get_entity(channel_id)
+                        else:
+                            raise ValueError("无效的群组话题链接格式")
+                    except (IndexError, ValueError) as e:
+                        logger.error(f"解析群组话题链接失败: {str(e)}")
+                        await event.reply('无效的群组话题链接格式')
+                        return
+                else:
+                    target_chat = await user_client.get_entity(target)
             else:
-                # 如果是名称，获取对话列表并查找匹配的第一个
+                # 处理名称形式，检查是否包含话题
+                topic_name = None
+                if '{' in target and '}' in target:
+                    chat_name, topic_part = target.split('{', 1)
+                    if '}' in topic_part:
+                        topic_name = topic_part.split('}')[0].strip()
+                        chat_name = chat_name.strip()
+                    else:
+                        await event.reply('话题格式错误，请使用 "群组名称{话题名称}" 的格式')
+                        return
+                else:
+                    chat_name = target
+
+                # 查找匹配的群组/频道
                 async for dialog in user_client.iter_dialogs():
-                    if dialog.name and target.lower() in dialog.name.lower():
+                    if dialog.name and chat_name.lower() in dialog.name.lower():
                         target_chat = dialog.entity
+                        
+                        # 如果指定了话题名称，尝试查找对应的话题
+                        if topic_name and hasattr(target_chat, 'forum') and target_chat.forum:
+                            try:
+                                # 使用用户客户端获取所有话题
+                                async for message in user_client.iter_messages(target_chat, filter=InputMessagesFilterEmpty()):
+                                    if hasattr(message, 'action') and hasattr(message.action, 'title'):
+                                        if message.action.title.lower() == topic_name.lower():
+                                            topic_id = message.id
+                                            break
+                                if not topic_id:
+                                    await event.reply(f'在群组 "{chat_name}" 中未找到话题 "{topic_name}"')
+                                    return
+                            except Exception as e:
+                                logger.error(f'获取话题列表失败: {str(e)}')
+                                await event.reply('获取话题列表时出错，请确保账号已加入该群组并有权限访问话题')
+                                return
                         break
                 else:
                     await event.reply('未找到匹配的群组/频道，请确保名称正确且账号已加入该群组/频道')
@@ -76,10 +127,12 @@ async def handle_bind_command(event, client, parts):
             if not source_chat_db:
                 source_chat_db = Chat(
                     telegram_chat_id=str(target_chat.id),
-                    name=target_chat.title if hasattr(target_chat, 'title') else 'Private Chat'
+                    name=target_chat.title if hasattr(target_chat, 'title') else 'Private Chat',
+                    topic_id=topic_id  # 保存话题ID
                 )
                 session.add(source_chat_db)
                 session.flush()
+
 
             # 保存目标聊天（当前聊天）
             target_chat_db = session.query(Chat).filter(
@@ -106,21 +159,21 @@ async def handle_bind_command(event, client, parts):
             session.add(rule)
             session.commit()
 
-            await event.reply(
-                f'已设置转发规则:\n'
-                f'源聊天: {source_chat_db.name} ({source_chat_db.telegram_chat_id})\n'
-                f'目标聊天: {target_chat_db.name} ({target_chat_db.telegram_chat_id})\n'
-                f'请使用 /add 或 /add_regex 添加关键字'
-            )
+            # 构建回复消息
+            reply_text = f'已设置转发规则:\n源聊天: {source_chat_db.name} ({source_chat_db.telegram_chat_id})'
+            if topic_id:
+                reply_text += f'\n话题ID: {topic_id}'
+            reply_text += f'\n目标聊天: {target_chat_db.name} ({target_chat_db.telegram_chat_id})\n请使用 /add 或 /add_regex 添加关键字'
+
+            await event.reply(reply_text)
 
         except IntegrityError:
             session.rollback()
-            await event.reply(
-                f'已存在相同的转发规则:\n'
-                f'源聊天: {source_chat_db.name}\n'
-                f'目标聊天: {target_chat_db.name}\n'
-                f'如需修改请使用 /settings 命令'
-            )
+            reply_text = f'已存在相同的转发规则:\n源聊天: {source_chat_db.name}'
+            if topic_id:
+                reply_text += f'\n话题ID: {topic_id}'
+            reply_text += f'\n目标聊天: {target_chat_db.name}\n如需修改请使用 /settings 命令'
+            await event.reply(reply_text)
             return
         finally:
             session.close()

@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 import re
 from telethon.tl.types import ChannelParticipantsAdmins
 from managers.settings_manager import create_buttons
+from telethon.tl.functions.channels import GetForumTopicsByIDRequest
 
 # 加载环境变量
 load_dotenv()
@@ -62,7 +63,39 @@ async def handle_user_message(event, user_client, bot_client):
     """处理用户客户端收到的消息"""
     chat = await event.get_chat()
     chat_id = chat.id
-
+    
+    # 获取消息的话题ID（如果存在）
+    topic_id = None
+    try:
+        if hasattr(event.message, 'reply_to'):
+            if hasattr(event.message.reply_to, 'forum_topic'):
+                # 如果是话题消息，获取话题ID
+                topic_id = event.message.reply_to.reply_to_msg_id
+                
+                # 检查是否为论坛频道
+                if hasattr(chat, 'forum') and chat.forum:
+                    try:
+                        logger.info(f'尝试获取话题信息 - 频道ID: {chat_id}, 话题ID: {topic_id}')
+                        result = await user_client(GetForumTopicsByIDRequest(
+                            channel=chat_id,
+                            topics=[topic_id]
+                        ))
+                        if result and result.topics:
+                            topic = result.topics[0]
+                            logger.info(f'成功获取话题信息 - 话题ID: {topic_id}, 话题标题: {topic.title}')
+                        else:
+                            logger.warning(f'话题信息为空 - 话题ID: {topic_id}, 返回结果: {result}')
+                    except Exception as e:
+                        logger.debug(f'获取话题详情失败（可能不是论坛频道）: {str(e)}')
+                else:
+                    logger.debug(f'频道 {chat_id} 不是论坛类型，跳过获取话题详情')
+            elif hasattr(event.message.reply_to, 'reply_to_top_id'):
+                topic_id = event.message.reply_to.reply_to_top_id
+                logger.info(f'收到话题回复消息，话题ID: {topic_id}')
+    except Exception as e:
+        logger.error(f'处理话题ID时出错: {str(e)}')
+        logger.exception(e)
+    
     # 处理设置AI提示词回调
     try:
         previous_messages = await user_client.get_messages(chat_id, limit=2)
@@ -196,19 +229,24 @@ async def handle_user_message(event, user_client, bot_client):
         # 添加日志：查询转发规则
         logger.info(f'找到源聊天: {source_chat.name} (ID: {source_chat.id})')
         
-        # 查找以当前聊天为源的规则
-        rules = session.query(ForwardRule).filter(
-            ForwardRule.source_chat_id == source_chat.id
+        # 查找以当前聊天为源的规则，考虑话题ID
+        rules = session.query(ForwardRule).join(
+            Chat, ForwardRule.source_chat_id == Chat.id
+        ).filter(
+            ForwardRule.source_chat_id == source_chat.id,
+            # 添加话题ID过滤条件：匹配没有话题ID的规则或话题ID匹配的规则
+            (
+                (Chat.topic_id.is_(None)) |  # 没有指定话题ID的规则
+                (Chat.topic_id == topic_id)   # 话题ID匹配的规则
+            )
         ).all()
         
         if not rules:
-            logger.info(f'聊天 {source_chat.name} 没有转发规则')
+            logger.info(f'聊天 {source_chat.name} 没有匹配的转发规则')
             return
             
         # 添加日志：处理规则
         logger.info(f'找到 {len(rules)} 条转发规则')
-
-
         
         # 处理每条转发规则
         for rule in rules:
@@ -216,16 +254,19 @@ async def handle_user_message(event, user_client, bot_client):
             if not rule.enable_rule:
                 logger.info(f'规则 {rule.id} 未启用')
                 continue
-            logger.info(f'处理转发规则 ID: {rule.id} (从 {source_chat.name} 转发到: {target_chat.name})')
+                
+            # 添加话题ID相关的日志
+            topic_info = f" (话题ID: {rule.source_chat.topic_id})" if rule.source_chat.topic_id else ""
+            logger.info(f'处理转发规则 ID: {rule.id} (从 {source_chat.name}{topic_info} 转发到: {target_chat.name})')
+            
             if rule.use_bot:
                 await bot_handler.process_forward_rule(bot_client, event, str(chat_id), rule)
-                # await bot_handler.process_edit_message(bot_client, event, str(chat_id), rule)
             else:
                 await user_handler.process_forward_rule(user_client, event, str(chat_id), rule)
         
     except Exception as e:
         logger.error(f'处理用户消息时发生错误: {str(e)}')
-        logger.exception(e)  # 添加详细的错误堆栈
+        logger.exception(e)
     finally:
         session.close()
 
