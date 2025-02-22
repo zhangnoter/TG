@@ -2,7 +2,6 @@ from telethon import events, Button
 from handlers.callback_handlers import handle_callback
 from handlers.message_handler import pre_handle, ai_handle
 from handlers.command_handlers import *
-
 import logging
 import asyncio
 from enums.enums import ForwardMode, PreviewMode, MessageMode
@@ -60,14 +59,14 @@ async def handle_command(client, event):
         if admin_ids is None:
             return
             
-        user_id = get_user_id()
+        user_id = await get_user_id()
         if user_id not in admin_ids:
             logger.info(f'非管理员的频道消息，已忽略')
             return
     else:
         # 普通聊天消息，检查发送者ID
         user_id = event.sender_id
-        if user_id != get_user_id():
+        if user_id != await get_user_id():
             logger.info(f'非管理员的消息，已忽略')
             return
 
@@ -159,7 +158,7 @@ async def handle_command(client, event):
 async def callback_handler(event):
     """回调处理器入口"""
     # 只处理来自管理员的回调
-    if event.sender_id != get_user_id():
+    if event.sender_id != await get_user_id():
         return
     await handle_callback(event)
 
@@ -167,8 +166,8 @@ async def callback_handler(event):
 async def process_forward_rule(client, event, chat_id, rule):
     """处理转发规则（机器人模式）"""
     message_text = event.message.text or ''
-    MAX_MEDIA_SIZE = get_max_media_size()
-    check_message_text = pre_handle(message_text)
+    MAX_MEDIA_SIZE = await get_max_media_size()
+    check_message_text = await pre_handle(message_text)
 
     logger.info(f"处理后的消息文本: {check_message_text}")
     # 添加日志
@@ -177,7 +176,7 @@ async def process_forward_rule(client, event, chat_id, rule):
     logger.info(f'规则模式: {rule.mode.value}')
 
     # 使用提取的方法进行关键字检查
-    should_forward = check_keywords(
+    should_forward = await check_keywords(
         rule,
         check_message_text,
         is_whitelist=(rule.mode == ForwardMode.WHITELIST)
@@ -217,7 +216,7 @@ async def process_forward_rule(client, event, chat_id, rule):
                 message_text = await ai_handle(message_text, rule)
                 if rule.is_keyword_after_ai:
                     # 对AI处理后的文本再次进行关键字检查
-                    should_forward = check_keywords(
+                    should_forward = await check_keywords(
                         rule,
                         message_text,
                         is_whitelist=(rule.mode == ForwardMode.WHITELIST)
@@ -306,7 +305,7 @@ async def process_forward_rule(client, event, chat_id, rule):
 
                         # 检查媒体大小
                         if message.media:
-                            file_size = get_media_size(message.media)
+                            file_size = await get_media_size(message.media)
                             if MAX_MEDIA_SIZE and file_size > MAX_MEDIA_SIZE:
                                 skipped_media.append((message, file_size))
                                 continue
@@ -318,7 +317,7 @@ async def process_forward_rule(client, event, chat_id, rule):
                 caption = await ai_handle(caption, rule)
                 if rule.is_keyword_after_ai:
                     # 对AI处理后的文本再次进行关键字检查
-                    should_forward = check_keywords(
+                    should_forward = await check_keywords(
                         rule,
                         caption,
                         is_whitelist=(rule.mode == ForwardMode.WHITELIST)
@@ -422,7 +421,7 @@ async def process_forward_rule(client, event, chat_id, rule):
 
                 if has_media:
                     # 先检查媒体大小
-                    file_size = get_media_size(event.message.media)
+                    file_size = await get_media_size(event.message.media)
                     logger.info(f'媒体文件大小: {file_size/1024/1024:.2f}MB')
                     logger.info(f'媒体文件大小上限: {MAX_MEDIA_SIZE}')
                     logger.info(f'媒体文件大小: {file_size}')
@@ -475,7 +474,7 @@ async def process_forward_rule(client, event, chat_id, rule):
                                 if rule.is_delete_original and event.message.grouped_id:
                                     try:
                                         # 获取 main.py 中的用户客户端
-                                        main = get_main_module()
+                                        main = await get_main_module()
                                         user_client = main.user_client  # 获取用户客户端
 
                                         # 使用用户客户端获取并删除媒体组消息
@@ -538,7 +537,7 @@ async def process_forward_rule(client, event, chat_id, rule):
             if rule.is_delete_original and event.message.grouped_id:
                 try:
                     # 获取 main.py 中的用户客户端
-                    main = get_main_module()
+                    main = await get_main_module()
                     user_client = main.user_client  # 获取用户客户端
                     
                     # 使用用户客户端获取并删除媒体组消息
@@ -567,7 +566,7 @@ async def process_forward_rule(client, event, chat_id, rule):
 async def send_welcome_message(client):
     """发送欢迎消息"""
     try:
-        user_id = get_user_id()
+        user_id = await get_user_id()
         welcome_text = (
             "** 🎉 欢迎使用 TelegramForwarder ! **\n\n"
             "更新日志请查看：https://github.com/Heavrnl/TelegramForwarder/releases\n\n"

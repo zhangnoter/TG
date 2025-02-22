@@ -7,7 +7,7 @@ import re
 
 logger = logging.getLogger(__name__)
 
-def get_main_module():
+async def get_main_module():
     """获取 main 模块"""
     try:
         return sys.modules['__main__']
@@ -23,12 +23,12 @@ def get_main_module():
 
 async def get_db_ops():
     """获取 main.py 中的 db_ops 实例"""
-    main = get_main_module()
+    main = await get_main_module()
     if main.db_ops is None:
         main.db_ops = await main.init_db_ops()
     return main.db_ops
 
-def get_user_id():
+async def get_user_id():
     """获取用户ID，确保环境变量已加载"""
     user_id_str = os.getenv('USER_ID')
     if not user_id_str:
@@ -122,7 +122,7 @@ async def get_all_rules(session, event):
         return None
 
 
-def check_keywords(rule, message_text, is_whitelist=True):
+async def check_keywords(rule, message_text, is_whitelist=True):
     """
     检查消息是否匹配关键字规则
 

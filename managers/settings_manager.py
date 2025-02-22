@@ -174,7 +174,7 @@ AI_SETTINGS = {
     }
 }
 
-def create_settings_text(rule):
+async def create_settings_text(rule):
     """创建设置信息文本"""
     text = (
         "📋 管理转发规则\n\n"
@@ -184,7 +184,7 @@ def create_settings_text(rule):
     )
     return text
 
-def create_buttons(rule):
+async def create_buttons(rule):
     """创建规则设置按钮"""
     buttons = []
 

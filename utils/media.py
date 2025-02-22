@@ -3,7 +3,7 @@ import os
 
 logger = logging.getLogger(__name__)
 
-def get_media_size(media):
+async def get_media_size(media):
     """获取媒体文件大小"""
     if not media:
         return 0
@@ -28,7 +28,7 @@ def get_media_size(media):
 
     return 0
 
-def get_max_media_size():
+async def get_max_media_size():
     """获取媒体文件大小上限"""
     max_media_size_str = os.getenv('MAX_MEDIA_SIZE')
     if not max_media_size_str:

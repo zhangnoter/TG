@@ -28,7 +28,7 @@ def get_main_module():
 
 async def get_db_ops():
     """获取 main.py 中的 db_ops 实例"""
-    main = get_main_module()
+    main = await get_main_module()
     if main.db_ops is None:
         main.db_ops = await main.init_db_ops()
     return main.db_ops

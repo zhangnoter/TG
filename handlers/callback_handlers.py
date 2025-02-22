@@ -233,8 +233,8 @@ async def callback_rule_settings(event, rule_id, session, message):
         return
 
     await message.edit(
-        create_settings_text(rule),
-        buttons=create_buttons(rule)
+        await create_settings_text(rule),
+        buttons=await create_buttons(rule)
     )
 
 async def callback_toggle_current(event, rule_id, session, message):
@@ -253,8 +253,8 @@ async def callback_toggle_current(event, rule_id, session, message):
 
     # 更新按钮显示
     await message.edit(
-        create_settings_text(rule),
-        buttons=create_buttons(rule)
+        await create_settings_text(rule),
+        buttons=await create_buttons(rule)
     )
 
     await event.answer(f'已切换到: {source_chat.name}')
@@ -296,7 +296,7 @@ async def handle_callback(event):
                     logger.info(f"已更新规则 {rule_id} 的AI模型为: {model}")
 
                     # 返回到 AI 设置页面
-                    await event.edit("AI 设置：", buttons=create_ai_settings_buttons(rule))
+                    await event.edit("AI 设置：", buttons=await create_ai_settings_buttons(rule))
             finally:
                 session.close()
             return
@@ -308,7 +308,7 @@ async def handle_callback(event):
             try:
                 rule = session.query(ForwardRule).get(int(rule_id))
                 if rule:
-                    await event.edit("AI 设置：", buttons=create_ai_settings_buttons(rule))
+                    await event.edit("AI 设置：", buttons=await create_ai_settings_buttons(rule))
             finally:
                 session.close()
             return
@@ -344,14 +344,14 @@ async def handle_callback(event):
                 if data.startswith('toggle_keyword_after_ai:'):
                     rule.is_keyword_after_ai = not rule.is_keyword_after_ai
                     session.commit()
-                    await event.edit("AI 设置：", buttons=create_ai_settings_buttons(rule))
+                    await event.edit("AI 设置：", buttons=await create_ai_settings_buttons(rule))
                     await event.answer(f'AI处理后关键字过滤已{"开启" if rule.is_keyword_after_ai else "关闭"}')
                     return
 
                 if data.startswith('toggle_ai:'):
                     rule.is_ai = not rule.is_ai
                     session.commit()
-                    await event.edit("AI 设置：", buttons=create_ai_settings_buttons(rule))
+                    await event.edit("AI 设置：", buttons=await create_ai_settings_buttons(rule))
                     return
                 elif data.startswith('set_prompt:'):
                     # 存储当前正在设置提示词的规则 ID
@@ -369,7 +369,7 @@ async def handle_callback(event):
                     )
                     return
                 elif data.startswith('change_model:'):
-                    await event.edit("请选择AI模型：", buttons=create_model_buttons(rule_id, page=0))
+                    await event.edit("请选择AI模型：", buttons=await create_model_buttons(rule_id, page=0))
                     return
             finally:
                 session.close()
@@ -379,7 +379,7 @@ async def handle_callback(event):
             # 处理翻页
             _, rule_id, page = data.split(':')
             page = int(page)
-            await event.edit("请选择AI模型：", buttons=create_model_buttons(rule_id, page=page))
+            await event.edit("请选择AI模型：", buttons=await create_model_buttons(rule_id, page=page))
             return
 
         if data.startswith('noop:'):
@@ -399,8 +399,8 @@ async def handle_callback(event):
                     logger.info(f"已更新规则 {rule_id} 的AI模型为: {model}")
 
                     # 返回设置页面
-                    text = create_settings_text(rule)
-                    buttons = create_buttons(rule)
+                    text =await create_settings_text(rule)
+                    buttons =await create_buttons(rule)
                     await event.edit(text, buttons=buttons)
             finally:
                 session.close()
@@ -415,20 +415,20 @@ async def handle_callback(event):
                     session.commit()
 
                     # 更新调度任务
-                    main = get_main_module()
+                    main = await get_main_module()
                     if hasattr(main, 'scheduler') and main.scheduler:
                         await main.scheduler.schedule_rule(rule)
                     else:
                         logger.warning("调度器未初始化")
 
-                    await event.edit("AI 设置：", buttons=create_ai_settings_buttons(rule))
+                    await event.edit("AI 设置：", buttons=await create_ai_settings_buttons(rule))
             finally:
                 session.close()
             return
 
         if data.startswith('set_summary_time:'):
             rule_id = data.split(':')[1]
-            await event.edit("请选择总结时间：", buttons=create_summary_time_buttons(rule_id, page=0))
+            await event.edit("请选择总结时间：", buttons=await create_summary_time_buttons(rule_id, page=0))
             return
 
         if data.startswith('select_time:'):
@@ -452,7 +452,7 @@ async def handle_callback(event):
                         # 如果总结功能已开启，重新调度任务
                         if rule.is_summary:
                             logger.info("规则已启用总结功能，开始更新调度任务")
-                            main = get_main_module()
+                            main = await get_main_module()
                             if hasattr(main, 'scheduler') and main.scheduler:
                                 await main.scheduler.schedule_rule(rule)
                                 logger.info(f"调度任务更新成功，新时间: {time}")
@@ -461,7 +461,7 @@ async def handle_callback(event):
                         else:
                             logger.info("规则未启用总结功能，跳过调度任务更新")
 
-                        await event.edit("AI 设置：", buttons=create_ai_settings_buttons(rule))
+                        await event.edit("AI 设置：", buttons=await create_ai_settings_buttons(rule))
                         logger.info("界面更新完成")
                 except Exception as e:
                     logger.error(f"设置总结时间时出错: {str(e)}")
@@ -473,7 +473,7 @@ async def handle_callback(event):
         if data.startswith('time_page:'):
             _, rule_id, page = data.split(':')
             page = int(page)
-            await event.edit("请选择总结时间：", buttons=create_summary_time_buttons(rule_id, page=page))
+            await event.edit("请选择总结时间：", buttons=await create_summary_time_buttons(rule_id, page=page))
             return
 
         # 解析回调数据
@@ -534,8 +534,8 @@ async def handle_callback(event):
                             # 如果切换了转发方式，立即更新按钮
                             try:
                                 await message.edit(
-                                    create_settings_text(rule),
-                                    buttons=create_buttons(rule)
+                                    await create_settings_text(rule),
+                                    buttons=await create_buttons(rule)
                                 )
                             except Exception as e:
                                 if 'message was not modified' not in str(e).lower():

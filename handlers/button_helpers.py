@@ -1,14 +1,12 @@
 from telethon import events, Button
 from config.constants import *
-from config.settings import load_summary_times
-from managers.settings_manager import AI_SETTINGS
-
-
+from config.settings import load_summary_times, load_ai_models
+from managers.settings_manager import AI_SETTINGS, AI_MODELS
 
 SUMMARY_TIMES = load_summary_times()
+AI_MODELS= load_ai_models()
 
-
-def create_ai_settings_buttons(rule):
+async def create_ai_settings_buttons(rule):
     """创建 AI 设置按钮"""
     buttons = []
 
@@ -60,7 +58,7 @@ async def create_list_buttons(total_pages, current_page, command):
 
 
 # 添加模型选择按钮创建函数
-def create_model_buttons(rule_id, page=0):
+async def create_model_buttons(rule_id, page=0):
     """创建模型选择按钮，支持分页
 
     Args:
@@ -96,7 +94,7 @@ def create_model_buttons(rule_id, page=0):
     return buttons
 
 
-def create_summary_time_buttons(rule_id, page=0):
+async def create_summary_time_buttons(rule_id, page=0):
     """创建时间选择按钮"""
     # 从环境变量获取布局设置
     rows = SUMMARY_TIME_ROWS

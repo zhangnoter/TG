@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 #传入字符串，返回字符串
 
 #匹配前处理字符串
-def pre_handle(message: str) -> str:
+async def pre_handle(message: str) -> str:
 
     # 去除 markdown 链接格式，包括带单星号和双星号的，只去除紧贴着方括号的星号
     message = re.sub(r'\[(\*{1,2})?(.+?)(\*{1,2})?\]\(.+?\)', r'\2', message)
@@ -45,7 +45,7 @@ async def ai_handle(message: str, rule) -> str:
         else:
             logger.info(f"使用规则配置的AI模型: {rule.ai_model}")
             
-        provider = get_ai_provider(rule.ai_model)
+        provider = await get_ai_provider(rule.ai_model)
         
         if not rule.ai_prompt:
             rule.ai_prompt = os.getenv('DEFAULT_AI_PROMPT')

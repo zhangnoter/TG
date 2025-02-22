@@ -7,6 +7,7 @@ import os
 from dotenv import load_dotenv
 import re
 from telethon.tl.types import ChannelParticipantsAdmins
+from managers.settings_manager import create_buttons
 
 # 加载环境变量
 load_dotenv()
@@ -82,7 +83,7 @@ async def handle_user_message(event, user_client, bot_client):
                         await bot_client.send_message(
                             chat_id,
                             "已取消设置", 
-                            buttons=bot_handler.create_buttons(session.query(ForwardRule).get(int(rule_id)))
+                            buttons=await create_buttons(session.query(ForwardRule).get(int(rule_id)))
                         )
                         return
                     
@@ -98,7 +99,7 @@ async def handle_user_message(event, user_client, bot_client):
                         await bot_client.send_message(
                             chat_id,
                             f"AI 提示词已更新为：\n{rule.ai_prompt}", 
-                            buttons=bot_handler.create_ai_settings_buttons(rule)  # 返回到 AI 设置页面
+                            buttons=await bot_handler.create_ai_settings_buttons(rule)  # 返回到 AI 设置页面
                         )
                         return
                     else:
@@ -129,7 +130,7 @@ async def handle_user_message(event, user_client, bot_client):
                         await bot_client.send_message(
                             chat_id,
                             "已取消设置", 
-                            buttons=bot_handler.create_ai_settings_buttons(session.query(ForwardRule).get(int(rule_id)))
+                            buttons=await bot_handler.create_ai_settings_buttons(session.query(ForwardRule).get(int(rule_id)))
                         )
                         return
                     
@@ -144,7 +145,7 @@ async def handle_user_message(event, user_client, bot_client):
                         await bot_client.send_message(
                             chat_id,
                             f"AI总结提示词已更新为：\n{rule.summary_prompt}", 
-                            buttons=bot_handler.create_ai_settings_buttons(rule)
+                            buttons=await bot_handler.create_ai_settings_buttons(rule)
                         )
                         return
                     else:

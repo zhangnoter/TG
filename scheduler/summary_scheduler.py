@@ -178,7 +178,7 @@ class SummaryScheduler:
                 all_messages = '\n'.join(messages)
                 
                 # 获取AI提供者并处理总结
-                provider = get_ai_provider(rule.ai_model)
+                provider = await get_ai_provider(rule.ai_model)
                 await provider.initialize()
                 summary = await provider.process_message(
                     all_messages,

@@ -32,7 +32,7 @@ async def handle_bind_command(event, client, parts):
 
     try:
         # 获取 main 模块中的用户客户端
-        main = get_main_module()
+        main = await get_main_module()
         user_client = main.user_client
 
         # 使用用户客户端获取目标聊天的实体信息

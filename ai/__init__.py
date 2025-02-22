@@ -7,8 +7,7 @@ from .grok_provider import GrokProvider
 from .claude_provider import ClaudeProvider
 import os
 
-
-def get_ai_provider(model=None):
+async def get_ai_provider(model=None):
     """获取AI提供者实例"""
     if not model:
         model = os.getenv('DEFAULT_AI_MODEL', 'gemini-2.0-flash')
