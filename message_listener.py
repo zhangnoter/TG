@@ -72,10 +72,10 @@ async def handle_user_message(event, user_client, bot_client):
                 # 如果是话题消息，获取话题ID
                 topic_id = event.message.reply_to.reply_to_msg_id
                 
-                # 检查是否为论坛频道
+                # 检查是否为群组话题
                 if hasattr(chat, 'forum') and chat.forum:
                     try:
-                        logger.info(f'尝试获取话题信息 - 频道ID: {chat_id}, 话题ID: {topic_id}')
+                        logger.info(f'尝试获取话题信息 - 群组ID: {chat_id}, 话题ID: {topic_id}')
                         result = await user_client(GetForumTopicsByIDRequest(
                             channel=chat_id,
                             topics=[topic_id]
@@ -86,9 +86,9 @@ async def handle_user_message(event, user_client, bot_client):
                         else:
                             logger.warning(f'话题信息为空 - 话题ID: {topic_id}, 返回结果: {result}')
                     except Exception as e:
-                        logger.debug(f'获取话题详情失败（可能不是论坛频道）: {str(e)}')
+                        logger.debug(f'获取话题详情失败（可能不是群组话题）: {str(e)}')
                 else:
-                    logger.debug(f'频道 {chat_id} 不是论坛类型，跳过获取话题详情')
+                    logger.debug(f'频道 {chat_id} 不是群组话题类型，跳过获取话题详情')
             elif hasattr(event.message.reply_to, 'reply_to_top_id'):
                 topic_id = event.message.reply_to.reply_to_top_id
                 logger.info(f'收到话题回复消息，话题ID: {topic_id}')
