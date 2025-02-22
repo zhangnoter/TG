@@ -48,7 +48,7 @@ class ForwardRule(Base):
     summary_time = Column(String(5), default=os.getenv('DEFAULT_SUMMARY_TIME', '07:00'))
     summary_prompt = Column(String, nullable=True)  # AI总结的prompt
     is_keyword_after_ai = Column(Boolean, default=False) # AI处理后是否再次执行关键字过滤
-   
+    is_top_summary = Column(Boolean, default=True) # 是否顶置总结消息
     # 添加唯一约束
     __table_args__ = (
         UniqueConstraint('source_chat_id', 'target_chat_id', name='unique_source_target'),
@@ -118,6 +118,7 @@ def migrate_db(engine):
         'is_keyword_after_ai': 'ALTER TABLE forward_rules ADD COLUMN is_keyword_after_ai BOOLEAN DEFAULT FALSE',
         'add_mode': 'ALTER TABLE forward_rules ADD COLUMN add_mode VARCHAR DEFAULT "BLACKLIST"',
         'enable_rule': 'ALTER TABLE forward_rules ADD COLUMN enable_rule BOOLEAN DEFAULT TRUE',
+        'is_top_summary': 'ALTER TABLE forward_rules ADD COLUMN is_top_summary BOOLEAN DEFAULT TRUE',
     }
 
     keywords_new_columns = {

@@ -196,6 +196,15 @@ AI_SETTINGS = {
         },
         'toggle_action': 'set_summary_prompt',
         'toggle_func': None
+    },
+    'is_top_summary': {
+        'display_name': '顶置总结消息',
+        'values': {
+            True: '是',
+            False: '否'
+        },
+        'toggle_action': 'toggle_top_summary',
+        'toggle_func': lambda current: not current
     }
 }
 

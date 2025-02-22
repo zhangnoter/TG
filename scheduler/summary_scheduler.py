@@ -186,12 +186,15 @@ class SummaryScheduler:
                     model=rule.ai_model
                 )
                 
+                
                 if summary:
-                    await self.bot_client.send_message(
+                    summary_message = await self.bot_client.send_message(
                         target_chat_id,
                         f"📋 {rule.source_chat.name} - 24小时消息总结\n\n{summary}",
                         parse_mode='markdown'
                     )
+                    if rule.is_top_summary:
+                        await self.bot_client.pin_message(target_chat_id, summary_message)
                     logger.info(f'规则 {rule_id} 总结完成，共处理 {len(messages)} 条消息')
                     
             except Exception as e:
