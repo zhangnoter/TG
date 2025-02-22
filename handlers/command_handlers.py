@@ -1,10 +1,10 @@
 from sqlalchemy.exc import IntegrityError
-from telethon import events, Button
+from telethon import Button
 from models.models import get_session, Keyword, ReplaceRule
 from utils.common import *
 from utils.media import *
 from handlers.list_handlers import *
-from config.constants import TEMP_DIR
+from utils.constants import TEMP_DIR
 import traceback
 
 logger = logging.getLogger(__name__)

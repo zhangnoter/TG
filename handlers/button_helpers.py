@@ -1,6 +1,6 @@
-from telethon import events, Button
-from config.constants import *
-from config.settings import load_summary_times, load_ai_models
+from telethon import Button
+from utils.constants import *
+from utils.settings import load_summary_times, load_ai_models
 from managers.settings_manager import AI_SETTINGS, AI_MODELS
 
 SUMMARY_TIMES = load_summary_times()

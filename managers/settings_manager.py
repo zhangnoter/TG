@@ -1,8 +1,8 @@
 import os
-from config.settings import load_ai_models
+from utils.settings import load_ai_models
 from enums.enums import ForwardMode, MessageMode, PreviewMode
 from models.models import get_session
-from telethon import events, Button
+from telethon import Button
 
 AI_MODELS = load_ai_models()
 
