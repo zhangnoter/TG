@@ -162,6 +162,36 @@ async def callback_handler(event):
         return
     await handle_callback(event)
 
+async def process_edit_message(client, event, chat_id, rule):
+    """处理编辑消息"""
+    # if rule.is_edit_mode and not rule.is_delete_original:
+    #     logger.info(f'进入编辑模式')
+    #     try:
+    #         # 如果启用了替换模式，处理文本
+    #         if rule.is_replace and message_text:
+    #             try:
+    #                 # 应用所有替换规则
+    #                 for replace_rule in rule.replace_rules:
+    #                     if replace_rule.pattern == '.*':
+    #                         message_text = replace_rule.content or ''
+    #                         break  # 如果是全文替换，就不继续处理其他规则
+    #                     else:
+    #                         try:
+    #                             message_text = re.sub(
+    #                                 replace_rule.pattern,
+    #                                 replace_rule.content or '',
+    #                                 message_text
+    #                             )
+    #                         except re.error:
+    #                             logger.error(f'替换规则格式错误: {replace_rule.pattern}')
+    #             except Exception as e:
+    #                 logger.error(f'应用替换规则时出错: {str(e)}')
+
+    pass
+
+
+
+                    
 
 async def process_forward_rule(client, event, chat_id, rule):
     """处理转发规则（机器人模式）"""
@@ -173,13 +203,12 @@ async def process_forward_rule(client, event, chat_id, rule):
     # 添加日志
     logger.info(f'处理规则 ID: {rule.id}')
     logger.info(f'消息内容: {message_text}')
-    logger.info(f'规则模式: {rule.mode.value}')
+    logger.info(f'规则模式: {rule.forward_mode.value}')
 
     # 使用提取的方法进行关键字检查
     should_forward = await check_keywords(
         rule,
-        check_message_text,
-        is_whitelist=(rule.mode == ForwardMode.WHITELIST)
+        check_message_text
     )
 
     if should_forward:
@@ -218,8 +247,7 @@ async def process_forward_rule(client, event, chat_id, rule):
                     # 对AI处理后的文本再次进行关键字检查
                     should_forward = await check_keywords(
                         rule,
-                        message_text,
-                        is_whitelist=(rule.mode == ForwardMode.WHITELIST)
+                        message_text
                     )
                     if not should_forward:
                         logger.info('AI处理后的文本未通过关键字检查，取消转发')
@@ -319,8 +347,7 @@ async def process_forward_rule(client, event, chat_id, rule):
                     # 对AI处理后的文本再次进行关键字检查
                     should_forward = await check_keywords(
                         rule,
-                        caption,
-                        is_whitelist=(rule.mode == ForwardMode.WHITELIST)
+                        caption
                     )
                     if not should_forward:
                         logger.info('AI处理后的文本未通过关键字检查，取消转发')
@@ -347,7 +374,11 @@ async def process_forward_rule(client, event, chat_id, rule):
                     # 转发成功后，如果启用了删除原消息
                     if rule.is_delete_original:
                         try:
-                            await event.message.delete()
+                            # 获取 main.py 中的用户客户端
+                            main = await get_main_module()
+                            user_client = main.user_client  # 获取用户客户端
+                            message = await user_client.get_messages(event.chat_id, ids=event.message.id)
+                            await message.delete()
                             logger.info(f'已删除原始消息 ID: {event.message.id}')
                         except Exception as e:
                             logger.error(f'删除原始消息时出错: {str(e)}')
@@ -444,11 +475,15 @@ async def process_forward_rule(client, event, chat_id, rule):
                         # 转发成功后，如果启用了删除原消息
                         if rule.is_delete_original:
                             try:
-                                await event.message.delete()
+                                # 获取 main.py 中的用户客户端
+                                main = await get_main_module()
+                                user_client = main.user_client  # 获取用户客户端
+                                message = await user_client.get_messages(event.chat_id, ids=event.message.id)
+                                await message.delete()
                                 logger.info(f'已删除原始消息 ID: {event.message.id}')
                             except Exception as e:
                                 logger.error(f'删除原始消息时出错: {str(e)}')
-                        return  # 立即返回，不继续处理
+                        return
 
 
                     # 如果没有超过大小限制，继续处理...
@@ -563,27 +598,28 @@ async def process_forward_rule(client, event, chat_id, rule):
         except Exception as e:
             logger.error(f'转发消息时出错: {str(e)}')
 
+
 async def send_welcome_message(client):
     """发送欢迎消息"""
-    try:
-        user_id = await get_user_id()
-        welcome_text = (
-            "** 🎉 欢迎使用 TelegramForwarder ! **\n\n"
-            "更新日志请查看：https://github.com/Heavrnl/TelegramForwarder/releases\n\n"
-            "如果您觉得这个项目对您有帮助，欢迎通过以下方式支持我:\n\n" 
-            "⭐ **给项目点个小小的 Star:** [TelegramForwarder](https://github.com/Heavrnl/TelegramForwarder)\n"
-            "☕ **请我喝杯咖啡:** [Ko-fi](https://ko-fi.com/0heavrnl)\n\n"
-            "感谢您的支持!"
-        )
-        
-        await client.send_message(
-            user_id,
-            welcome_text,
-            parse_mode='markdown',
-            link_preview=True
-        )
-        logger.info("已发送欢迎消息")
-    except Exception as e:
-        logger.error(f"发送欢迎消息失败: {str(e)}")
+    main = await get_main_module()
+    user_id = await get_user_id()
+    welcome_text = (
+        "** 🎉 欢迎使用 TelegramForwarder ! **\n\n"
+        "更新日志请查看：https://github.com/Heavrnl/TelegramForwarder/releases\n\n"
+        "如果您觉得这个项目对您有帮助，欢迎通过以下方式支持我:\n\n"
+        "⭐ **给项目点个小小的 Star:** [TelegramForwarder](https://github.com/Heavrnl/TelegramForwarder)\n"
+        "☕ **请我喝杯咖啡:** [Ko-fi](https://ko-fi.com/0heavrnl)\n\n"
+        "感谢您的支持!"
+    )
+
+    # 发送新消息
+    await client.send_message(
+        user_id,
+        welcome_text,
+        parse_mode='markdown',
+        link_preview=True
+    )
+    logger.info("已发送欢迎消息")
+
 
 

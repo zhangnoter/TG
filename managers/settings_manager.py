@@ -1,6 +1,6 @@
 import os
 from utils.settings import load_ai_models
-from enums.enums import ForwardMode, MessageMode, PreviewMode
+from enums.enums import ForwardMode, MessageMode, PreviewMode, AddMode
 from models.models import get_session
 from telethon import Button
 
@@ -8,14 +8,39 @@ AI_MODELS = load_ai_models()
 
 # 规则配置字段定义
 RULE_SETTINGS = {
-    'mode': {
+    'enable_rule': {
+        'display_name': '是否启用规则',
+        'values': {
+            True: '是',
+            False: '否'
+        },
+        'toggle_action': 'toggle_enable_rule',
+        'toggle_func': lambda current: not current
+    },
+    'add_mode': {
+        'display_name': '当前关键字添加模式',
+        'values': {
+            AddMode.WHITELIST: '白名单',
+            AddMode.BLACKLIST: '黑名单'
+        },
+        'toggle_action': 'toggle_add_mode',
+        'toggle_func': lambda current: AddMode.BLACKLIST if current == AddMode.WHITELIST else AddMode.WHITELIST
+    },
+    'forward_mode': {
         'display_name': '转发模式',
         'values': {
-            ForwardMode.WHITELIST: '白名单',
-            ForwardMode.BLACKLIST: '黑名单'
+            ForwardMode.BLACKLIST: '仅黑名单',
+            ForwardMode.WHITELIST: '仅白名单',
+            ForwardMode.BLACKLIST_THEN_WHITELIST: '先黑名单后白名单', 
+            ForwardMode.WHITELIST_THEN_BLACKLIST: '先白名单后黑名单'
         },
-        'toggle_action': 'toggle_mode',
-        'toggle_func': lambda current: ForwardMode.BLACKLIST if current == ForwardMode.WHITELIST else ForwardMode.WHITELIST
+        'toggle_action': 'toggle_forward_mode',
+        'toggle_func': lambda current: {
+            ForwardMode.BLACKLIST: ForwardMode.WHITELIST,
+            ForwardMode.WHITELIST: ForwardMode.BLACKLIST_THEN_WHITELIST,
+            ForwardMode.BLACKLIST_THEN_WHITELIST: ForwardMode.WHITELIST_THEN_BLACKLIST,
+            ForwardMode.WHITELIST_THEN_BLACKLIST: ForwardMode.BLACKLIST
+        }[current]
     },
     'use_bot': {
         'display_name': '转发方式',
@@ -204,11 +229,26 @@ async def create_buttons(rule):
             )
         ])
 
+        buttons.append([
+            Button.inline(
+                f"是否启用规则: {RULE_SETTINGS['enable_rule']['values'][rule.enable_rule]}",
+                f"toggle_enable_rule:{rule.id}"
+            )
+        ])
+
+        # 当前关键字添加模式
+        buttons.append([
+            Button.inline(
+                f"当前关键字添加模式: {RULE_SETTINGS['add_mode']['values'][rule.add_mode]}",
+                f"toggle_add_mode:{rule.id}"
+            )
+        ])
+
         # 转发模式和转发方式放在一行
         buttons.append([
             Button.inline(
-                f"📥 转发模式: {RULE_SETTINGS['mode']['values'][rule.mode]}",
-                f"toggle_mode:{rule.id}"
+                f"📥 转发模式: {RULE_SETTINGS['forward_mode']['values'][rule.forward_mode]}",
+                f"toggle_forward_mode:{rule.id}"
             ),
             Button.inline(
                 f"🤖 转发方式: {RULE_SETTINGS['use_bot']['values'][rule.use_bot]}",

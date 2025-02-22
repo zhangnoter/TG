@@ -8,6 +8,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from ufb.ufb_client import UFBClient
 from models.models import get_session
+from sqlalchemy import text
 
 logger = logging.getLogger(__name__)
 load_dotenv()
@@ -220,40 +221,54 @@ class DBOperations:
         finally:
             session.close()
 
-    async def add_keywords(self, session, rule_id, keywords, is_regex=False):
+    async def add_keywords(self, session, rule_id, keywords, is_regex=False, is_blacklist=False):
         """添加关键字到规则
-        
+
         Args:
             session: 数据库会话
             rule_id: 规则ID
             keywords: 关键字列表
             is_regex: 是否是正则表达式
-            
+            is_blacklist: 是否为黑名单关键字
+
         Returns:
             tuple: (成功数量, 重复数量)
         """
         success_count = 0
         duplicate_count = 0
-        
+
         for keyword in keywords:
             try:
+                # 检查是否存在相同的关键字（考虑黑白名单）
+                existing_keyword = session.query(Keyword).filter(
+                    Keyword.rule_id == rule_id,
+                    Keyword.keyword == keyword,
+                    Keyword.is_blacklist == is_blacklist
+                ).first()
+
+                if existing_keyword:
+                    duplicate_count += 1
+                    continue
+
                 new_keyword = Keyword(
                     rule_id=rule_id,
                     keyword=keyword,
-                    is_regex=is_regex
+                    is_regex=is_regex,
+                    is_blacklist=is_blacklist
                 )
                 session.add(new_keyword)
                 session.flush()
                 success_count += 1
-            except IntegrityError:
+            except Exception as e:
+                logger.error(f"添加关键字时出错: {str(e)}")
                 session.rollback()
                 duplicate_count += 1
                 continue
-                
+
         await self.sync_to_server(session, rule_id)
         return success_count, duplicate_count
 
-    async def get_keywords(self, session, rule_id):
+    async def get_keywords(self, session, rule_id, add_mode):
         """获取规则的所有关键字
         
         Args:
@@ -264,7 +279,8 @@ class DBOperations:
             list: 关键字列表
         """
         return session.query(Keyword).filter(
-            Keyword.rule_id == rule_id
+            Keyword.rule_id == rule_id,
+            Keyword.is_blacklist == (add_mode == 'blacklist')
         ).all()
 
     async def delete_keywords(self, session, rule_id, indices):

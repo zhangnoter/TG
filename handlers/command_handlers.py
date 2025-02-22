@@ -1,5 +1,7 @@
 from sqlalchemy.exc import IntegrityError
 from telethon import Button
+
+from enums.enums import AddMode
 from models.models import get_session, Keyword, ReplaceRule
 from utils.common import *
 from utils.media import *
@@ -286,7 +288,8 @@ async def handle_add_command(event, command, parts):
             session,
             rule.id,
             keywords,
-            is_regex=(command == 'add_regex')
+            is_regex=(command == 'add_regex'),
+            is_blacklist=(rule.add_mode == AddMode.BLACKLIST)
         )
 
         session.commit()
@@ -298,7 +301,9 @@ async def handle_add_command(event, command, parts):
         if duplicate_count > 0:
             result_text += f'\n跳过重复: {duplicate_count} 个'
         result_text += f'\n关键字列表:\n{keywords_text}\n'
-        result_text += f'当前规则: 来自 {source_chat.name}'
+        result_text += f'当前规则: 来自 {source_chat.name}\n'
+        mode_text = '白名单' if rule.add_mode == AddMode.WHITELIST else '黑名单'
+        result_text += f'当前关键字添加模式: {mode_text}'
 
         await event.reply(result_text)
 
@@ -378,14 +383,15 @@ async def handle_list_keyword_command(event):
 
         # 使用 get_keywords 获取所有关键字
         db_ops = await get_db_ops()
-        keywords = await db_ops.get_keywords(session, rule.id)
+        rule_mode = "blacklist" if rule.add_mode == AddMode.BLACKLIST else "whitelist"
+        keywords = await db_ops.get_keywords(session, rule.id, rule_mode)
 
         await show_list(
             event,
             'keyword',
             keywords,
             lambda i, kw: f'{i}. {kw.keyword}{" (正则)" if kw.is_regex else ""}',
-            f'关键字列表\n规则: 来自 {source_chat.name}'
+            f'关键字列表\n当前模式: {"黑名单" if rule.add_mode == AddMode.BLACKLIST else "白名单"}\n规则: 来自 {source_chat.name}'
         )
 
     finally:
@@ -531,11 +537,11 @@ async def handle_clear_all_command(event):
 async def handle_start_command(event):
     """处理 start 命令"""
     welcome_text = """
-👋 欢迎使用 Telegram 消息转发机器人！
+    👋 欢迎使用 Telegram 消息转发机器人！
 
-📖 查看完整命令列表请使用 /help
+    📖 查看完整命令列表请使用 /help
 
-"""
+    """
     await event.reply(welcome_text)
 
 async def handle_help_command(event, command):
@@ -610,9 +616,9 @@ async def handle_export_keyword_command(event, command):
         # 直接从规则对象获取关键字
         for keyword in rule.keywords:
             if keyword.is_regex:
-                regex_keywords.append(keyword.keyword)
+                regex_keywords.append(f"{keyword.keyword} {1 if keyword.is_blacklist else 0}")
             else:
-                normal_keywords.append(keyword.keyword)
+                normal_keywords.append(f"{keyword.keyword} {1 if keyword.is_blacklist else 0}")
 
         # 创建临时文件
         normal_file = os.path.join(TEMP_DIR, 'keywords.txt')
@@ -721,26 +727,57 @@ async def handle_import_command(event, command):
                     logger.info(f'导入完成,成功导入 {success_count} 条替换规则')
                     await event.reply(f'成功导入 {success_count} 条替换规则\n规则: 来自 {source_chat.name}')
 
+
                 else:
                     # 处理关键字导入
-                    db_ops = await get_db_ops()
-                    success_count, duplicate_count = await db_ops.add_keywords(
-                        session,
-                        rule.id,
-                        lines,
-                        is_regex=(command == 'import_regex_keyword')
-                    )
+                    success_count = 0
+                    duplicate_count = 0
+                    is_regex = (command == 'import_regex_keyword')
+                    for i, line in enumerate(lines, 1):
+                        try:
+                            # 按空格分割，提取关键字和标志
+                            parts = line.split()
+                            if len(parts) < 2:
+                                raise ValueError("行格式无效，至少需要关键字和标志")
+                            flag_str = parts[-1]  # 最后一个部分为标志
+                            if flag_str not in ('0', '1'):
+                                raise ValueError("标志值必须为 0 或 1")
+                            is_blacklist = (flag_str == '1')  # 转换为布尔值
+                            keyword = ' '.join(parts[:-1])  # 前面的部分组合为关键字
+                            if not keyword:
+                                raise ValueError("关键字为空")
+                            # 检查是否已存在相同的关键字
+                            existing = session.query(Keyword).filter_by(
+                                rule_id=rule.id,
+                                keyword=keyword,
+                                is_regex=is_regex
+                            ).first()
+
+                            if existing:
+                                duplicate_count += 1
+                                continue
+
+                            # 创建新的 Keyword 对象
+                            new_keyword = Keyword(
+                                rule_id=rule.id,
+                                keyword=keyword,
+                                is_regex=is_regex,
+                                is_blacklist=is_blacklist
+                            )
+                            session.add(new_keyword)
+                            success_count += 1
+
+                        except Exception as e:
+                            logger.error(f'处理第 {i} 行时出错: {line}\n{str(e)}')
+                            continue
 
                     session.commit()
-
-                    keyword_type = "正则表达式" if command == "import_regex_keyword" else "关键字"
+                    keyword_type = "正则表达式" if is_regex else "关键字"
                     result_text = f'成功导入 {success_count} 个{keyword_type}'
                     if duplicate_count > 0:
                         result_text += f'\n跳过重复: {duplicate_count} 个'
                     result_text += f'\n规则: 来自 {source_chat.name}'
-
                     await event.reply(result_text)
-
             finally:
                 # 删除临时文件
                 if os.path.exists(file_path):
@@ -1008,7 +1045,8 @@ async def handle_copy_keywords_command(event, command):
                     new_keyword = Keyword(
                         rule_id=target_rule.id,
                         keyword=keyword.keyword,
-                        is_regex=False
+                        is_regex=False,
+                        is_blacklist=keyword.is_blacklist
                     )
                     session.add(new_keyword)
                     success_count += 1
@@ -1072,7 +1110,8 @@ async def handle_copy_keywords_regex_command(event, command):
                     new_keyword = Keyword(
                         rule_id=target_rule.id,
                         keyword=keyword.keyword,
-                        is_regex=True
+                        is_regex=True,
+                        is_blacklist=keyword.is_blacklist
                     )
                     session.add(new_keyword)
                     success_count += 1

@@ -26,7 +26,7 @@ async def show_list(event, command, items, formatter, title, page=1):
     buttons = await create_list_buttons(total_pages, page, command)
 
     # 构建消息文本
-    text = f'{title}:\n{chr(10).join(item_list)}'
+    text = f'{title}\n{chr(10).join(item_list)}'
     if len(text) > 4096:  # Telegram消息长度限制
         text = text[:4093] + '...'
 

@@ -185,8 +185,7 @@ async def handle_user_message(event, user_client, bot_client):
     # 检查数据库中是否有该聊天的转发规则
     session = get_session()
     try:
-        # 添加日志：查询源聊天)
-        
+        # 查询源聊天
         source_chat = session.query(Chat).filter(
             Chat.telegram_chat_id == str(chat_id)
         ).first()
@@ -208,13 +207,19 @@ async def handle_user_message(event, user_client, bot_client):
             
         # 添加日志：处理规则
         logger.info(f'找到 {len(rules)} 条转发规则')
+
+
         
         # 处理每条转发规则
         for rule in rules:
             target_chat = rule.target_chat
+            if not rule.enable_rule:
+                logger.info(f'规则 {rule.id} 未启用')
+                continue
             logger.info(f'处理转发规则 ID: {rule.id} (从 {source_chat.name} 转发到: {target_chat.name})')
             if rule.use_bot:
                 await bot_handler.process_forward_rule(bot_client, event, str(chat_id), rule)
+                await bot_handler.process_edit_message(bot_client, event, str(chat_id), rule)
             else:
                 await user_handler.process_forward_rule(user_client, event, str(chat_id), rule)
         

@@ -1,7 +1,7 @@
 from sqlalchemy import create_engine, Column, Integer, String, Boolean, ForeignKey, Enum, UniqueConstraint, inspect, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
-from enums.enums import ForwardMode, PreviewMode, MessageMode
+from enums.enums import ForwardMode, PreviewMode, MessageMode, AddMode
 import logging
 import os
 
@@ -26,7 +26,7 @@ class ForwardRule(Base):
     id = Column(Integer, primary_key=True)
     source_chat_id = Column(Integer, ForeignKey('chats.id'), nullable=False)
     target_chat_id = Column(Integer, ForeignKey('chats.id'), nullable=False)
-    mode = Column(Enum(ForwardMode), nullable=False, default=ForwardMode.BLACKLIST)
+    forward_mode = Column(Enum(ForwardMode), nullable=False, default=ForwardMode.BLACKLIST)
     use_bot = Column(Boolean, default=True)
     message_mode = Column(Enum(MessageMode), nullable=False, default=MessageMode.MARKDOWN)
     is_replace = Column(Boolean, default=False)
@@ -38,6 +38,8 @@ class ForwardRule(Base):
     is_delete_original = Column(Boolean, default=False)  # 是否删除原始消息
     is_original_sender = Column(Boolean, default=False)  # 是否附带原始消息发送人名称
     is_original_time = Column(Boolean, default=False)  # 是否附带原始消息发送时间
+    add_mode = Column(Enum(AddMode), nullable=False, default=AddMode.BLACKLIST) # 添加模式,默认黑名单
+    enable_rule = Column(Boolean, default=True)  # 是否启用规则
     # AI相关字段
     is_ai = Column(Boolean, default=False)  # 是否启用AI处理
     ai_model = Column(String, nullable=True)  # 使用的AI模型
@@ -66,13 +68,14 @@ class Keyword(Base):
     rule_id = Column(Integer, ForeignKey('forward_rules.id'), nullable=False)
     keyword = Column(String, nullable=True)
     is_regex = Column(Boolean, default=False)
+    is_blacklist = Column(Boolean, default=True)
 
     # 关系
     rule = relationship('ForwardRule', back_populates='keywords')
 
     # 添加唯一约束
     __table_args__ = (
-        UniqueConstraint('rule_id', 'keyword','is_regex', name='unique_rule_keyword_is_regex'),
+        UniqueConstraint('rule_id', 'keyword','is_regex','is_blacklist', name='unique_rule_keyword_is_regex_is_blacklist'),
     )
 
 class ReplaceRule(Base):
@@ -96,10 +99,13 @@ def migrate_db(engine):
     inspector = inspect(engine)
 
     # 检查forward_rules表的现有列
-    existing_columns = {column['name'] for column in inspector.get_columns('forward_rules')}
+    forward_rules_columns = {column['name'] for column in inspector.get_columns('forward_rules')}
+
+    # 检查Keyword表的现有列
+    keyword_columns = {column['name'] for column in inspector.get_columns('keywords')}
 
     # 需要添加的新列及其默认值
-    new_columns = {
+    forward_rules_new_columns = {
         'is_ai': 'ALTER TABLE forward_rules ADD COLUMN is_ai BOOLEAN DEFAULT FALSE',
         'ai_model': 'ALTER TABLE forward_rules ADD COLUMN ai_model VARCHAR DEFAULT NULL',
         'ai_prompt': 'ALTER TABLE forward_rules ADD COLUMN ai_prompt VARCHAR DEFAULT NULL',
@@ -110,17 +116,98 @@ def migrate_db(engine):
         'is_original_sender': 'ALTER TABLE forward_rules ADD COLUMN is_original_sender BOOLEAN DEFAULT FALSE',
         'is_original_time': 'ALTER TABLE forward_rules ADD COLUMN is_original_time BOOLEAN DEFAULT FALSE',
         'is_keyword_after_ai': 'ALTER TABLE forward_rules ADD COLUMN is_keyword_after_ai BOOLEAN DEFAULT FALSE',
+        'add_mode': 'ALTER TABLE forward_rules ADD COLUMN add_mode VARCHAR DEFAULT "BLACKLIST"',
+        'enable_rule': 'ALTER TABLE forward_rules ADD COLUMN enable_rule BOOLEAN DEFAULT TRUE',
+    }
+
+    keywords_new_columns = {
+        'is_blacklist': 'ALTER TABLE keywords ADD COLUMN is_blacklist BOOLEAN DEFAULT TRUE',
     }
 
     # 添加缺失的列
     with engine.connect() as connection:
-        for column, sql in new_columns.items():
-            if column not in existing_columns:
+        # 添加forward_rules表的列
+        for column, sql in forward_rules_new_columns.items():
+            if column not in forward_rules_columns:
                 try:
                     connection.execute(text(sql))
                     logging.info(f'已添加列: {column}')
                 except Exception as e:
                     logging.error(f'添加列 {column} 时出错: {str(e)}')
+                    
+
+        # 添加keywords表的列
+        for column, sql in keywords_new_columns.items():
+            if column not in keyword_columns:
+                try:
+                    connection.execute(text(sql))
+                    logging.info(f'已添加列: {column}')
+                except Exception as e:
+                    logging.error(f'添加列 {column} 时出错: {str(e)}')
+
+        #先检查forward_rules表的列的forward_mode是否存在
+        if 'forward_mode' not in forward_rules_columns:
+            # 修改forward_rules表的列mode为forward_mode
+            connection.execute(text("ALTER TABLE forward_rules RENAME COLUMN mode TO forward_mode"))
+            logging.info('修改forward_rules表的列mode为forward_mode成功')
+
+        # 修改keywords表的唯一约束
+        try:
+            with engine.connect() as connection:
+                # 检查索引是否存在
+                result = connection.execute(text("""
+                    SELECT name FROM sqlite_master 
+                    WHERE type='index' AND name='unique_rule_keyword_is_regex_is_blacklist'
+                """))
+                index_exists = result.fetchone() is not None
+                if not index_exists:
+                    logging.info('开始更新 keywords 表的唯一约束...')
+                    try:
+                        
+                        with engine.begin() as connection:
+                            # 创建临时表
+                            connection.execute(text("""
+                                CREATE TABLE keywords_temp (
+                                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                    rule_id INTEGER,
+                                    keyword TEXT,
+                                    is_regex BOOLEAN,
+                                    is_blacklist BOOLEAN
+                                    -- 如果 keywords 表还有其他字段，请在这里一并定义
+                                )
+                            """))
+                            logging.info('创建 keywords_temp 表结构成功')
+
+                            # 将原表数据复制到临时表，让数据库自动生成 id
+                            result = connection.execute(text("""
+                                INSERT INTO keywords_temp (rule_id, keyword, is_regex, is_blacklist)
+                                SELECT rule_id, keyword, is_regex, is_blacklist FROM keywords
+                            """))
+                            logging.info(f'复制数据到 keywords_temp 成功，影响行数: {result.rowcount}')
+
+                            # 删除原表 keywords
+                            connection.execute(text("DROP TABLE keywords"))
+                            logging.info('删除原表 keywords 成功')
+
+                            # 4将临时表重命名为 keywords
+                            connection.execute(text("ALTER TABLE keywords_temp RENAME TO keywords"))
+                            logging.info('重命名 keywords_temp 为 keywords 成功')
+
+                            # 添加唯一约束
+                            connection.execute(text("""
+                                CREATE UNIQUE INDEX unique_rule_keyword_is_regex_is_blacklist 
+                                ON keywords (rule_id, keyword, is_regex, is_blacklist)
+                            """))
+                            logging.info('添加唯一约束 unique_rule_keyword_is_regex_is_blacklist 成功')
+
+                            logging.info('成功更新 keywords 表结构和唯一约束')
+                    except Exception as e:
+                        logging.error(f'更新 keywords 表结构时出错: {str(e)}')
+                else:
+                    logging.info('唯一约束已存在，跳过创建')
+
+        except Exception as e:
+            logging.error(f'更新唯一约束时出错: {str(e)}')
 
 def init_db():
     """初始化数据库"""
