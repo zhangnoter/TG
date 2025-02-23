@@ -97,6 +97,9 @@ async def callback_delete(event, rule_id, session, message):
         return
 
     try:
+        # 保存源频道ID以供后续检查
+        source_chat_id = rule.source_chat_id
+
         # 先删除替换规则
         session.query(ReplaceRule).filter(
             ReplaceRule.rule_id == rule.id
@@ -107,8 +110,23 @@ async def callback_delete(event, rule_id, session, message):
             Keyword.rule_id == rule.id
         ).delete()
 
-        # 最后删除规则
+        # 删除规则
         session.delete(rule)
+
+        # 检查源频道是否还有其他规则引用
+        remaining_rules = session.query(ForwardRule).filter(
+            ForwardRule.source_chat_id == source_chat_id
+        ).count()
+
+        if remaining_rules == 0:
+            # 如果没有其他规则引用这个源频道，删除源频道记录
+            source_chat = session.query(Chat).filter(
+                Chat.id == source_chat_id
+            ).first()
+            if source_chat:
+                logger.info(f'删除未使用的源频道: {source_chat.name} (ID: {source_chat.telegram_chat_id})')
+                session.delete(source_chat)
+
         session.commit()
 
         # 删除机器人的消息
@@ -120,6 +138,7 @@ async def callback_delete(event, rule_id, session, message):
     except Exception as e:
         session.rollback()
         logger.error(f'删除规则时出错: {str(e)}')
+        logger.exception(e)  # 添加详细的错误堆栈信息
         await event.answer('删除规则失败，请检查日志')
 
 async def callback_page(event, rule_id, session, message):
