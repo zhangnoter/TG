@@ -196,10 +196,10 @@ async def process_edit_message(client, event, chat_id, rule):
 async def process_forward_rule(client, event, chat_id, rule):
     """处理转发规则（机器人模式）"""
     message_text = event.message.text or ''
+    original_message_text = message_text
     MAX_MEDIA_SIZE = await get_max_media_size()
     check_message_text = await pre_handle(message_text)
 
-    logger.info(f"处理后的消息文本: {check_message_text}")
     # 添加日志
     logger.info(f'处理规则 ID: {rule.id}')
     logger.info(f'消息内容: {message_text}')
@@ -242,7 +242,8 @@ async def process_forward_rule(client, event, chat_id, rule):
 
             if not event.message.grouped_id:
                 # 使用AI处理消息
-                message_text = await ai_handle(message_text, rule)
+                if original_message_text:
+                    message_text = await ai_handle(message_text, rule)
                 if rule.is_keyword_after_ai:
                     # 对AI处理后的文本再次进行关键字检查
                     should_forward = await check_keywords(
@@ -342,7 +343,8 @@ async def process_forward_rule(client, event, chat_id, rule):
 
                 logger.info(f'共找到 {len(messages)} 条媒体组消息，{len(skipped_media)} 条超限')
 
-                caption = await ai_handle(caption, rule)
+                if original_message_text:
+                    caption = await ai_handle(caption, rule)
                 if rule.is_keyword_after_ai:
                     # 对AI处理后的文本再次进行关键字检查
                     should_forward = await check_keywords(
