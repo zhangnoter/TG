@@ -83,7 +83,7 @@ async def callback_settings(event, rule_id, session, message):
     buttons = []
     for rule in rules:
         source_chat = rule.source_chat
-        button_text = f'来自: {source_chat.name}'
+        button_text = f'{source_chat.name}'
         callback_data = f"rule_settings:{rule.id}"
         buttons.append([Button.inline(button_text, callback_data)])
 
@@ -138,7 +138,7 @@ async def callback_delete(event, rule_id, session, message):
     except Exception as e:
         session.rollback()
         logger.error(f'删除规则时出错: {str(e)}')
-        logger.exception(e)  # 添加详细的错误堆栈信息
+        logger.exception(e)
         await event.answer('删除规则失败，请检查日志')
 
 async def callback_page(event, rule_id, session, message):

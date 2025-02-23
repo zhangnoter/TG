@@ -5,7 +5,6 @@ from enums.enums import ForwardMode, PreviewMode, MessageMode, AddMode
 import logging
 import os
 
-
 Base = declarative_base()
 
 class Chat(Base):
@@ -15,7 +14,6 @@ class Chat(Base):
     telegram_chat_id = Column(String, unique=True, nullable=False)
     name = Column(String, nullable=True)
     current_add_id = Column(String, nullable=True)
-    topic_id = Column(String, nullable=True)
 
     # 关系
     source_rules = relationship('ForwardRule', foreign_keys='ForwardRule.source_chat_id', back_populates='source_chat')
@@ -96,145 +94,167 @@ class ReplaceRule(Base):
     )
 
 def migrate_db(engine):
-    """数据库迁移函数，确保新字段的添加"""
+    """数据库迁移函数，使用临时表迁移数据以回退到旧版本"""
     inspector = inspect(engine)
+    table_names = inspector.get_table_names()
+    session = sessionmaker(bind=engine)()
+    old_engine = create_engine('sqlite:///./db/forward.db') # 假设旧数据库也是同一个文件
 
-    # 检查Chat表的现有列
-    chat_columns = {column['name'] for column in inspector.get_columns('chats')}
+    temp_table_names = {} # 用于存储临时表名
 
-    # 检查forward_rules表的现有列
-    forward_rules_columns = {column['name'] for column in inspector.get_columns('forward_rules')}
-
-    # 检查Keyword表的现有列
-    keyword_columns = {column['name'] for column in inspector.get_columns('keywords')}
-
-    chat_new_columns = {
-        'topic_id': 'ALTER TABLE chats ADD COLUMN topic_id VARCHAR DEFAULT NULL',
-    }
-
-    # 需要添加的新列及其默认值
-    forward_rules_new_columns = {
-        'is_ai': 'ALTER TABLE forward_rules ADD COLUMN is_ai BOOLEAN DEFAULT FALSE',
-        'ai_model': 'ALTER TABLE forward_rules ADD COLUMN ai_model VARCHAR DEFAULT NULL',
-        'ai_prompt': 'ALTER TABLE forward_rules ADD COLUMN ai_prompt VARCHAR DEFAULT NULL',
-        'is_summary': 'ALTER TABLE forward_rules ADD COLUMN is_summary BOOLEAN DEFAULT FALSE',
-        'summary_time': 'ALTER TABLE forward_rules ADD COLUMN summary_time VARCHAR DEFAULT "07:00"',
-        'summary_prompt': 'ALTER TABLE forward_rules ADD COLUMN summary_prompt VARCHAR DEFAULT NULL',
-        'is_delete_original': 'ALTER TABLE forward_rules ADD COLUMN is_delete_original BOOLEAN DEFAULT FALSE',
-        'is_original_sender': 'ALTER TABLE forward_rules ADD COLUMN is_original_sender BOOLEAN DEFAULT FALSE',
-        'is_original_time': 'ALTER TABLE forward_rules ADD COLUMN is_original_time BOOLEAN DEFAULT FALSE',
-        'is_keyword_after_ai': 'ALTER TABLE forward_rules ADD COLUMN is_keyword_after_ai BOOLEAN DEFAULT FALSE',
-        'add_mode': 'ALTER TABLE forward_rules ADD COLUMN add_mode VARCHAR DEFAULT "BLACKLIST"',
-        'enable_rule': 'ALTER TABLE forward_rules ADD COLUMN enable_rule BOOLEAN DEFAULT TRUE',
-        'is_top_summary': 'ALTER TABLE forward_rules ADD COLUMN is_top_summary BOOLEAN DEFAULT TRUE',
-    }
-
-    keywords_new_columns = {
-        'is_blacklist': 'ALTER TABLE keywords ADD COLUMN is_blacklist BOOLEAN DEFAULT TRUE',
-    }
-
-    # 添加缺失的列
     with engine.connect() as connection:
-        # 添加Chat表的列
-        for column, sql in chat_new_columns.items():
-            if column not in chat_columns:
+        if 'chats' in table_names:
+            temp_table_name = 'chats_temp_backup'
+            temp_table_names['chats'] = temp_table_name
+            logging.info(f"正在重命名 'chats' 表为 '{temp_table_name}'...")
+            connection.execute(text(f"ALTER TABLE chats RENAME TO {temp_table_name}"))
+
+        if 'forward_rules' in table_names:
+            temp_table_name = 'forward_rules_temp_backup'
+            temp_table_names['forward_rules'] = temp_table_name
+            logging.info(f"正在重命名 'forward_rules' 表为 '{temp_table_name}'...")
+            connection.execute(text(f"ALTER TABLE forward_rules RENAME TO {temp_table_name}"))
+
+        if 'keywords' in table_names:
+            temp_table_name = 'keywords_temp_backup'
+            temp_table_names['keywords'] = temp_table_name
+            logging.info(f"正在重命名 'keywords' 表为 '{temp_table_name}'...")
+            connection.execute(text(f"ALTER TABLE keywords RENAME TO {temp_table_name}"))
+
+        if 'replace_rules' in table_names:
+            temp_table_name = 'replace_rules_temp_backup'
+            temp_table_names['replace_rules'] = temp_table_name
+            logging.info(f"正在重命名 'replace_rules' 表为 '{temp_table_name}'...")
+            connection.execute(text(f"ALTER TABLE replace_rules RENAME TO {temp_table_name}"))
+
+    logging.info("正在根据旧版模式创建表...")
+    Base.metadata.create_all(engine) # 创建新表
+
+    if 'chats' in temp_table_names:
+        old_table_name = temp_table_names['chats']
+        logging.info(f"正在迁移 'chats' 表数据，从 '{old_table_name}'...")
+        with old_engine.connect() as old_connection:
+            old_chats_result = old_connection.execute(text(f"SELECT id, telegram_chat_id, name, current_add_id FROM {old_table_name}"))
+            for old_chat in old_chats_result:
                 try:
-                    connection.execute(text(sql))
-                    logging.info(f'已添加列: {column}')
+                    new_chat = Chat(
+                        id=old_chat.id,
+                        telegram_chat_id=old_chat.telegram_chat_id,
+                        name=old_chat.name,
+                        current_add_id=old_chat.current_add_id,
+                    )
+                    session.add(new_chat)
                 except Exception as e:
-                    logging.error(f'添加列 {column} 时出错: {str(e)}')
+                    logging.error(f"迁移 chat id {old_chat.id} 时出错: {e}")
+        logging.info("'chats' 表数据迁移完成。")
 
-        # 添加forward_rules表的列
-        for column, sql in forward_rules_new_columns.items():
-            if column not in forward_rules_columns:
+    if 'forward_rules' in temp_table_names:
+        old_table_name = temp_table_names['forward_rules']
+        logging.info(f"正在迁移 'forward_rules' 表数据，从 '{old_table_name}'...")
+        with old_engine.connect() as old_connection:
+            old_rules_result = old_connection.execute(text(f"""
+                SELECT id, source_chat_id, target_chat_id, forward_mode, use_bot, message_mode,
+                       is_replace, is_preview, is_original_link, is_ufb, ufb_domain, ufb_item,
+                       is_delete_original, is_original_sender, is_original_time, add_mode, enable_rule,
+                       is_ai, ai_model, ai_prompt, is_summary, summary_time, summary_prompt,
+                       is_keyword_after_ai, is_top_summary
+                FROM {old_table_name}
+            """))
+            for old_rule in old_rules_result:
                 try:
-                    connection.execute(text(sql))
-                    logging.info(f'已添加列: {column}')
+                    new_rule = ForwardRule(
+                        id=old_rule.id,
+                        source_chat_id=old_rule.source_chat_id,
+                        target_chat_id=old_rule.target_chat_id,
+                        forward_mode=old_rule.forward_mode,
+                        use_bot=old_rule.use_bot,
+                        message_mode=old_rule.message_mode,
+                        is_replace=old_rule.is_replace,
+                        is_preview=old_rule.is_preview,
+                        is_original_link=old_rule.is_original_link,
+                        is_ufb=old_rule.is_ufb,
+                        ufb_domain=old_rule.ufb_domain,
+                        ufb_item=old_rule.ufb_item,
+                        is_delete_original=old_rule.is_delete_original,
+                        is_original_sender=old_rule.is_original_sender,
+                        is_original_time=old_rule.is_original_time,
+                        add_mode=old_rule.add_mode,
+                        enable_rule=old_rule.enable_rule,
+                        is_ai=old_rule.is_ai,
+                        ai_model=old_rule.ai_model,
+                        ai_prompt=old_rule.ai_prompt,
+                        is_summary=old_rule.is_summary,
+                        summary_time=old_rule.summary_time,
+                        summary_prompt=old_rule.summary_prompt,
+                        is_keyword_after_ai=old_rule.is_keyword_after_ai,
+                        is_top_summary=old_rule.is_top_summary,
+                    )
+                    session.add(new_rule)
                 except Exception as e:
-                    logging.error(f'添加列 {column} 时出错: {str(e)}')
-                    
+                    logging.error(f"迁移 forward_rule id {old_rule.id} 时出错: {e}")
+        logging.info("'forward_rules' 表数据迁移完成。")
 
-        # 添加keywords表的列
-        for column, sql in keywords_new_columns.items():
-            if column not in keyword_columns:
+    if 'keywords' in temp_table_names:
+        old_table_name = temp_table_names['keywords']
+        logging.info(f"正在迁移 'keywords' 表数据，从 '{old_table_name}'...")
+        with old_engine.connect() as old_connection:
+            old_keywords_result = old_connection.execute(text(f"SELECT id, rule_id, keyword, is_regex, is_blacklist FROM {old_table_name}"))
+            for old_keyword in old_keywords_result:
                 try:
-                    connection.execute(text(sql))
-                    logging.info(f'已添加列: {column}')
+                    new_keyword = Keyword(
+                        id=old_keyword.id,
+                        rule_id=old_keyword.rule_id,
+                        keyword=old_keyword.keyword,
+                        is_regex=old_keyword.is_regex,
+                        is_blacklist=old_keyword.is_blacklist,
+                    )
+                    session.add(new_keyword)
                 except Exception as e:
-                    logging.error(f'添加列 {column} 时出错: {str(e)}')
+                    logging.error(f"迁移 keyword id {old_keyword.id} 时出错: {e}")
+        logging.info("'keywords' 表数据迁移完成。")
 
-        #先检查forward_rules表的列的forward_mode是否存在
-        if 'forward_mode' not in forward_rules_columns:
-            # 修改forward_rules表的列mode为forward_mode
-            connection.execute(text("ALTER TABLE forward_rules RENAME COLUMN mode TO forward_mode"))
-            logging.info('修改forward_rules表的列mode为forward_mode成功')
+    if 'replace_rules' in temp_table_names:
+        old_table_name = temp_table_names['replace_rules']
+        logging.info(f"正在迁移 'replace_rules' 表数据，从 '{old_table_name}'...")
+        with old_engine.connect() as old_connection:
+            old_replace_rules_result = old_connection.execute(text(f"SELECT id, rule_id, pattern, content FROM {old_table_name}"))
+            for old_replace_rule in old_replace_rules_result:
+                try:
+                    new_replace_rule = ReplaceRule(
+                        id=old_replace_rule.id,
+                        rule_id=old_replace_rule.rule_id,
+                        pattern=old_replace_rule.pattern,
+                        content=old_replace_rule.content,
+                    )
+                    session.add(new_replace_rule)
+                except Exception as e:
+                    logging.error(f"迁移 replace_rule id {old_replace_rule.id} 时出错: {e}")
+        logging.info("'replace_rules' 表数据迁移完成。")
 
-        # 修改keywords表的唯一约束
-        try:
-            with engine.connect() as connection:
-                # 检查索引是否存在
-                result = connection.execute(text("""
-                    SELECT name FROM sqlite_master 
-                    WHERE type='index' AND name='unique_rule_keyword_is_regex_is_blacklist'
-                """))
-                index_exists = result.fetchone() is not None
-                if not index_exists:
-                    logging.info('开始更新 keywords 表的唯一约束...')
-                    try:
-                        
-                        with engine.begin() as connection:
-                            # 创建临时表
-                            connection.execute(text("""
-                                CREATE TABLE keywords_temp (
-                                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                                    rule_id INTEGER,
-                                    keyword TEXT,
-                                    is_regex BOOLEAN,
-                                    is_blacklist BOOLEAN
-                                    -- 如果 keywords 表还有其他字段，请在这里一并定义
-                                )
-                            """))
-                            logging.info('创建 keywords_temp 表结构成功')
+    try:
+        session.commit()
+        logging.info("数据迁移事务提交成功。")
+    except Exception as e:
+        session.rollback()
+        logging.error(f"提交数据迁移时出错: {e}")
+    finally:
+        session.close()
 
-                            # 将原表数据复制到临时表，让数据库自动生成 id
-                            result = connection.execute(text("""
-                                INSERT INTO keywords_temp (rule_id, keyword, is_regex, is_blacklist)
-                                SELECT rule_id, keyword, is_regex, is_blacklist FROM keywords
-                            """))
-                            logging.info(f'复制数据到 keywords_temp 成功，影响行数: {result.rowcount}')
+    with engine.connect() as connection:
+        for original_table_name, temp_table_name in temp_table_names.items():
+            logging.info(f"正在删除临时表 '{temp_table_name}'...")
+            connection.execute(text(f"DROP TABLE {temp_table_name}"))
+        logging.info("临时表删除完成。")
 
-                            # 删除原表 keywords
-                            connection.execute(text("DROP TABLE keywords"))
-                            logging.info('删除原表 keywords 成功')
+    logging.info("数据库迁移过程完成。")
+    logging.info("请务必验证表之间的数据关系是否正确保留，例如 ForwardRule 中的 source_chat_id 和 target_chat_id 是否仍然指向有效的 Chat 记录，以及 Keyword 和 ReplaceRule 中的 rule_id 是否仍然指向有效的 ForwardRule 记录。")
 
-                            # 4将临时表重命名为 keywords
-                            connection.execute(text("ALTER TABLE keywords_temp RENAME TO keywords"))
-                            logging.info('重命名 keywords_temp 为 keywords 成功')
-
-                            # 添加唯一约束
-                            connection.execute(text("""
-                                CREATE UNIQUE INDEX unique_rule_keyword_is_regex_is_blacklist 
-                                ON keywords (rule_id, keyword, is_regex, is_blacklist)
-                            """))
-                            logging.info('添加唯一约束 unique_rule_keyword_is_regex_is_blacklist 成功')
-
-                            logging.info('成功更新 keywords 表结构和唯一约束')
-                    except Exception as e:
-                        logging.error(f'更新 keywords 表结构时出错: {str(e)}')
-                else:
-                    logging.info('唯一约束已存在，跳过创建')
-
-        except Exception as e:
-            logging.error(f'更新唯一约束时出错: {str(e)}')
 
 def init_db():
     """初始化数据库"""
     engine = create_engine('sqlite:///./db/forward.db')
 
-    # 首先创建所有表
-    Base.metadata.create_all(engine)
-
-    # 然后进行必要的迁移
+    # 执行迁移函数来重建表和迁移数据
     migrate_db(engine)
 
     return engine
@@ -249,4 +269,4 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
     engine = init_db()
     session = get_session()
-    logging.info("数据库初始化和迁移完成。")
+    logging.info("数据库初始化和迁移完成 (回退到旧版本，使用临时表).")
