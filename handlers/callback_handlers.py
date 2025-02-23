@@ -1,6 +1,8 @@
 import os
 import traceback
-
+from managers.state_manager import state_manager
+import asyncio
+from datetime import datetime, timedelta
 
 from handlers.button_helpers import create_ai_settings_buttons, create_model_buttons, create_summary_time_buttons
 from handlers.list_handlers import show_list
@@ -12,6 +14,28 @@ from utils.common import get_db_ops, get_main_module
 
 
 logger = logging.getLogger(__name__)
+
+# 菜单标题
+AI_SETTINGS_TEXT = """
+当前AI提示词：
+
+`{ai_prompt}`
+
+当前总结提示词：
+
+`{summary_prompt}`
+"""
+
+
+async def get_ai_settings_text(rule):
+    """生成AI设置页面的文本"""
+    ai_prompt = rule.ai_prompt or os.getenv('DEFAULT_AI_PROMPT', '未设置')
+    summary_prompt = rule.summary_prompt or os.getenv('DEFAULT_SUMMARY_PROMPT', '未设置')
+    
+    return AI_SETTINGS_TEXT.format(
+        ai_prompt=ai_prompt,
+        summary_prompt=summary_prompt
+    )
 
 
 async def callback_switch(event, rule_id, session, message):
@@ -278,30 +302,154 @@ async def callback_toggle_current(event, rule_id, session, message):
 
     await event.answer(f'已切换到: {source_chat.name}')
 
+
+async def cancel_state_after_timeout(user_id: int, chat_id: int, timeout_minutes: int = 5):
+    """在指定时间后自动取消状态"""
+    await asyncio.sleep(timeout_minutes * 60)
+    current_state = state_manager.get_state(user_id, chat_id)
+    if current_state:  # 只有当状态还存在时才清除
+        logger.info(f"状态超时自动取消 - user_id: {user_id}, chat_id: {chat_id}")
+        state_manager.clear_state(user_id, chat_id)
+
 async def callback_set_summary_prompt(event, rule_id, session, message):
     """处理设置AI总结提示词的回调"""
+    logger.info(f"开始处理设置AI总结提示词回调 - event: {event}, rule_id: {rule_id}")
+    
     rule = session.query(ForwardRule).get(rule_id)
     if not rule:
         await event.answer('规则不存在')
         return
 
-    # 发送提示消息
-    await message.edit(
-        "请发送新的AI总结提示词，或发送 /cancel 取消",
-        buttons=[[Button.inline("取消", f"ai_settings:{rule_id}")]]
-    )
-
-    # 设置用户状态
     user_id = event.sender_id
-    chat_id = event.chat_id
-    db_ops = await get_db_ops()
-    await db_ops.set_user_state(user_id, chat_id, f"set_summary_prompt:{rule_id}")
+    chat_id = abs(event.chat_id)
+    state = f"set_summary_prompt:{rule_id}"
+    
+    logger.info(f"准备设置状态 - user_id: {user_id}, chat_id: {chat_id}, state: {state}")
+    try:
+        state_manager.set_state(user_id, chat_id, state)
+        # 启动超时取消任务
+        asyncio.create_task(cancel_state_after_timeout(user_id, chat_id))
+        logger.info("状态设置成功")
+    except Exception as e:
+        logger.error(f"设置状态时出错: {str(e)}")
+        logger.exception(e)
+
+    try:
+        current_prompt = rule.summary_prompt or os.getenv('DEFAULT_SUMMARY_PROMPT', '未设置')
+        await message.edit(
+            f"请发送新的AI总结提示词\n"
+            f"当前规则ID: `{rule_id}`\n"
+            f"当前AI总结提示词：\n\n`{current_prompt}`\n\n"
+            f"5分钟内未设置将自动取消",
+            buttons=[[Button.inline("取消", f"cancel_set_summary:{rule_id}")]]
+        )
+        logger.info("消息编辑成功")
+    except Exception as e:
+        logger.error(f"编辑消息时出错: {str(e)}")
+        logger.exception(e)
+
+async def callback_set_ai_prompt(event, rule_id, session, message):
+    """处理设置AI提示词的回调"""
+    logger.info(f"开始处理设置AI提示词回调 - event: {event}, rule_id: {rule_id}")
+    
+    rule = session.query(ForwardRule).get(rule_id)
+    if not rule:
+        await event.answer('规则不存在')
+        return
+
+    user_id = event.sender_id
+    chat_id = abs(event.chat_id)
+    state = f"set_ai_prompt:{rule_id}"
+    
+    logger.info(f"准备设置状态 - user_id: {user_id}, chat_id: {chat_id}, state: {state}")
+    try:
+        state_manager.set_state(user_id, chat_id, state)
+        # 启动超时取消任务
+        asyncio.create_task(cancel_state_after_timeout(user_id, chat_id))
+        logger.info("状态设置成功")
+    except Exception as e:
+        logger.error(f"设置状态时出错: {str(e)}")
+        logger.exception(e)
+
+    try:
+        current_prompt = rule.ai_prompt or os.getenv('DEFAULT_AI_PROMPT', '未设置')
+        await message.edit(
+            f"请发送新的AI提示词\n"
+            f"当前规则ID: `{rule_id}`\n"
+            f"当前AI提示词：\n\n`{current_prompt}`\n\n"
+            f"5分钟内未设置将自动取消",
+            buttons=[[Button.inline("取消", f"cancel_set_prompt:{rule_id}")]]
+        )
+        logger.info("消息编辑成功")
+    except Exception as e:
+        logger.error(f"编辑消息时出错: {str(e)}")
+        logger.exception(e)
+
+async def callback_toggle_top_summary(event, rule_id, session, message):
+    """处理切换顶置总结消息的回调"""
+    logger.info(f"处理切换顶置总结消息回调 - rule_id: {rule_id}")
+    
+    rule = session.query(ForwardRule).get(rule_id)
+    if not rule:
+        await event.answer('规则不存在')
+        return
+
+    # 切换状态
+    rule.is_top_summary = not rule.is_top_summary
+    session.commit()
+    logger.info(f"已更新规则 {rule_id} 的顶置总结状态为: {rule.is_top_summary}")
+
+    # 更新按钮
+    await message.edit(
+        buttons=await create_ai_settings_buttons(rule)
+    )
+    
+    # 显示提示
+    await event.answer(f"已{'开启' if rule.is_top_summary else '关闭'}顶置总结消息")
 
 async def handle_callback(event):
     """处理按钮回调"""
     try:
         data = event.data.decode()
         logger.info(f'收到回调数据: {data}')
+
+        # 处理取消设置提示词
+        if data.startswith(('cancel_set_prompt:', 'cancel_set_summary:')):
+            rule_id = data.split(':')[1]
+            session = get_session()
+            try:
+                rule = session.query(ForwardRule).get(int(rule_id))
+                if rule:
+                    # 清除状态
+                    state_manager.clear_state(event.sender_id, abs(event.chat_id))
+                    # 返回到 AI 设置页面
+                    await event.edit(await get_ai_settings_text(rule), buttons=await create_ai_settings_buttons(rule))
+                    await event.answer("已取消设置")
+            finally:
+                session.close()
+            return
+
+        if data.startswith('set_summary_prompt:'):
+            # 直接处理设置总结提示词的回调
+            rule_id = data.split(':')[1]
+            logger.info(f"处理设置AI总结提示词回调 - rule_id: {rule_id}")
+            session = get_session()
+            try:
+                await callback_set_summary_prompt(event, rule_id, session, await event.get_message())
+            finally:
+                session.close()
+            return
+
+        if data.startswith('set_ai_prompt:'):
+            # 直接处理设置AI提示词的回调
+            rule_id = data.split(':')[1]
+            logger.info(f"处理设置AI提示词回调 - rule_id: {rule_id}")
+            session = get_session()
+            try:
+                await callback_set_ai_prompt(event, rule_id, session, await event.get_message())
+            finally:
+                session.close()
+            return
 
         if data.startswith('select_model:'):
             # 处理模型选择
@@ -315,7 +463,7 @@ async def handle_callback(event):
                     logger.info(f"已更新规则 {rule_id} 的AI模型为: {model}")
 
                     # 返回到 AI 设置页面
-                    await event.edit("AI 设置：", buttons=await create_ai_settings_buttons(rule))
+                    await event.edit(await get_ai_settings_text(rule), buttons=await create_ai_settings_buttons(rule))
             finally:
                 session.close()
             return
@@ -327,14 +475,14 @@ async def handle_callback(event):
             try:
                 rule = session.query(ForwardRule).get(int(rule_id))
                 if rule:
-                    await event.edit("AI 设置：", buttons=await create_ai_settings_buttons(rule))
+                    await event.edit(await get_ai_settings_text(rule), buttons=await create_ai_settings_buttons(rule))
             finally:
                 session.close()
             return
 
         # 处理 AI 设置中的切换操作
         if data.startswith(
-                ('toggle_ai:', 'set_prompt:', 'change_model:', 'set_summary_prompt:', 'toggle_keyword_after_ai:')):
+                ('toggle_ai:',  'change_model:',  'toggle_keyword_after_ai:')):
             rule_id = data.split(':')[1]
             session = get_session()
             try:
@@ -343,49 +491,17 @@ async def handle_callback(event):
                     await event.answer('规则不存在')
                     return
 
-                if data.startswith('set_summary_prompt:'):
-                    # 存储当前正在设置总结提示词的规则 ID
-                    event.client.setting_prompt_for_rule = int(rule_id)
-
-                    await event.edit(
-                        "请发送新的AI总结提示词\n\n"
-                        "提示：\n"
-                        "1. 可以使用 {Messages} 表示需要总结的所有消息\n"
-                        "2. 例如：'请总结以下内容：{Messages}'\n"
-                        "3. 当前提示词：" + (
-                                    rule.summary_prompt or os.getenv('DEFAULT_SUMMARY_PROMPT') or "未设置") + "\n\n"
-                                                                                                              "当前规则ID: " + rule_id + " \n\n"
-                                                                                                                                         "输入 /cancel 取消设置",
-                        buttons=None
-                    )
-                    return
-
                 if data.startswith('toggle_keyword_after_ai:'):
                     rule.is_keyword_after_ai = not rule.is_keyword_after_ai
                     session.commit()
-                    await event.edit("AI 设置：", buttons=await create_ai_settings_buttons(rule))
+                    await event.edit(await get_ai_settings_text(rule), buttons=await create_ai_settings_buttons(rule))
                     await event.answer(f'AI处理后关键字过滤已{"开启" if rule.is_keyword_after_ai else "关闭"}')
                     return
 
                 if data.startswith('toggle_ai:'):
                     rule.is_ai = not rule.is_ai
                     session.commit()
-                    await event.edit("AI 设置：", buttons=await create_ai_settings_buttons(rule))
-                    return
-                elif data.startswith('set_prompt:'):
-                    # 存储当前正在设置提示词的规则 ID
-                    event.client.setting_prompt_for_rule = int(rule_id)
-
-                    await event.edit(
-                        "请输入新的 AI 提示词\n\n"
-                        "提示：\n"
-                        "1. 可以使用 {Message} 表示原始消息\n"
-                        "2. 例如：'请将以下内容翻译成英文：{Message}'\n"
-                        "3. 当前提示词：" + (rule.ai_prompt or "未设置") + "\n\n"
-                                                                          "当前规则ID: " + rule_id + " \n\n"
-                                                                                                     "输入 /cancel 取消设置",
-                        buttons=None
-                    )
+                    await event.edit(await get_ai_settings_text(rule), buttons=await create_ai_settings_buttons(rule))
                     return
                 elif data.startswith('change_model:'):
                     await event.edit("请选择AI模型：", buttons=await create_model_buttons(rule_id, page=0))
@@ -440,7 +556,7 @@ async def handle_callback(event):
                     else:
                         logger.warning("调度器未初始化")
 
-                    await event.edit("AI 设置：", buttons=await create_ai_settings_buttons(rule))
+                    await event.edit(await get_ai_settings_text(rule), buttons=await create_ai_settings_buttons(rule))
             finally:
                 session.close()
             return
@@ -480,7 +596,7 @@ async def handle_callback(event):
                         else:
                             logger.info("规则未启用总结功能，跳过调度任务更新")
 
-                        await event.edit("AI 设置：", buttons=await create_ai_settings_buttons(rule))
+                        await event.edit(await get_ai_settings_text(rule), buttons=await create_ai_settings_buttons(rule))
                         logger.info("界面更新完成")
                 except Exception as e:
                     logger.error(f"设置总结时间时出错: {str(e)}")
@@ -506,28 +622,7 @@ async def handle_callback(event):
 
         # 使用会话
         session = get_session()
-        try:
-            # 处理设置提示词的特殊情况
-            if action == 'set_prompt':
-                rule = session.query(ForwardRule).get(int(rule_id))
-                if not rule:
-                    await event.answer('规则不存在')
-                    return
-
-                # 存储当前正在设置提示词的规则 ID
-                event.client.setting_prompt_for_rule = int(rule_id)
-
-                await event.edit(
-                    "请输入新的 AI 提示词\n\n"
-                    "提示：\n"
-                    "1. 可以使用 {Message} 表示原始消息\n"
-                    "2. 例如：'请将以下内容翻译成英文：{Message}'\n"
-                    "3. 当前提示词：" + (rule.ai_prompt or "未设置") + "\n\n"
-                                                                      "当前规则ID: " + rule_id + " \n\n"
-                                                                                                 "输入 /cancel 取消设置",
-                    buttons=None
-                )
-                return
+        try:  
 
             # 获取对应的处理器
             handler = CALLBACK_HANDLERS.get(action)
@@ -590,5 +685,7 @@ CALLBACK_HANDLERS = {
     'help': callback_help,
     'rule_settings': callback_rule_settings,
     'set_summary_prompt': callback_set_summary_prompt,
+    'set_ai_prompt': callback_set_ai_prompt,
+    'toggle_top_summary': callback_toggle_top_summary,
 }
 

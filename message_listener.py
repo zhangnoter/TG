@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 import re
 from telethon.tl.types import ChannelParticipantsAdmins
 from managers.settings_manager import create_buttons
-
+from managers.state_manager import state_manager
 # 加载环境变量
 load_dotenv()
 
@@ -61,100 +61,60 @@ def setup_listeners(user_client, bot_client):
 async def handle_user_message(event, user_client, bot_client):
     """处理用户客户端收到的消息"""
     chat = await event.get_chat()
-    chat_id = chat.id
+    chat_id = abs(chat.id)
 
-    # 处理设置AI提示词回调
-    try:
-        previous_messages = await user_client.get_messages(chat_id, limit=2)
-        if len(previous_messages) > 1 and "请输入新的 AI 提示词" in previous_messages[1].text:
-            # 只有在需要时才检查权限
-            if (event.sender_id == int(os.getenv('USER_ID')) or 
-                (event.is_channel and await is_admin(event.chat_id, int(os.getenv('USER_ID')), user_client))):
-                # 从上一条消息中提取规则ID
-                rule_id = re.search(r"当前规则ID: (\d+)", previous_messages[1].text).group(1)
-                logger.info(f"检测到设置AI提示词请求,规则ID: {rule_id}")
+    # 检查用户状态
+    current_state = state_manager.get_state(event.sender_id, chat_id)
+    if current_state:
+        logger.info(f"当前用户状态: {current_state}")
+    
+    if current_state and current_state.startswith("set_summary_prompt:"):
+        rule_id = current_state.split(":")[1]
+        logger.info(f"处理设置AI总结提示词,规则ID: {rule_id}")
+        session = get_session()
+        try:
+            rule = session.query(ForwardRule).get(int(rule_id))
+            if rule:
+                rule.summary_prompt = event.message.text
+                session.commit()
+                logger.info(f"已更新规则 {rule_id} 的总结提示词: {rule.summary_prompt}")
                 
-                session = get_session()
-                try:
-                    # 处理取消命令 - 支持带机器人用户名的命令
-                    command = event.message.text.strip().lower().split('@')[0]  # 移除 @username 部分
-                    if command == '/cancel':
-                        logger.info(f"用户取消设置AI提示词,规则ID: {rule_id}")
-                        await bot_client.send_message(
-                            chat_id,
-                            "已取消设置", 
-                            buttons=await create_buttons(session.query(ForwardRule).get(int(rule_id)))
-                        )
-                        return
-                    
-                    # 更新提示词
-                    rule = session.query(ForwardRule).get(int(rule_id))
-                    if rule:
-                        logger.info(f"开始更新规则 {rule_id} 的AI提示词")
-                        rule.ai_prompt = event.message.text
-                        session.commit()
-                        logger.info(f"已更新规则 {rule_id} 的AI提示词: {rule.ai_prompt}")
-                        
-                        # 使用bot发送更新后的设置页面
-                        await bot_client.send_message(
-                            chat_id,
-                            f"AI 提示词已更新为：\n{rule.ai_prompt}", 
-                            buttons=await bot_handler.create_ai_settings_buttons(rule)  # 返回到 AI 设置页面
-                        )
-                        return
-                    else:
-                        logger.warning(f"未找到规则ID: {rule_id}")
-                finally:
-                    session.close()
-    except Exception as e:
-        logger.error(f"处理AI提示词设置时出错: {str(e)}")
-        logger.exception(e)
-
-    # 处理设置AI总结提示词回调
-    try:
-        previous_messages = await user_client.get_messages(chat_id, limit=2)
-        if len(previous_messages) > 1 and "请发送新的AI总结提示词" in previous_messages[1].text:
-            # 只有在需要时才检查权限
-            if (event.sender_id == int(os.getenv('USER_ID')) or 
-                (event.is_channel and await is_admin(event.chat_id, int(os.getenv('USER_ID')), user_client))):
-                # 从上一条消息中提取规则ID
-                rule_id = re.search(r"当前规则ID: (\d+)", previous_messages[1].text).group(1)
-                logger.info(f"检测到设置AI总结提示词请求,规则ID: {rule_id}")
+                state_manager.clear_state(event.sender_id, chat_id)
+                await bot_client.send_message(
+                    chat.id,
+                    f"AI总结提示词已更新为：\n{rule.summary_prompt}",
+                    buttons=await bot_handler.create_ai_settings_buttons(rule)
+                )
+                return
+            else:
+                logger.warning(f"未找到规则ID: {rule_id}")
+        finally:
+            session.close()
+        return
+        
+    elif current_state and current_state.startswith("set_ai_prompt:"):
+        rule_id = current_state.split(":")[1]
+        logger.info(f"处理设置AI提示词,规则ID: {rule_id}")
+        session = get_session()
+        try:
+            rule = session.query(ForwardRule).get(int(rule_id))
+            if rule:
+                rule.ai_prompt = event.message.text
+                session.commit()
+                logger.info(f"已更新规则 {rule_id} 的AI提示词: {rule.ai_prompt}")
                 
-                session = get_session()
-                try:
-                    # 处理取消命令
-                    command = event.message.text.strip().lower().split('@')[0]
-                    if command == '/cancel':
-                        logger.info(f"用户取消设置AI总结提示词,规则ID: {rule_id}")
-                        await bot_client.send_message(
-                            chat_id,
-                            "已取消设置", 
-                            buttons=await bot_handler.create_ai_settings_buttons(session.query(ForwardRule).get(int(rule_id)))
-                        )
-                        return
-                    
-                    # 更新总结提示词
-                    rule = session.query(ForwardRule).get(int(rule_id))
-                    if rule:
-                        logger.info(f"开始更新规则 {rule_id} 的AI总结提示词")
-                        rule.summary_prompt = event.message.text
-                        session.commit()
-                        logger.info(f"已更新规则 {rule_id} 的AI总结提示词: {rule.summary_prompt}")
-                        
-                        await bot_client.send_message(
-                            chat_id,
-                            f"AI总结提示词已更新为：\n{rule.summary_prompt}", 
-                            buttons=await bot_handler.create_ai_settings_buttons(rule)
-                        )
-                        return
-                    else:
-                        logger.warning(f"未找到规则ID: {rule_id}")
-                finally:
-                    session.close()
-    except Exception as e:
-        logger.error(f"处理AI总结提示词设置时出错: {str(e)}")
-        logger.exception(e)
+                state_manager.clear_state(event.sender_id, chat_id)
+                await bot_client.send_message(
+                    chat.id,
+                    f"AI提示词已更新为：\n{rule.ai_prompt}",
+                    buttons=await bot_handler.create_ai_settings_buttons(rule)
+                )
+                return
+            else:
+                logger.warning(f"未找到规则ID: {rule_id}")
+        finally:
+            session.close()
+        return
 
     # 检查是否是媒体组消息
     if event.message.grouped_id:

@@ -158,7 +158,7 @@ AI_SETTINGS = {
             None: os.getenv('DEFAULT_AI_PROMPT'),
             '': os.getenv('DEFAULT_AI_PROMPT'),
         },
-        'toggle_action': 'set_prompt',
+        'toggle_action': 'set_ai_prompt',
         'toggle_func': None
     },
     'is_keyword_after_ai': {

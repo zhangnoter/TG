@@ -16,6 +16,11 @@ async def create_ai_settings_buttons(rule):
         if field == 'ai_prompt':
             display_value = current_value[:20] + '...' if current_value and len(current_value) > 20 else (
                         current_value or os.getenv('DEFAULT_AI_PROMPT'))
+        elif field == 'summary_prompt':
+            display_value = current_value[:20] + '...' if current_value and len(current_value) > 20 else (
+                        current_value or os.getenv('DEFAULT_SUMMARY_PROMPT'))
+        elif field == 'ai_model':
+            display_value = current_value or os.getenv('DEFAULT_AI_MODEL')
         else:
             display_value = config['values'].get(current_value, str(current_value))
         button_text = f"{config['display_name']}: {display_value}"
