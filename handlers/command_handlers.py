@@ -424,16 +424,64 @@ async def handle_list_replace_command(event):
 
 async def handle_remove_command(event, command, parts):
     """处理 remove_keyword 和 remove_replace 命令"""
-    if len(parts) < 2:
-        await event.reply(f'用法: /{command} <ID1> [ID2] [ID3] ...\n例如: /{command} 1 2 3')
-        return
+    message_text = event.message.text
+    
+    # 如果是替换规则，保持原来的 ID 删除方式
+    if command == 'remove_replace':
+        if len(parts) < 2:
+            await event.reply(f'用法: /{command} <ID1> [ID2] [ID3] ...\n例如: /{command} 1 2 3')
+            return
+            
+        try:
+            ids_to_remove = [int(x) for x in parts[1:]]
+        except ValueError:
+            await event.reply('ID必须是数字')
+            return
+    else:  # remove_keyword
+        if len(message_text.split(None, 1)) < 2:
+            await event.reply(f'用法: /{command} <关键字1> [关键字2] ...\n例如:\n/{command} keyword1 "key word 2" \'key word 3\'')
+            return
+            
+        # 分离命令和参数部分
+        _, args_text = message_text.split(None, 1)
+        
+        # 解析带引号的参数
+        keywords_to_remove = []
+        current_word = []
+        in_quotes = False
+        quote_char = None
 
-    # 解析要删除的ID列表
-    try:
-        ids_to_remove = [int(x) for x in parts[1:]]
-    except ValueError:
-        await event.reply('ID必须是数字')
-        return
+        for char in args_text:
+            if char in ['"', "'"]:  # 处理引号
+                if not in_quotes:  # 开始引号
+                    in_quotes = True
+                    quote_char = char
+                elif char == quote_char:  # 结束匹配的引号
+                    in_quotes = False
+                    quote_char = None
+                    if current_word:  # 添加当前词
+                        keywords_to_remove.append(''.join(current_word))
+                        current_word = []
+            elif char.isspace() and not in_quotes:  # 非引号中的空格
+                if current_word:  # 添加当前词
+                    keywords_to_remove.append(''.join(current_word))
+                    current_word = []
+            else:  # 普通字符
+                current_word.append(char)
+
+        # 处理最后一个词
+        if current_word:
+            keywords_to_remove.append(''.join(current_word))
+
+        # 过滤空字符串
+        keywords_to_remove = [k.strip() for k in keywords_to_remove if k.strip()]
+        
+        if not keywords_to_remove:
+            await event.reply('请提供至少一个关键字')
+            return
+
+    # 在 try 块外定义 item_type
+    item_type = '关键字' if command == 'remove_keyword' else '替换规则'
 
     session = get_session()
     try:
@@ -442,57 +490,57 @@ async def handle_remove_command(event, command, parts):
             return
 
         rule, source_chat = rule_info
+        rule_mode = "blacklist" if rule.add_mode == AddMode.BLACKLIST else "whitelist"
+        mode_name = "黑名单" if rule.add_mode == AddMode.BLACKLIST else "白名单"
 
         db_ops = await get_db_ops()
-        # 根据命令类型选择要删除的对象
         if command == 'remove_keyword':
-            # 获取当前所有关键字
-            items = await db_ops.get_keywords(session, rule.id)
-            item_type = '关键字'
+            # 获取当前模式下的关键字
+            items = await db_ops.get_keywords(session, rule.id, rule_mode)
+            
+            if not items:
+                await event.reply(f'当前规则在{mode_name}模式下没有任何关键字')
+                return
+                
+            # 删除匹配的关键字
+            removed_count = 0
+            for keyword in keywords_to_remove:
+                for item in items:
+                    if item.keyword == keyword:
+                        session.delete(item)
+                        removed_count += 1
+                        break
+            
+            session.commit()
+            
+            # 重新获取更新后的列表
+            remaining_items = await db_ops.get_keywords(session, rule.id, rule_mode)
+            
+            # 显示删除结果
+            if removed_count > 0:
+                await event.reply(f"已从{mode_name}中删除 {removed_count} 个关键字")
+            else:
+                await event.reply(f"在{mode_name}中未找到匹配的关键字")
+
         else:  # remove_replace
-            # 获取当前所有替换规则
+            # 处理替换规则的删除（保持原有逻辑）
             items = await db_ops.get_replace_rules(session, rule.id)
-            item_type = '替换规则'
+            if not items:
+                await event.reply(f'当前规则没有任何{item_type}')
+                return
 
-        # 检查ID是否有效
-        if not items:
-            await event.reply(f'当前规则没有任何{item_type}')
-            return
+            max_id = len(items)
+            invalid_ids = [id for id in ids_to_remove if id < 1 or id > max_id]
+            if invalid_ids:
+                await event.reply(f'无效的ID: {", ".join(map(str, invalid_ids))}')
+                return
 
-        max_id = len(items)
-        invalid_ids = [id for id in ids_to_remove if id < 1 or id > max_id]
-        if invalid_ids:
-            await event.reply(f'无效的ID: {", ".join(map(str, invalid_ids))}')
-            return
-
-        # 删除选中的项目
-        if command == 'remove_keyword':
-            await db_ops.delete_keywords(session, rule.id, ids_to_remove)
-            # 重新获取更新后的列表
-            remaining_items = await db_ops.get_keywords(session, rule.id)
-        else:  # remove_replace
             await db_ops.delete_replace_rules(session, rule.id, ids_to_remove)
-            # 重新获取更新后的列表
+            session.commit()
+            
             remaining_items = await db_ops.get_replace_rules(session, rule.id)
+            await event.reply(f'已删除 {len(ids_to_remove)} 个替换规则')
 
-        session.commit()
-
-        await event.reply(f'已删除 {len(ids_to_remove)} 个{item_type}')
-
-        # 显示更新后的列表
-        if remaining_items:
-            if command == 'remove_keyword':
-                formatter = lambda i, kw: f'{i}. {kw.keyword}{" (正则)" if kw.is_regex else ""}'
-            else:  # remove_replace
-                formatter = lambda i, rr: f'{i}. 匹配: {rr.pattern} -> {"删除" if not rr.content else f"替换为: {rr.content}"}'
-
-            await show_list(
-                event,
-                command.split('_')[1],  # 'keyword' 或 'replace'
-                remaining_items,
-                formatter,
-                f'{item_type}列表\n规则: 来自 {source_chat.name}'
-            )
 
     except Exception as e:
         session.rollback()

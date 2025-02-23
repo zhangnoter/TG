@@ -198,7 +198,7 @@ async def process_forward_rule(client, event, chat_id, rule):
     message_text = event.message.text or ''
     original_message_text = message_text
     MAX_MEDIA_SIZE = await get_max_media_size()
-    check_message_text = await pre_handle(message_text)
+    # check_message_text = await pre_handle(message_text)
 
     # 添加日志
     logger.info(f'处理规则 ID: {rule.id}')
@@ -208,7 +208,7 @@ async def process_forward_rule(client, event, chat_id, rule):
     # 使用提取的方法进行关键字检查
     should_forward = await check_keywords(
         rule,
-        check_message_text
+        message_text
     )
 
     if should_forward:
