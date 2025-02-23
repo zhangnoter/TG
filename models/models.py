@@ -247,7 +247,6 @@ def migrate_db(engine):
         logging.info("临时表删除完成。")
 
     logging.info("数据库迁移过程完成。")
-    logging.info("请务必验证表之间的数据关系是否正确保留，例如 ForwardRule 中的 source_chat_id 和 target_chat_id 是否仍然指向有效的 Chat 记录，以及 Keyword 和 ReplaceRule 中的 rule_id 是否仍然指向有效的 ForwardRule 记录。")
 
 
 def init_db():
