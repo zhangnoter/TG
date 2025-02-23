@@ -30,6 +30,10 @@ class StateManager:
             del self._states[key]
             logger.info(f"清除状态 - key: {key}")
         logger.debug(f"当前所有状态: {self._states}")  # 改为 debug 级别
+    
+    def check_state(self) -> bool:
+        """检查是否存在状态"""
+        return bool(self._states)
 
 # 创建全局实例
 state_manager = StateManager()

@@ -13,6 +13,8 @@ from utils.media import *
 from datetime import datetime, timedelta
 
 
+
+
 logger = logging.getLogger(__name__)
 
 # 确保 temp 目录存在
@@ -196,9 +198,17 @@ async def process_edit_message(client, event, chat_id, rule):
 async def process_forward_rule(client, event, chat_id, rule):
     """处理转发规则（机器人模式）"""
     message_text = event.message.text or ''
+    check_message_text = message_text
     original_message_text = message_text
     MAX_MEDIA_SIZE = await get_max_media_size()
     # check_message_text = await pre_handle(message_text)
+    if rule.is_filter_user_info:
+        sender_info = await get_sender_info(event, rule.id)  # 调用新的函数获取 sender_info
+        if sender_info:
+            check_message_text = f"{sender_info}:\n{message_text}"
+            logger.info(f'附带用户信息后的消息: {message_text}')
+        else:
+            logger.warning(f"规则 ID: {rule.id} - 无法获取发送者信息")
 
     # 添加日志
     logger.info(f'处理规则 ID: {rule.id}')
@@ -208,7 +218,7 @@ async def process_forward_rule(client, event, chat_id, rule):
     # 使用提取的方法进行关键字检查
     should_forward = await check_keywords(
         rule,
-        message_text
+        check_message_text
     )
 
     if should_forward:

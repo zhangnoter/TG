@@ -26,6 +26,15 @@ RULE_SETTINGS = {
         'toggle_action': 'toggle_add_mode',
         'toggle_func': lambda current: AddMode.BLACKLIST if current == AddMode.WHITELIST else AddMode.WHITELIST
     },
+    'is_filter_user_info': {
+        'display_name': '过滤关键字时是否附带发送者名称和ID',
+        'values': {
+            True: '是',
+            False: '否'
+        },
+        'toggle_action': 'toggle_filter_user_info',
+        'toggle_func': lambda current: not current
+    },
     'forward_mode': {
         'display_name': '转发模式',
         'values': {
@@ -153,11 +162,7 @@ AI_SETTINGS = {
         'toggle_func': None
     },
     'ai_prompt': {
-        'display_name': 'AI提示词',
-        'values': {
-            None: os.getenv('DEFAULT_AI_PROMPT'),
-            '': os.getenv('DEFAULT_AI_PROMPT'),
-        },
+        'display_name': '设置AI处理提示词',
         'toggle_action': 'set_ai_prompt',
         'toggle_func': None
     },
@@ -189,11 +194,7 @@ AI_SETTINGS = {
         'toggle_func': None
     },
     'summary_prompt': {
-        'display_name': 'AI总结提示词',
-        'values': {
-            None: os.getenv('DEFAULT_SUMMARY_PROMPT'),
-            '': os.getenv('DEFAULT_SUMMARY_PROMPT'),
-        },
+        'display_name': '设置AI总结提示词',
         'toggle_action': 'set_summary_prompt',
         'toggle_func': None
     },
@@ -250,6 +251,14 @@ async def create_buttons(rule):
             Button.inline(
                 f"当前关键字添加模式: {RULE_SETTINGS['add_mode']['values'][rule.add_mode]}",
                 f"toggle_add_mode:{rule.id}"
+            )
+        ])
+
+        # 是否过滤用户信息
+        buttons.append([
+            Button.inline(
+                f"过滤关键字时是否附带发送者名称和ID: {RULE_SETTINGS['is_filter_user_info']['values'][rule.is_filter_user_info]}",
+                f"toggle_filter_user_info:{rule.id}"
             )
         ])
 

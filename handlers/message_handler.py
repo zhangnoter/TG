@@ -69,4 +69,4 @@ async def ai_handle(message: str, rule) -> str:
         
     except Exception as e:
         logger.error(f"AI处理消息时出错: {str(e)}")
-        return message  # 出错时返回原始消息
+        return message  

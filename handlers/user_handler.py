@@ -3,7 +3,7 @@ import re
 import logging
 import asyncio
 from handlers.message_handler import pre_handle
-from utils.common import check_keywords
+from utils.common import check_keywords, get_sender_info
 
 logger = logging.getLogger(__name__)
 
@@ -11,13 +11,22 @@ async def process_forward_rule(client, event, chat_id, rule):
     """处理转发规则（用户模式）"""
     should_forward = False
     message_text = event.message.text or ''
+    check_message_text = message_text
     # check_message_text = await pre_handle(message_text)
     # 添加日志
     logger.info(f'处理规则 ID: {rule.id}')
     logger.info(f'消息内容: {message_text}')
     logger.info(f'规则模式: {rule.forward_mode.value}')
+
+    if rule.is_filter_user_info:
+        sender_info = await get_sender_info(event, rule.id)  # 调用新的函数获取 sender_info
+        if sender_info:
+            check_message_text = f"{sender_info}:\n{message_text}"
+            logger.info(f'附带用户信息后的消息: {message_text}')
+        else:
+            logger.warning(f"规则 ID: {rule.id} - 无法获取发送者信息")
     
-    should_forward = await check_keywords(rule,message_text)
+    should_forward = await check_keywords(rule,check_message_text)
     
     logger.info(f'最终决定: {"转发" if should_forward else "不转发"}')
     

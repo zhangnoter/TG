@@ -9,6 +9,8 @@ import re
 from telethon.tl.types import ChannelParticipantsAdmins
 from managers.settings_manager import create_buttons
 from managers.state_manager import state_manager
+from telethon.tl import types
+from utils.common import get_ai_settings_text
 # 加载环境变量
 load_dotenv()
 
@@ -63,11 +65,20 @@ async def handle_user_message(event, user_client, bot_client):
     chat = await event.get_chat()
     chat_id = abs(chat.id)
 
+    # 检查是否频道消息
+    if isinstance(event.chat, types.Channel) and state_manager.check_state():
+        sender_id = os.getenv('USER_ID')
+        # 频道ID需要加上100前缀
+        chat_id = int(f"100{chat_id}")
+    else:
+        sender_id = event.sender_id
+
+
     # 检查用户状态
-    current_state = state_manager.get_state(event.sender_id, chat_id)
+    current_state = state_manager.get_state(sender_id, chat_id)
     if current_state:
         logger.info(f"当前用户状态: {current_state}")
-    
+
     if current_state and current_state.startswith("set_summary_prompt:"):
         rule_id = current_state.split(":")[1]
         logger.info(f"处理设置AI总结提示词,规则ID: {rule_id}")
@@ -79,10 +90,10 @@ async def handle_user_message(event, user_client, bot_client):
                 session.commit()
                 logger.info(f"已更新规则 {rule_id} 的总结提示词: {rule.summary_prompt}")
                 
-                state_manager.clear_state(event.sender_id, chat_id)
+                state_manager.clear_state(sender_id, chat_id)
                 await bot_client.send_message(
                     chat.id,
-                    f"AI总结提示词已更新为：\n{rule.summary_prompt}",
+                    await get_ai_settings_text(rule),
                     buttons=await bot_handler.create_ai_settings_buttons(rule)
                 )
                 return
@@ -103,10 +114,10 @@ async def handle_user_message(event, user_client, bot_client):
                 session.commit()
                 logger.info(f"已更新规则 {rule_id} 的AI提示词: {rule.ai_prompt}")
                 
-                state_manager.clear_state(event.sender_id, chat_id)
+                state_manager.clear_state(sender_id, chat_id)
                 await bot_client.send_message(
                     chat.id,
-                    f"AI提示词已更新为：\n{rule.ai_prompt}",
+                    await get_ai_settings_text(rule),
                     buttons=await bot_handler.create_ai_settings_buttons(rule)
                 )
                 return

@@ -2,10 +2,14 @@ import importlib
 import os
 import sys
 import logging
+from telethon.tl.types import ChannelParticipantsAdmins
 
 from enums.enums import ForwardMode
 from models.models import Chat, ForwardRule
 import re
+import telethon
+
+from utils.constants import AI_SETTINGS_TEXT
 
 logger = logging.getLogger(__name__)
 
@@ -276,3 +280,64 @@ async def check_keywords(rule, message_text):
 
     logger.info(f"关键字检查最终结果: {'转发' if should_forward else '不转发'}")
     return should_forward
+
+async def is_admin(channel_id, user_id, client):
+    """检查用户是否为频道/群组管理员
+    
+    Args:
+        channel_id: 频道/群组ID
+        user_id: 用户ID
+        client: Telethon客户端实例
+    
+    Returns:
+        bool: 是否是管理员
+    """
+    try:
+        # 获取频道的管理员列表
+        admins = await client.get_participants(channel_id, filter=ChannelParticipantsAdmins)
+        # 检查用户是否在管理员列表中
+        return any(admin.id == user_id for admin in admins)
+    except Exception as e:
+        logger.error(f"检查管理员权限时出错: {str(e)}")
+        return False
+
+
+async def get_ai_settings_text(rule):
+    """生成AI设置页面的文本"""
+    ai_prompt = rule.ai_prompt or os.getenv('DEFAULT_AI_PROMPT', '未设置')
+    summary_prompt = rule.summary_prompt or os.getenv('DEFAULT_SUMMARY_PROMPT', '未设置')
+
+    return AI_SETTINGS_TEXT.format(
+        ai_prompt=ai_prompt,
+        summary_prompt=summary_prompt
+    )
+
+async def get_sender_info(event, rule_id):
+    """获取消息发送者信息，处理各种情况并返回 sender_info 字符串"""
+    sender_info = ""
+    if hasattr(event.message, 'from_user'):
+        if event.message.from_user:
+            sender_info = f"{event.message.from_user.mention} ({event.message.from_user.id})"
+        else:
+            logger.warning(f"规则 ID: {rule_id} - event.message.from_user 存在但为 None")
+            sender_info = "未知发送者 (from_user 为 None)"
+    elif hasattr(event.message, 'sender'):
+        if event.message.sender:
+            sender = await event.get_sender()
+            if sender:
+                if isinstance(sender, telethon.tl.types.Channel):
+                    sender_info = f"{sender.title} ({sender.id})"
+                elif isinstance(sender, telethon.tl.types.User):
+                    sender_info = f"{sender.username or sender.first_name or '未知用户'} ({sender.id})"
+                else:
+                    sender_info = f"未知类型发送者 ({sender.id})"
+            else:
+                logger.warning(f"规则 ID: {rule_id} - event.message.sender 存在但 get_sender() 返回 None")
+                sender_info = "未知发送者 (sender 为 None after get_sender)"
+        else:
+            logger.warning(f"规则 ID: {rule_id} - event.message.sender 存在但为 None")
+            sender_info = "未知发送者 (sender 为 None)"
+    else:
+        logger.warning(f"规则 ID: {rule_id} - event.message 既没有 from_user 也没有 sender 属性")
+        sender_info = "未知发送者 (无法获取用户信息)"
+    return sender_info

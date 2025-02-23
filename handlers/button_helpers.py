@@ -13,12 +13,12 @@ async def create_ai_settings_buttons(rule):
     # 添加 AI 设置按钮
     for field, config in AI_SETTINGS.items():
         current_value = getattr(rule, field)
-        if field == 'ai_prompt':
-            display_value = current_value[:20] + '...' if current_value and len(current_value) > 20 else (
-                        current_value or os.getenv('DEFAULT_AI_PROMPT'))
-        elif field == 'summary_prompt':
-            display_value = current_value[:20] + '...' if current_value and len(current_value) > 20 else (
-                        current_value or os.getenv('DEFAULT_SUMMARY_PROMPT'))
+        if field == 'ai_prompt' or field == 'summary_prompt':
+            display_value = config['display_name']
+            callback_data = f"{config['toggle_action']}:{rule.id}"
+            buttons.append([Button.inline(display_value, callback_data)])
+            continue
+
         elif field == 'ai_model':
             display_value = current_value or os.getenv('DEFAULT_AI_MODEL')
         else:

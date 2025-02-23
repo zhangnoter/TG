@@ -3,6 +3,7 @@ import traceback
 from managers.state_manager import state_manager
 import asyncio
 from datetime import datetime, timedelta
+from telethon.tl import types
 
 from handlers.button_helpers import create_ai_settings_buttons, create_model_buttons, create_summary_time_buttons
 from handlers.list_handlers import show_list
@@ -10,32 +11,15 @@ from managers.settings_manager import create_settings_text, create_buttons, RULE
 from models.models import Chat, ForwardRule, ReplaceRule, Keyword,get_session
 from telethon import events, Button
 import logging
-from utils.common import get_db_ops, get_main_module
-
+from utils.common import get_db_ops, get_main_module, get_ai_settings_text
+from utils.common import is_admin
 
 logger = logging.getLogger(__name__)
 
-# 菜单标题
-AI_SETTINGS_TEXT = """
-当前AI提示词：
-
-`{ai_prompt}`
-
-当前总结提示词：
-
-`{summary_prompt}`
-"""
 
 
-async def get_ai_settings_text(rule):
-    """生成AI设置页面的文本"""
-    ai_prompt = rule.ai_prompt or os.getenv('DEFAULT_AI_PROMPT', '未设置')
-    summary_prompt = rule.summary_prompt or os.getenv('DEFAULT_SUMMARY_PROMPT', '未设置')
-    
-    return AI_SETTINGS_TEXT.format(
-        ai_prompt=ai_prompt,
-        summary_prompt=summary_prompt
-    )
+
+
 
 
 async def callback_switch(event, rule_id, session, message):
@@ -320,7 +304,16 @@ async def callback_set_summary_prompt(event, rule_id, session, message):
         await event.answer('规则不存在')
         return
 
-    user_id = event.sender_id
+    # 检查是否频道消息
+    if isinstance(event.chat, types.Channel):
+        # 检查是否是管理员
+        if not await is_admin(event.chat_id, event.sender_id, event.client):
+            await event.answer('只有管理员可以修改设置')
+            return
+        user_id = os.getenv('USER_ID')
+    else:
+        user_id = event.sender_id
+
     chat_id = abs(event.chat_id)
     state = f"set_summary_prompt:{rule_id}"
     
@@ -351,16 +344,25 @@ async def callback_set_summary_prompt(event, rule_id, session, message):
 async def callback_set_ai_prompt(event, rule_id, session, message):
     """处理设置AI提示词的回调"""
     logger.info(f"开始处理设置AI提示词回调 - event: {event}, rule_id: {rule_id}")
-    
+
     rule = session.query(ForwardRule).get(rule_id)
     if not rule:
         await event.answer('规则不存在')
         return
 
-    user_id = event.sender_id
+    # 检查是否频道消息
+    if isinstance(event.chat, types.Channel):
+        # 检查是否是管理员
+        if not await is_admin(event.chat_id, event.sender_id, event.client):
+            await event.answer('只有管理员可以修改设置')
+            return
+        user_id = os.getenv('USER_ID')
+    else:
+        user_id = event.sender_id
+
     chat_id = abs(event.chat_id)
     state = f"set_ai_prompt:{rule_id}"
-    
+
     logger.info(f"准备设置状态 - user_id: {user_id}, chat_id: {chat_id}, state: {state}")
     try:
         state_manager.set_state(user_id, chat_id, state)

@@ -40,6 +40,7 @@ class ForwardRule(Base):
     is_original_time = Column(Boolean, default=False)  # 是否附带原始消息发送时间
     add_mode = Column(Enum(AddMode), nullable=False, default=AddMode.BLACKLIST) # 添加模式,默认黑名单
     enable_rule = Column(Boolean, default=True)  # 是否启用规则
+    is_filter_user_info = Column(Boolean, default=False)  # 是否过滤用户信息
     # AI相关字段
     is_ai = Column(Boolean, default=False)  # 是否启用AI处理
     ai_model = Column(String, nullable=True)  # 使用的AI模型
@@ -119,6 +120,7 @@ def migrate_db(engine):
         'add_mode': 'ALTER TABLE forward_rules ADD COLUMN add_mode VARCHAR DEFAULT "BLACKLIST"',
         'enable_rule': 'ALTER TABLE forward_rules ADD COLUMN enable_rule BOOLEAN DEFAULT TRUE',
         'is_top_summary': 'ALTER TABLE forward_rules ADD COLUMN is_top_summary BOOLEAN DEFAULT TRUE',
+        'is_filter_user_info': 'ALTER TABLE forward_rules ADD COLUMN is_filter_user_info BOOLEAN DEFAULT FALSE',
     }
 
     keywords_new_columns = {
