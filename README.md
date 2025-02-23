@@ -315,7 +315,7 @@ TG频道的部分消息由于文字嵌入链接，点击会让你确认再跳转
 /add_all(/aa) <关键字> - 添加普通关键字到所有规则
 /add_regex_all(/ara) <正则表达式> - 添加正则表达式到所有规则
 /list_keyword(/lk) - 列出所有关键字
-/remove_keyword(/rk) <序号> - 删除关键字
+/remove_keyword(/rk) <关键词1> [关键词2] - 删除关键字
 /clear_all_keywords(/cak) - 清除当前规则的所有关键字
 /clear_all_keywords_regex(/cakr) - 清除当前规则的所有正则关键字
 /copy_keywords(/ck) <规则ID> - 复制指定规则的关键字到当前规则
