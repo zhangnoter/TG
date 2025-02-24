@@ -1,6 +1,9 @@
 import os
 from pathlib import Path
+from dotenv import load_dotenv
 
+# 加载环境变量
+load_dotenv()
 
 # 目录配置
 BASE_DIR = Path(__file__).parent.parent
@@ -9,7 +12,7 @@ TEMP_DIR = os.path.join(BASE_DIR, 'temp')
 
 # 分页配置
 MODELS_PER_PAGE = int(os.getenv('AI_MODELS_PER_PAGE', 10))
-KEYWORDS_PER_PAGE = int(os.getenv('KEYWORDS_PER_PAGE', 10))
+KEYWORDS_PER_PAGE = int(os.getenv('KEYWORDS_PER_PAGE', 50))
 
 # 按钮布局配置
 SUMMARY_TIME_ROWS = int(os.getenv('SUMMARY_TIME_ROWS', 10))
