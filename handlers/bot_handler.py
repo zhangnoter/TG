@@ -353,7 +353,7 @@ async def process_forward_rule(client, event, chat_id, rule):
 
                 logger.info(f'共找到 {len(messages)} 条媒体组消息，{len(skipped_media)} 条超限')
 
-                if original_message_text:
+                if caption or original_message_text:
                     caption = await ai_handle(caption, rule)
                 if rule.is_keyword_after_ai:
                     # 对AI处理后的文本再次进行关键字检查
