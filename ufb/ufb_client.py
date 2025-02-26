@@ -12,7 +12,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def get_main_module():
+async def get_main_module():
     """获取 main 模块"""
     try:
         return sys.modules['__main__']

@@ -11,6 +11,7 @@ from managers.settings_manager import create_buttons
 from managers.state_manager import state_manager
 from telethon.tl import types
 from utils.common import get_ai_settings_text
+from filters.process import process_forward_rule
 # 加载环境变量
 load_dotenv()
 
@@ -38,6 +39,8 @@ logger = logging.getLogger(__name__)
 
 # 添加一个缓存来存储已处理的媒体组
 PROCESSED_GROUPS = set()
+
+
 
 def setup_listeners(user_client, bot_client):
     """
@@ -189,8 +192,8 @@ async def handle_user_message(event, user_client, bot_client):
                 continue
             logger.info(f'处理转发规则 ID: {rule.id} (从 {source_chat.name} 转发到: {target_chat.name})')
             if rule.use_bot:
-                await bot_handler.process_forward_rule(bot_client, event, str(chat_id), rule)
-                # await bot_handler.process_edit_message(bot_client, event, str(chat_id), rule)
+                # 直接使用过滤器模块中的process_forward_rule函数
+                await process_forward_rule(bot_client, event, str(chat_id), rule)
             else:
                 await user_handler.process_forward_rule(user_client, event, str(chat_id), rule)
         
