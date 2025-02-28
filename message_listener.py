@@ -2,6 +2,7 @@ from telethon import events
 from models.models import get_session, Chat, ForwardRule
 import logging
 from handlers import user_handler, bot_handler
+from handlers.prompt_handlers import handle_prompt_setting
 import asyncio
 import os
 from dotenv import load_dotenv
@@ -76,59 +77,13 @@ async def handle_user_message(event, user_client, bot_client):
     else:
         sender_id = event.sender_id
 
-
     # 检查用户状态
     current_state = state_manager.get_state(sender_id, chat_id)
     if current_state:
         logger.info(f"当前用户状态: {current_state}")
-
-    if current_state and current_state.startswith("set_summary_prompt:"):
-        rule_id = current_state.split(":")[1]
-        logger.info(f"处理设置AI总结提示词,规则ID: {rule_id}")
-        session = get_session()
-        try:
-            rule = session.query(ForwardRule).get(int(rule_id))
-            if rule:
-                rule.summary_prompt = event.message.text
-                session.commit()
-                logger.info(f"已更新规则 {rule_id} 的总结提示词: {rule.summary_prompt}")
-                
-                state_manager.clear_state(sender_id, chat_id)
-                await bot_client.send_message(
-                    chat.id,
-                    await get_ai_settings_text(rule),
-                    buttons=await bot_handler.create_ai_settings_buttons(rule)
-                )
-                return
-            else:
-                logger.warning(f"未找到规则ID: {rule_id}")
-        finally:
-            session.close()
-        return
-        
-    elif current_state and current_state.startswith("set_ai_prompt:"):
-        rule_id = current_state.split(":")[1]
-        logger.info(f"处理设置AI提示词,规则ID: {rule_id}")
-        session = get_session()
-        try:
-            rule = session.query(ForwardRule).get(int(rule_id))
-            if rule:
-                rule.ai_prompt = event.message.text
-                session.commit()
-                logger.info(f"已更新规则 {rule_id} 的AI提示词: {rule.ai_prompt}")
-                
-                state_manager.clear_state(sender_id, chat_id)
-                await bot_client.send_message(
-                    chat.id,
-                    await get_ai_settings_text(rule),
-                    buttons=await bot_handler.create_ai_settings_buttons(rule)
-                )
-                return
-            else:
-                logger.warning(f"未找到规则ID: {rule_id}")
-        finally:
-            session.close()
-        return
+        # 处理提示词设置
+        if await handle_prompt_setting(event, bot_client, sender_id, chat_id, current_state):
+            return
 
     # 检查是否是媒体组消息
     if event.message.grouped_id:
@@ -206,9 +161,22 @@ async def handle_user_message(event, user_client, bot_client):
 async def handle_bot_message(event, bot_client):
     """处理机器人客户端收到的消息（命令）"""
     try:
+        # 获取用户ID和聊天ID
+        sender_id = event.sender_id
+        chat_id = abs(event.chat_id)
+
+        # 检查用户状态
+        current_state = state_manager.get_state(sender_id, chat_id)
+        
+        # 处理提示词设置
+        if await handle_prompt_setting(event, bot_client, sender_id, chat_id, current_state):
+            return
+
+        # 如果没有特殊状态，则处理常规命令
         await bot_handler.handle_command(bot_client, event)
     except Exception as e:
-        logger.error(f'处理机器人命令时发生错误: {str(e)}') 
+        logger.error(f'处理机器人命令时发生错误: {str(e)}')
+        logger.exception(e)
 
 async def clear_group_cache(group_key, delay=300):  # 5分钟后清除缓存
     """清除已处理的媒体组记录"""
