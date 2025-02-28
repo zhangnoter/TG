@@ -5,14 +5,14 @@ from filters.base_filter import BaseFilter
 
 logger = logging.getLogger(__name__)
 
-class LinkFilter(BaseFilter):
+class InfoFilter(BaseFilter):
     """
-    链接过滤器，处理原始链接和发送者信息
+    信息过滤器，添加原始链接和发送者信息
     """
     
     async def _process(self, context):
         """
-        处理原始链接和发送者信息
+        添加原始链接和发送者信息
         
         Args:
             context: 消息上下文

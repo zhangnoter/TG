@@ -3,7 +3,7 @@ from filters.filter_chain import FilterChain
 from filters.keyword_filter import KeywordFilter
 from filters.replace_filter import ReplaceFilter
 from filters.ai_filter import AIFilter
-from filters.link_filter import LinkFilter
+from filters.info_filter import InfoFilter
 from filters.media_filter import MediaFilter
 from filters.sender_filter import SenderFilter
 from filters.delete_original_filter import DeleteOriginalFilter
@@ -42,8 +42,8 @@ async def process_forward_rule(client, event, chat_id, rule):
     # 添加AI处理过滤器（如果启用了AI处理后的关键字检查，可能会中断处理链）
     filter_chain.add_filter(AIFilter())
     
-    # 添加链接过滤器（处理原始链接和发送者信息）
-    filter_chain.add_filter(LinkFilter())
+    # 添加信息过滤器（处理原始链接和发送者信息）
+    filter_chain.add_filter(InfoFilter())
     
     # 添加媒体过滤器（处理媒体内容）
     filter_chain.add_filter(MediaFilter())
