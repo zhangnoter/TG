@@ -7,6 +7,7 @@ from filters.link_filter import LinkFilter
 from filters.media_filter import MediaFilter
 from filters.sender_filter import SenderFilter
 from filters.delete_original_filter import DeleteOriginalFilter
+from filters.delay_filter import DelayFilter
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,9 @@ async def process_forward_rule(client, event, chat_id, rule):
     
     # 创建过滤器链
     filter_chain = FilterChain()
+
+    # 延迟处理过滤器（如果启用了延迟处理）
+    filter_chain.add_filter(DelayFilter())
     
     # 添加关键字过滤器（如果消息不匹配关键字，会中断处理链）
     filter_chain.add_filter(KeywordFilter())

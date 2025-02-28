@@ -18,6 +18,9 @@ KEYWORDS_PER_PAGE = int(os.getenv('KEYWORDS_PER_PAGE', 50))
 SUMMARY_TIME_ROWS = int(os.getenv('SUMMARY_TIME_ROWS', 10))
 SUMMARY_TIME_COLS = int(os.getenv('SUMMARY_TIME_COLS', 6))
 
+DELAY_TIME_ROWS = int(os.getenv('DELAY_TIME_ROWS', 10))
+DELAY_TIME_COLS = int(os.getenv('DELAY_TIME_COLS', 6))
+
 # 菜单标题
 AI_SETTINGS_TEXT = """
 当前AI提示词：

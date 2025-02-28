@@ -50,6 +50,8 @@ class ForwardRule(Base):
     summary_prompt = Column(String, nullable=True)  # AI总结的prompt
     is_keyword_after_ai = Column(Boolean, default=False) # AI处理后是否再次执行关键字过滤
     is_top_summary = Column(Boolean, default=True) # 是否顶置总结消息
+    enable_delay = Column(Boolean, default=False)  # 是否启用延迟处理
+    delay_seconds = Column(Integer, default=5)  # 延迟处理秒数
     # 添加唯一约束
     __table_args__ = (
         UniqueConstraint('source_chat_id', 'target_chat_id', name='unique_source_target'),
@@ -121,6 +123,8 @@ def migrate_db(engine):
         'enable_rule': 'ALTER TABLE forward_rules ADD COLUMN enable_rule BOOLEAN DEFAULT TRUE',
         'is_top_summary': 'ALTER TABLE forward_rules ADD COLUMN is_top_summary BOOLEAN DEFAULT TRUE',
         'is_filter_user_info': 'ALTER TABLE forward_rules ADD COLUMN is_filter_user_info BOOLEAN DEFAULT FALSE',
+        'enable_delay': 'ALTER TABLE forward_rules ADD COLUMN enable_delay BOOLEAN DEFAULT FALSE',
+        'delay_seconds': 'ALTER TABLE forward_rules ADD COLUMN delay_seconds INTEGER DEFAULT 5',
     }
 
     keywords_new_columns = {

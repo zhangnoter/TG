@@ -34,3 +34,18 @@ def load_summary_times():
     except (FileNotFoundError, IOError) as e:
         logger.warning(f"summary_times.txt 加载失败: {e}，使用默认时间列表")
     return ['00:00', '06:00', '12:00', '18:00']
+
+def load_delay_times():
+    """加载延迟时间列表"""
+    try:
+        times_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'delay_times.txt')
+        if not os.path.exists(times_path):
+            create_default_configs()
+            
+        with open(times_path, 'r', encoding='utf-8') as f:
+            times = [line.strip() for line in f if line.strip()]
+            if times:
+                return times
+    except (FileNotFoundError, IOError) as e:
+        logger.warning(f"delay_times.txt 加载失败: {e}，使用默认时间列表")
+    return [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]

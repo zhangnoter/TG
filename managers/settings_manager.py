@@ -136,6 +136,24 @@ RULE_SETTINGS = {
         },
         'toggle_action': 'toggle_original_time',
         'toggle_func': lambda current: not current
+    },
+    # 添加延迟过滤器设置
+    'enable_delay': {
+        'display_name': '延迟处理',
+        'values': {
+            True: '开启',
+            False: '关闭'
+        },
+        'toggle_action': 'toggle_enable_delay',
+        'toggle_func': lambda current: not current
+    },
+    'delay_seconds': {
+        'values': {
+            None: 5,
+            '': 5
+        },
+        'toggle_action': 'set_delay_time',
+        'toggle_func': None
     }
 }
 
@@ -265,7 +283,7 @@ async def create_buttons(rule):
         # 转发模式和转发方式放在一行
         buttons.append([
             Button.inline(
-                f"📥 转发模式: {RULE_SETTINGS['forward_mode']['values'][rule.forward_mode]}",
+                f"📥 过滤模式: {RULE_SETTINGS['forward_mode']['values'][rule.forward_mode]}",
                 f"toggle_forward_mode:{rule.id}"
             ),
             Button.inline(
@@ -320,6 +338,18 @@ async def create_buttons(rule):
                 )
             ])
 
+            # 添加延迟过滤器按钮
+            buttons.append([
+                Button.inline(
+                    f"⏱️ 延迟处理: {RULE_SETTINGS['enable_delay']['values'][rule.enable_delay]}",
+                    f"toggle_enable_delay:{rule.id}"
+                ),
+                Button.inline(
+                    f"⌛ 延迟秒数: {rule.delay_seconds or 5}秒",
+                    f"set_delay_time:{rule.id}"
+                )
+            ])
+
             # AI设置单独一行
             buttons.append([
                 Button.inline(
@@ -347,3 +377,5 @@ async def create_buttons(rule):
         session.close()
 
     return buttons
+
+

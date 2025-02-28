@@ -5,7 +5,7 @@ import asyncio
 from datetime import datetime, timedelta
 from telethon.tl import types
 
-from handlers.button_helpers import create_ai_settings_buttons, create_model_buttons, create_summary_time_buttons
+from handlers.button_helpers import create_ai_settings_buttons, create_model_buttons, create_summary_time_buttons,create_delay_time_buttons
 from handlers.list_handlers import show_list
 from managers.settings_manager import create_settings_text, create_buttons, RULE_SETTINGS
 from models.models import Chat, ForwardRule, ReplaceRule, Keyword,get_session
@@ -567,6 +567,50 @@ async def handle_callback(event):
             rule_id = data.split(':')[1]
             await event.edit("请选择总结时间：", buttons=await create_summary_time_buttons(rule_id, page=0))
             return
+        
+        if data.startswith('set_delay_time:'):
+            rule_id = data.split(':')[1]
+            await event.edit("请选择延迟时间：", buttons=await create_delay_time_buttons(rule_id, page=0))
+            return
+        
+        if data.startswith('select_delay_time:'):
+            parts = data.split(':', 2)  # 最多分割2次
+            if len(parts) == 3:
+                _, rule_id, time = parts
+                logger.info(f"设置规则 {rule_id} 的延迟时间为: {time}")
+
+                session = get_session()
+                try:
+                    rule = session.query(ForwardRule).get(int(rule_id))
+                    if rule:
+                        # 记录旧时间
+                        old_time = rule.delay_seconds
+
+                        # 更新时间
+                        rule.delay_seconds = int(time)
+                        session.commit()
+                        logger.info(f"数据库更新成功: {old_time} -> {time}")
+
+                        # 获取消息对象
+                        message = await event.get_message()
+
+                        await message.edit(
+                            await create_settings_text(rule),
+                            buttons=await create_buttons(rule)
+                        )
+                        logger.info("界面更新完成")
+                except Exception as e:
+                    logger.error(f"设置延迟时间时出错: {str(e)}")
+                    logger.error(f"错误详情: {traceback.format_exc()}")
+                finally:
+                    session.close()
+            return
+
+        if data.startswith('delay_time_page:'):
+            _, rule_id, page = data.split(':')
+            page = int(page)
+            await event.edit("请选择延迟时间：", buttons=await create_summary_time_buttons(rule_id, page=page))
+            return
 
         if data.startswith('select_time:'):
             parts = data.split(':', 2)  # 最多分割2次
@@ -689,5 +733,6 @@ CALLBACK_HANDLERS = {
     'set_summary_prompt': callback_set_summary_prompt,
     'set_ai_prompt': callback_set_ai_prompt,
     'toggle_top_summary': callback_toggle_top_summary,
+    
 }
 

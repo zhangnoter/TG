@@ -1,10 +1,11 @@
 from telethon import Button
 from utils.constants import *
-from utils.settings import load_summary_times, load_ai_models
+from utils.settings import load_summary_times, load_ai_models, load_delay_times
 from managers.settings_manager import AI_SETTINGS, AI_MODELS
 
 SUMMARY_TIMES = load_summary_times()
 AI_MODELS= load_ai_models()
+DELAY_TIMES = load_delay_times()
 
 async def create_ai_settings_buttons(rule):
     """创建 AI 设置按钮"""
@@ -153,5 +154,64 @@ async def create_summary_time_buttons(rule_id, page=0):
 
     buttons.append(nav_buttons)
     buttons.append([Button.inline("👈 返回", f"ai_settings:{rule_id}")])
+
+    return buttons
+
+
+async def create_delay_time_buttons(rule_id, page=0):
+    """创建延迟时间选择按钮"""
+    # 从环境变量获取布局设置
+    rows = DELAY_TIME_ROWS
+    cols = DELAY_TIME_COLS
+
+    times_per_page = rows * cols
+
+    buttons = []
+    total_times = len(DELAY_TIMES)
+    start_idx = page * times_per_page
+    end_idx = min(start_idx + times_per_page, total_times)
+
+    # 检查是否是频道消息
+    buttons = []
+    total_times = len(DELAY_TIMES)
+
+    # 添加时间按钮
+    current_row = []
+    for i, time in enumerate(DELAY_TIMES[start_idx:end_idx], start=1):
+        current_row.append(Button.inline(
+            str(time),
+            f"select_delay_time:{rule_id}:{time}"
+        ))
+
+        # 当达到每行的列数时，添加当前行并重置
+        if i % cols == 0:
+            buttons.append(current_row)
+            current_row = []
+
+    # 添加最后一个不完整的行
+    if current_row:
+        buttons.append(current_row)
+
+    # 添加导航按钮
+    nav_buttons = []
+    if page > 0:
+        nav_buttons.append(Button.inline(
+            "⬅️ 上一页",
+            f"delay_time_page:{rule_id}:{page - 1}"
+        ))
+
+    nav_buttons.append(Button.inline(
+        f"{page + 1}/{(total_times + times_per_page - 1) // times_per_page}",
+        "noop:0"
+    ))
+
+    if end_idx < total_times:
+        nav_buttons.append(Button.inline(
+            "下一页 ➡️",
+            f"delay_time_page:{rule_id}:{page + 1}"
+        ))
+
+    buttons.append(nav_buttons)
+    buttons.append([Button.inline("👈 返回", f"rule_settings:{rule_id}")])
 
     return buttons
