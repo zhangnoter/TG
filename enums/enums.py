@@ -21,3 +21,6 @@ class AddMode(enum.Enum):
     WHITELIST = 'whitelist'
     BLACKLIST = 'blacklist'
 
+class HandleMode(enum.Enum):
+    FORWARD = 'FORWARD'
+    EDIT = 'EDIT'

@@ -8,6 +8,7 @@ from filters.media_filter import MediaFilter
 from filters.sender_filter import SenderFilter
 from filters.delete_original_filter import DeleteOriginalFilter
 from filters.delay_filter import DelayFilter
+from filters.edit_filter import EditFilter
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +47,9 @@ async def process_forward_rule(client, event, chat_id, rule):
     
     # 添加媒体过滤器（处理媒体内容）
     filter_chain.add_filter(MediaFilter())
+    
+    # 添加编辑过滤器（编辑原始消息）
+    filter_chain.add_filter(EditFilter())
     
     # 添加发送过滤器（发送消息）
     filter_chain.add_filter(SenderFilter())

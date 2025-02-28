@@ -1,6 +1,6 @@
 import os
 from utils.settings import load_ai_models
-from enums.enums import ForwardMode, MessageMode, PreviewMode, AddMode
+from enums.enums import ForwardMode, MessageMode, PreviewMode, AddMode, HandleMode
 from models.models import get_session
 from telethon import Button
 
@@ -154,6 +154,15 @@ RULE_SETTINGS = {
         },
         'toggle_action': 'set_delay_time',
         'toggle_func': None
+    },
+    'handle_mode': {
+        'display_name': '处理模式',
+        'values': {
+            HandleMode.FORWARD: '转发模式',
+            HandleMode.EDIT: '编辑模式'
+        },
+        'toggle_action': 'toggle_handle_mode',
+        'toggle_func': lambda current: HandleMode.EDIT if current == HandleMode.FORWARD else HandleMode.FORWARD
     }
 }
 
@@ -280,7 +289,15 @@ async def create_buttons(rule):
             )
         ])
 
-        # 转发模式和转发方式放在一行
+        # 处理模式
+        buttons.append([
+            Button.inline(
+                f"⚙️ 处理模式: {RULE_SETTINGS['handle_mode']['values'][rule.handle_mode]}",
+                f"toggle_handle_mode:{rule.id}"
+            )
+        ])
+
+
         buttons.append([
             Button.inline(
                 f"📥 过滤模式: {RULE_SETTINGS['forward_mode']['values'][rule.forward_mode]}",
@@ -292,7 +309,7 @@ async def create_buttons(rule):
             )
         ])
 
-        # 其他设置两两一行
+
         if rule.use_bot:  # 只在使用机器人时显示这些设置
             buttons.append([
                 Button.inline(

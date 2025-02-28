@@ -1,7 +1,7 @@
 from sqlalchemy import create_engine, Column, Integer, String, Boolean, ForeignKey, Enum, UniqueConstraint, inspect, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
-from enums.enums import ForwardMode, PreviewMode, MessageMode, AddMode
+from enums.enums import ForwardMode, PreviewMode, MessageMode, AddMode, HandleMode
 import logging
 import os
 
@@ -41,6 +41,7 @@ class ForwardRule(Base):
     add_mode = Column(Enum(AddMode), nullable=False, default=AddMode.BLACKLIST) # 添加模式,默认黑名单
     enable_rule = Column(Boolean, default=True)  # 是否启用规则
     is_filter_user_info = Column(Boolean, default=False)  # 是否过滤用户信息
+    handle_mode = Column(Enum(HandleMode), nullable=False, default=HandleMode.FORWARD) # 处理模式,编辑模式和转发模式，默认转发
     # AI相关字段
     is_ai = Column(Boolean, default=False)  # 是否启用AI处理
     ai_model = Column(String, nullable=True)  # 使用的AI模型
@@ -125,6 +126,7 @@ def migrate_db(engine):
         'is_filter_user_info': 'ALTER TABLE forward_rules ADD COLUMN is_filter_user_info BOOLEAN DEFAULT FALSE',
         'enable_delay': 'ALTER TABLE forward_rules ADD COLUMN enable_delay BOOLEAN DEFAULT FALSE',
         'delay_seconds': 'ALTER TABLE forward_rules ADD COLUMN delay_seconds INTEGER DEFAULT 5',
+        'handle_mode': 'ALTER TABLE forward_rules ADD COLUMN handle_mode VARCHAR DEFAULT "FORWARD"',
     }
 
     keywords_new_columns = {
