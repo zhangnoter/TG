@@ -2,6 +2,7 @@ from telethon import events, Button
 from handlers.callback_handlers import handle_callback
 from handlers.message_handler import pre_handle, ai_handle
 from handlers.command_handlers import *
+from handlers.link_handlers import handle_message_link, handle_media_group, handle_single_message
 import logging
 import asyncio
 from enums.enums import ForwardMode, PreviewMode, MessageMode
@@ -80,6 +81,9 @@ async def handle_command(client, event):
         return
 
     if not message.text.startswith('/'):
+        # 检查是否是 Telegram 消息链接
+        if 't.me/' in message.text:
+            await handle_message_link(client, event)
         return
 
     # 分割命令，处理可能带有机器人用户名的情况
@@ -164,36 +168,6 @@ async def callback_handler(event):
     if event.sender_id != await get_user_id():
         return
     await handle_callback(event)
-
-async def process_edit_message(client, event, chat_id, rule):
-    """处理编辑消息"""
-    # if rule.is_edit_mode and not rule.is_delete_original:
-    #     logger.info(f'进入编辑模式')
-    #     try:
-    #         # 如果启用了替换模式，处理文本
-    #         if rule.is_replace and message_text:
-    #             try:
-    #                 # 应用所有替换规则
-    #                 for replace_rule in rule.replace_rules:
-    #                     if replace_rule.pattern == '.*':
-    #                         message_text = replace_rule.content or ''
-    #                         break  # 如果是全文替换，就不继续处理其他规则
-    #                     else:
-    #                         try:
-    #                             message_text = re.sub(
-    #                                 replace_rule.pattern,
-    #                                 replace_rule.content or '',
-    #                                 message_text
-    #                             )
-    #                         except re.error:
-    #                             logger.error(f'替换规则格式错误: {replace_rule.pattern}')
-    #             except Exception as e:
-    #                 logger.error(f'应用替换规则时出错: {str(e)}')
-
-    pass
-
-# 注意: 原始的 process_forward_rule 函数已被移除
-# 现在使用从 filters 模块导入的新版过滤器系统中的 process_forward_rule 函数
 
 
 async def send_welcome_message(client):
