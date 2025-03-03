@@ -10,7 +10,7 @@ from filters.delete_original_filter import DeleteOriginalFilter
 from filters.delay_filter import DelayFilter
 from filters.edit_filter import EditFilter
 from filters.comment_button_filter import CommentButtonFilter
-
+from filters.init_filter import InitFilter
 logger = logging.getLogger(__name__)
 
 async def process_forward_rule(client, event, chat_id, rule):
@@ -30,6 +30,9 @@ async def process_forward_rule(client, event, chat_id, rule):
     
     # 创建过滤器链
     filter_chain = FilterChain()
+
+    # 添加初始化过滤器
+    filter_chain.add_filter(InitFilter())
 
     # 延迟处理过滤器（如果启用了延迟处理）
     filter_chain.add_filter(DelayFilter())
