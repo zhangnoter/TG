@@ -30,17 +30,23 @@ class MediaFilter(BaseFilter):
         rule = context.rule
         event = context.event
         client = context.client
-        
-        # 获取媒体大小限制
-        MAX_MEDIA_SIZE = await get_max_media_size()
-        
-        # 如果是媒体组消息
-        if event.message.grouped_id:
-            await self._process_media_group(context, MAX_MEDIA_SIZE)
-        else:
-            await self._process_single_media(context, MAX_MEDIA_SIZE)
-        
-        return True
+
+        logger.info(f"MediaFilter处理消息前，context: {context.__dict__}")
+        try:
+            # 获取媒体大小限制
+            MAX_MEDIA_SIZE = await get_max_media_size()
+            
+            # 如果是媒体组消息
+            if event.message.grouped_id:
+                logger.info(f'处理媒体组消息 组ID: {event.message.grouped_id}')
+                await self._process_media_group(context, MAX_MEDIA_SIZE)
+            else:
+                logger.info(f'处理单条媒体消息')
+                await self._process_single_media(context, MAX_MEDIA_SIZE)
+            
+            return True
+        finally:
+            logger.info(f"MediaFilter处理消息后，context: {context.__dict__}")
     
     async def _process_media_group(self, context, MAX_MEDIA_SIZE):
         """处理媒体组消息"""
@@ -62,7 +68,7 @@ class MediaFilter(BaseFilter):
             ):
                 if message.grouped_id == event.message.grouped_id:
                     # 保存第一条消息的文本和按钮
-                    if not context.message_text:
+                    if not context.message_text and not context.original_message_text:
                         context.message_text = message.text or ''
                         context.buttons = message.buttons if hasattr(message, 'buttons') else None
                         logger.info(f'获取到媒体组文本: {context.message_text}')

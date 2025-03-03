@@ -4,6 +4,7 @@ from filters.base_filter import BaseFilter
 from enums.enums import HandleMode, PreviewMode
 from utils.common import get_main_module
 from telethon.tl.types import Channel
+import traceback
 
 logger = logging.getLogger(__name__)
 
@@ -26,24 +27,32 @@ class EditFilter(BaseFilter):
         rule = context.rule
         event = context.event
         
+        logger.debug(f"开始处理编辑过滤器，消息ID: {event.message.id}, 聊天ID: {event.chat_id}")
+        
         # 如果不是编辑模式，继续后续处理
         if rule.handle_mode != HandleMode.EDIT:
+            logger.debug(f"当前规则非编辑模式 (当前模式: {rule.handle_mode})，跳过编辑处理")
             return True
             
         # 检查是否为频道消息
         chat = await event.get_chat()
+        logger.debug(f"聊天类型: {type(chat).__name__}, 聊天ID: {chat.id}, 聊天标题: {getattr(chat, 'title', '未知')}")
+        
         if not isinstance(chat, Channel):
-            logger.info("不是频道消息，跳过编辑")
+            logger.info(f"不是频道消息 (聊天类型: {type(chat).__name__})，跳过编辑")
             return False
             
         try:
             # 获取用户客户端
+            logger.debug("尝试获取用户客户端")
             main = await get_main_module()
             user_client = main.user_client if (main and hasattr(main, 'user_client')) else None
             
             if not user_client:
                 logger.error("无法获取用户客户端，无法执行编辑操作")
                 return False
+            
+            logger.debug("成功获取用户客户端")
                 
             # 根据预览模式设置 link_preview
             link_preview = {
@@ -52,62 +61,32 @@ class EditFilter(BaseFilter):
                 PreviewMode.FOLLOW: event.message.media is not None  # 跟随原消息
             }[rule.is_preview]
             
+            logger.debug(f"预览模式: {rule.is_preview}, link_preview值: {link_preview}")
+            
             # 组合消息文本
             message_text = context.sender_info + context.message_text + context.time_info + context.original_link
-            logger.info(f"组合后的消息文本: '{message_text[:50]}...(省略)' (长度: {len(message_text)})")
-            logger.info(f"原消息文本: '{event.message.text[:50]}...(省略)' (长度: {len(event.message.text or '')})")
+            
+            logger.debug(f"原始消息文本: '{event.message.text}'")
+            logger.debug(f"新消息文本: '{message_text}'")
+            
+            # 检查文本是否有变化
+            if message_text == event.message.text:
+                logger.info("消息文本没有变化，跳过编辑")
+                return False
             
             # 处理媒体组消息
             if context.is_media_group:
-                logger.info(f"开始处理媒体组消息，组ID: {context.media_group_id}，共有 {len(context.media_group_messages)} 条消息")
-                
-                # 日志记录媒体组所有消息的概览
-                media_group_overview = []
-                for idx, msg in enumerate(context.media_group_messages):
-                    media_type = type(msg.media).__name__ if msg.media else "无媒体"
-                    has_text = "有文本" if msg.text else "无文本"
-                    text_length = len(msg.text or "")
-                    media_group_overview.append(f"消息{idx+1}: ID={msg.id}, 类型={media_type}, {has_text}({text_length}字)")
-                
-                logger.info(f"媒体组消息概览: {' | '.join(media_group_overview)}")
-                
+                logger.info(f"处理媒体组消息，媒体组ID: {context.media_group_id}, 消息数量: {len(context.media_group_messages) if context.media_group_messages else '未知'}")
                 # 尝试编辑媒体组中的每条消息
-                has_text_message = None
-                original_text = ""
-                
-                # 先找到包含文本的消息
-                for message in context.media_group_messages:
-                    logger.info(f"检查媒体组消息 ID: {message.id}, 文本长度: {len(message.text or '')}")
-                    if message.text:
-                        has_text_message = message
-                        original_text = message.text or ""
-                        logger.info(f"找到包含文本的消息: ID={message.id}, 文本: '{original_text[:50]}...(省略)'")
-                        break
-                
-                # 如果没找到包含文本的消息，则默认使用第一条消息
-                if not has_text_message and context.media_group_messages:
-                    has_text_message = context.media_group_messages[0]
-                    original_text = has_text_message.text or ""
-                    logger.info(f"未找到包含文本的消息，使用第一条消息: ID={has_text_message.id}")
-                
-                # 检查文本是否有变化
-                if message_text == original_text:
-                    logger.info("媒体组消息文本没有变化，跳过编辑")
+                if not context.media_group_messages:
+                    logger.warning("媒体组消息列表为空，无法编辑")
                     return False
-                
+                    
                 for message in context.media_group_messages:
                     try:
-                        # 只在包含文本的消息上添加文本
-                        is_text_message = has_text_message and message.id == has_text_message.id
-                        text_to_edit = message_text if is_text_message else ""
-                        
-                        # 如果当前消息不是文本消息，但原本有文本，则保留其文本
-                        if not is_text_message and (message.text or ""):
-                            text_to_edit = message.text
-                            logger.info(f"保留非主文本消息的原有文本: '{text_to_edit[:30]}...(省略)'")
-                        
-                        logger.info(f"准备编辑消息 ID: {message.id}, 是否为文本消息: {is_text_message}, "
-                                  f"文本长度: {len(text_to_edit)}")
+                        # 只在第一条消息上添加文本
+                        text_to_edit = message_text if message.id == event.message.id else ""
+                        logger.debug(f"尝试编辑媒体组消息 {message.id}, 媒体类型: {type(message.media).__name__ if message.media else '无媒体'}")
                         
                         await user_client.edit_message(
                             event.chat_id,
@@ -116,23 +95,21 @@ class EditFilter(BaseFilter):
                             parse_mode=rule.message_mode.value,
                             link_preview=link_preview
                         )
-                        logger.info(f"成功编辑媒体组消息 {message.id}{' (文本消息)' if is_text_message else ''}")
+                        logger.info(f"成功编辑媒体组消息 {message.id}")
                     except Exception as e:
-                        error_msg = str(e)
-                        if "was not modified" not in error_msg:
-                            logger.error(f"编辑媒体组消息 {message.id} 失败: {error_msg}")
+                        error_details = str(e)
+                        if "was not modified" not in error_details:
+                            logger.error(f"编辑媒体组消息 {message.id} 失败: {error_details}")
+                            logger.debug(f"异常详情: {traceback.format_exc()}")
                         else:
-                            logger.info(f"消息 {message.id} 未修改: {error_msg}")
+                            logger.debug(f"媒体组消息 {message.id} 内容未修改，无需编辑")
                 return False
-            
-            # 检查非媒体组消息文本是否有变化
-            if message_text == event.message.text:
-                logger.info("消息文本没有变化，跳过编辑")
-                return False
-                
             # 处理所有其他消息（包括单条媒体消息和纯文本消息）
             else:
                 try:
+                    logger.debug(f"尝试编辑单条消息 {event.message.id}, 消息类型: {type(event.message).__name__}, 媒体类型: {type(event.message.media).__name__ if event.message.media else '无媒体'}")
+                    logger.debug(f"使用解析模式: {rule.message_mode.value}")
+                    
                     await user_client.edit_message(
                         event.chat_id,
                         event.message.id,
@@ -143,10 +120,18 @@ class EditFilter(BaseFilter):
                     logger.info(f"成功编辑消息 {event.message.id}")
                     return False
                 except Exception as e:
-                    if "was not modified" not in str(e):
-                        logger.error(f"编辑消息失败: {str(e)}")
+                    error_details = str(e)
+                    if "was not modified" not in error_details:
+                        logger.error(f"编辑消息 {event.message.id} 失败: {error_details}")
+                        logger.debug(f"尝试编辑的消息ID: {event.message.id}, 聊天ID: {event.chat_id}")
+                        logger.debug(f"消息文本长度: {len(message_text)}, 解析模式: {rule.message_mode.value}")
+                        logger.debug(f"异常详情: {traceback.format_exc()}")
+                    else:
+                        logger.debug(f"消息 {event.message.id} 内容未修改，无需编辑")
                     return False
                 
         except Exception as e:
             logger.error(f"编辑过滤器处理出错: {str(e)}")
+            logger.debug(f"异常详情: {traceback.format_exc()}")
+            logger.debug(f"上下文信息 - 消息ID: {event.message.id}, 聊天ID: {event.chat_id}, 规则ID: {rule.id if hasattr(rule, 'id') else '未知'}")
             return False 
