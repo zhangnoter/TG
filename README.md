@@ -274,16 +274,16 @@ flowchart TD
     B --> C["替换过滤器(替换模式)"]
     C --> D["AI处理过滤器(使用AI处理消息)"]
     D --> E["信息过滤器(添加原始链接/发送者/时间)"]
-    E --> F["评论区按钮过滤器(添加评论区直达按钮)"]
-    F --> G["媒体过滤器(处理媒体内容，对应.env里的MAX_MEDIA_SIZE)"]
-    G --> J{"处理模式判断(根据规则配置判断后续处理方式)"}
-    J -->|编辑模式| H["编辑过滤器(编辑消息)"]
-    J -->|转发模式| I["发送过滤器(发送消息，对应预览模式/消息格式/转发方式)"]
+    E --> K["评论区按钮过滤器(添加评论区直达按钮)"]
+    K --> F["媒体过滤器(处理媒体内容，对应.env里的MAX_MEDIA_SIZE)"]
+    F --> J{"处理模式判断(根据规则配置判断后续处理方式)"}
+    J -->|编辑模式| G["编辑过滤器(编辑消息)"]
+    J -->|转发模式| H["发送过滤器(发送消息，对应预览模式/消息格式/转发方式)"]
     G --> I["删除原始消息过滤器(删除原始消息)"]
     H --> I
 
     classDef filter fill:#f5f5f5,stroke:#333,stroke-width:1px;
-    class A,B,C,D,E,F,G,H,I,J filter;
+    class A,B,C,D,E,F,G,H,I,K filter;
     classDef decision fill:#f5f5f5,stroke:#333,stroke-width:1px;
     class J decision;
 ```
