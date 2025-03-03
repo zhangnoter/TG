@@ -163,6 +163,15 @@ RULE_SETTINGS = {
         },
         'toggle_action': 'toggle_handle_mode',
         'toggle_func': lambda current: HandleMode.EDIT if current == HandleMode.FORWARD else HandleMode.FORWARD
+    },
+    'enable_comment_button': {
+        'display_name': '查看评论区',
+        'values': {
+            True: '开启',
+            False: '关闭'
+        },
+        'toggle_action': 'toggle_enable_comment_button',
+        'toggle_func': lambda current: not current
     }
 }
 
@@ -364,6 +373,14 @@ async def create_buttons(rule):
                 Button.inline(
                     f"⌛ 延迟秒数: {rule.delay_seconds or 5}秒",
                     f"set_delay_time:{rule.id}"
+                )
+            ])
+
+            # 评论区直达按钮
+            buttons.append([
+                Button.inline(
+                    f"💬 评论区直达按钮: {RULE_SETTINGS['enable_comment_button']['values'][rule.enable_comment_button]}",
+                    f"toggle_enable_comment_button:{rule.id}"
                 )
             ])
 

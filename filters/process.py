@@ -9,6 +9,7 @@ from filters.sender_filter import SenderFilter
 from filters.delete_original_filter import DeleteOriginalFilter
 from filters.delay_filter import DelayFilter
 from filters.edit_filter import EditFilter
+from filters.comment_button_filter import CommentButtonFilter
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +48,9 @@ async def process_forward_rule(client, event, chat_id, rule):
     
     # 添加媒体过滤器（处理媒体内容）
     filter_chain.add_filter(MediaFilter())
+    
+    # 添加评论区按钮过滤器
+    filter_chain.add_filter(CommentButtonFilter())
     
     # 添加编辑过滤器（编辑原始消息）
     filter_chain.add_filter(EditFilter())
