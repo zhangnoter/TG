@@ -222,6 +222,8 @@ def migrate_db(engine):
 
 def init_db():
     """初始化数据库"""
+    # 创建数据库文件夹
+    os.makedirs('./db', exist_ok=True)
     engine = create_engine('sqlite:///./db/forward.db')
 
     # 首先创建所有表
