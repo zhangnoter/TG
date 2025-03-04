@@ -1378,6 +1378,12 @@ async def handle_add_all_command(event, command, parts):
         rules = await get_all_rules(session, event)
         if not rules:
             return
+        
+        rule_info = await get_current_rule(session, event)
+        if not rule_info:
+            return
+        
+        current_rule, source_chat = rule_info
 
         db_ops = await get_db_ops()
         # 为每个规则添加关键字
@@ -1389,7 +1395,8 @@ async def handle_add_all_command(event, command, parts):
                 session,
                 rule.id,
                 keywords,
-                is_regex=(command == 'add_regex_all')
+                is_regex=(command == 'add_regex_all'),
+                is_blacklist=(current_rule.add_mode == AddMode.BLACKLIST)
             )
             success_count += s_count
             duplicate_count += d_count
