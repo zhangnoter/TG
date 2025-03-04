@@ -25,7 +25,7 @@ class CommentButtonFilter(BaseFilter):
         Returns:
             bool: 是否继续处理
         """
-        logger.info(f"CommentButtonFilter处理消息前，context: {context.__dict__}")
+        # logger.info(f"CommentButtonFilter处理消息前，context: {context.__dict__}")
         try:
             # 如果规则不存在或未启用评论按钮功能，直接跳过
             if not context.rule or not context.rule.enable_comment_button:
@@ -47,6 +47,8 @@ class CommentButtonFilter(BaseFilter):
                 
                 # 获取频道的真实用户名
                 channel_username = None
+                logger.info(f"获取频道实体: {channel_entity}")
+                logger.info(f"频道属性内容: {channel_entity.__dict__}")
                 if hasattr(channel_entity, 'username') and channel_entity.username:
                     channel_username = channel_entity.username
                     logger.info(f"获取到频道用户名: {channel_username}")
@@ -209,4 +211,5 @@ class CommentButtonFilter(BaseFilter):
                 
             return True 
         finally:
-            logger.info(f"CommentButtonFilter处理消息后，context: {context.__dict__}")
+            # logger.info(f"CommentButtonFilter处理消息后，context: {context.__dict__}")
+            pass

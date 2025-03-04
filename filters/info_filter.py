@@ -23,7 +23,7 @@ class InfoFilter(BaseFilter):
         rule = context.rule
         event = context.event
 
-        logger.info(f"InfoFilter处理消息前，context: {context.__dict__}")
+        # logger.info(f"InfoFilter处理消息前，context: {context.__dict__}")
         try:
 
             # 添加原始链接
@@ -56,4 +56,5 @@ class InfoFilter(BaseFilter):
             
             return True 
         finally:
-            logger.info(f"InfoFilter处理消息后，context: {context.__dict__}")
+            # logger.info(f"InfoFilter处理消息后，context: {context.__dict__}")
+            pass

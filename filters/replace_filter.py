@@ -23,7 +23,7 @@ class ReplaceFilter(BaseFilter):
         message_text = context.message_text
 
         #打印context的所有属性
-        logger.info(f"ReplaceFilter处理消息前，context: {context.__dict__}")
+        # logger.info(f"ReplaceFilter处理消息前，context: {context.__dict__}")
         # 如果不需要替换，直接返回
         if not rule.is_replace or not message_text:
             return True
@@ -60,4 +60,5 @@ class ReplaceFilter(BaseFilter):
             context.errors.append(f"替换规则错误: {str(e)}")
             return True  # 即使替换出错，仍然继续处理 
         finally:
-            logger.info(f"ReplaceFilter处理消息后，context: {context.__dict__}")
+            # logger.info(f"ReplaceFilter处理消息后，context: {context.__dict__}")
+            pass

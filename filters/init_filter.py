@@ -27,7 +27,7 @@ class InitFilter(BaseFilter):
         rule = context.rule
         event = context.event
 
-        logger.info(f"InitFilter处理消息前，context: {context.__dict__}")
+        # logger.info(f"InitFilter处理消息前，context: {context.__dict__}")
         try:
             #处理媒体组消息
             if event.message.grouped_id:
@@ -56,5 +56,5 @@ class InitFilter(BaseFilter):
                     context.errors.append(f"收集媒体组消息错误: {str(e)}")
            
         finally:
-            logger.info(f"InitFilter处理消息后，context: {context.__dict__}")
+            # logger.info(f"InitFilter处理消息后，context: {context.__dict__}")
             return True

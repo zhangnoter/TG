@@ -25,7 +25,7 @@ class AIFilter(BaseFilter):
         message_text = context.message_text
         original_message_text = context.original_message_text
 
-        logger.info(f"AIFilter处理消息前，context: {context.__dict__}")
+        # logger.info(f"AIFilter处理消息前，context: {context.__dict__}")
         try:
             if not rule.is_ai:
                 logger.info("AI处理未开启，返回原始消息")
@@ -55,4 +55,5 @@ class AIFilter(BaseFilter):
                     # 即使AI处理失败，仍然继续处理
             return True 
         finally:
-            logger.info(f"AIFilter处理消息后，context: {context.__dict__}")
+            # logger.info(f"AIFilter处理消息后，context: {context.__dict__}")
+            pass
