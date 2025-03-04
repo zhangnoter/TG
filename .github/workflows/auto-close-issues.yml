@@ -1,0 +1,20 @@
+name: Auto Close Inactive Issues
+
+on:
+  schedule:
+    - cron: '0 0 * * *' 
+  workflow_dispatch:
+
+jobs:
+  auto-close:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Close inactive issues
+        uses: peter-evans/close-issue@v1
+        with:
+          days-before-close: 3
+          comment: 'This issue has been closed due to inactivity.'
