@@ -201,6 +201,17 @@ CTRL+C 退出容器
 docker-compose up -d
 ```
 
+### 4. 更新
+注意：docker-compose运行不需要拉取仓库源码，只需要在项目目录执行以下命令即可更新。
+```bash
+docker-compose down
+```
+```bash
+docker-compose pull
+```
+```bash
+docker-compose up -d
+```
 ## 使用指南
 
 ### 基础使用示例
