@@ -241,6 +241,15 @@ async def register_bot_commands(bot):
             command='changelog',
             description='查看更新日志'
         ),
+        BotCommand(
+            command='list_rule',
+            description='列出所有转发规则'
+        ),
+        BotCommand(
+            command='delete_rule',
+            description='删除转发规则'
+        ),
+
 
         # BotCommand(
         #     command='clear_all',

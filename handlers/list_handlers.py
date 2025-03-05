@@ -20,7 +20,23 @@ async def show_list(event, command, items, formatter, title, page=1):
     current_items = items[start:end]
 
     # 格式化列表项
-    item_list = [formatter(i + start + 1, item) for i, item in enumerate(current_items)]
+    item_list = []
+    for i, item in enumerate(current_items):
+        formatted_item = formatter(i + start + 1, item)
+        # 如果是关键字列表，给关键字添加反引号
+        if command == 'keyword':
+            # 分割序号和关键字内容
+            parts = formatted_item.split('. ', 1)
+            if len(parts) == 2:
+                number = parts[0]
+                content = parts[1]
+                # 如果是正则表达式，在关键字部分添加反引号
+                if ' (正则)' in content:
+                    keyword, regex_mark = content.split(' (正则)')
+                    formatted_item = f'{number}. `{keyword}` (正则)'
+                else:
+                    formatted_item = f'{number}. `{content}`'
+        item_list.append(formatted_item)
 
     # 创建分页按钮
     buttons = await create_list_buttons(total_pages, page, command)
@@ -31,7 +47,7 @@ async def show_list(event, command, items, formatter, title, page=1):
         text = text[:4093] + '...'
 
     try:
-        return await event.edit(text, buttons=buttons)
+        return await event.edit(text, buttons=buttons, parse_mode='markdown')
     except:
-        return await event.reply(text, buttons=buttons)
+        return await event.reply(text, buttons=buttons, parse_mode='markdown')
 

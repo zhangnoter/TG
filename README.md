@@ -411,6 +411,9 @@ CLAUDE_API_KEY=your_key
 
 转发规则管理
 /copy_rule(/cr) <规则ID> - 复制指定规则的所有设置到当前规则（包括关键字、正则、替换规则、媒体设置等）
+/delete_rule(/dr) <规则ID> [规则ID] [规则ID] ... - 删除指定规则
+/list_rule(/lr) - 列出所有转发规则
+
 关键字管理
 /add(/a) <关键字> - 添加普通关键字
 /add_regex(/ar) <正则表达式> - 添加正则表达式
@@ -428,10 +431,10 @@ CLAUDE_API_KEY=your_key
 替换规则管理
 /replace(/r) <模式> [替换内容] - 添加替换规则
 /replace_all(/ra) <模式> [替换内容] - 添加替换规则到所有规则
-/list_replace(/lr) - 列出所有替换规则
+/list_replace(/lrp) - 列出所有替换规则
 /remove_replace(/rr) <序号> - 删除替换规则
 /clear_all_replace(/car) - 清除当前规则的所有替换规则
-/copy_replace(/cr) <规则ID> - 复制指定规则的替换规则到当前规则
+/copy_replace(/crp) <规则ID> - 复制指定规则的替换规则到当前规则
 
 导入导出
 /export_keyword(/ek) - 导出当前规则的关键字

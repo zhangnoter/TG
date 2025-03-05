@@ -329,6 +329,74 @@ async def callback_noop(event, rule_id, session, message, data):
     return
 
 
+async def callback_page_rule(event, page_str, session, message, data):
+    """处理规则列表分页的回调"""
+    try:
+        page = int(page_str)
+        if page < 1:
+            await event.answer('已经是第一页了')
+            return
+
+        per_page = 30
+        offset = (page - 1) * per_page
+
+        # 获取总规则数
+        total_rules = session.query(ForwardRule).count()
+        
+        if total_rules == 0:
+            await event.answer('没有任何规则')
+            return
+
+        # 计算总页数
+        total_pages = (total_rules + per_page - 1) // per_page
+
+        if page > total_pages:
+            await event.answer('已经是最后一页了')
+            return
+
+        # 获取当前页的规则
+        rules = session.query(ForwardRule).order_by(ForwardRule.id).offset(offset).limit(per_page).all()
+            
+        # 构建规则列表消息
+        message_parts = [f'📋 转发规则列表 (第{page}/{total_pages}页)：\n']
+        
+        for rule in rules:
+            source_chat = rule.source_chat
+            target_chat = rule.target_chat
+            
+            rule_desc = (
+                f'<b>ID: {rule.id}</b>\n'
+                f'<blockquote>来源: {source_chat.name} ({source_chat.telegram_chat_id})\n'
+                f'目标: {target_chat.name} ({target_chat.telegram_chat_id})\n'
+                '</blockquote>'
+            )
+            message_parts.append(rule_desc)
+
+        # 创建分页按钮
+        buttons = []
+        nav_row = []
+
+        if page > 1:
+            nav_row.append(Button.inline('⬅️ 上一页', f'page_rule:{page-1}'))
+        else:
+            nav_row.append(Button.inline('⬅️', 'noop'))
+
+        nav_row.append(Button.inline(f'{page}/{total_pages}', 'noop'))
+
+        if page < total_pages:
+            nav_row.append(Button.inline('下一页 ➡️', f'page_rule:{page+1}'))
+        else:
+            nav_row.append(Button.inline('➡️', 'noop'))
+
+        buttons.append(nav_row)
+
+        await message.edit('\n'.join(message_parts), buttons=buttons, parse_mode='html')
+        await event.answer()
+
+    except Exception as e:
+        logger.error(f'处理规则列表分页时出错: {str(e)}')
+        await event.answer('处理分页请求时出错，请检查日志')
+
 async def handle_callback(event):
     """处理按钮回调"""
     try:
@@ -413,6 +481,7 @@ CALLBACK_HANDLERS = {
     'set_delay_time': callback_set_delay_time,
     'select_delay_time': callback_select_delay_time,
     'delay_time_page': callback_delay_time_page,
+    'page_rule': callback_page_rule,
     # AI设置
     'set_summary_prompt': callback_set_summary_prompt,
     'set_ai_prompt': callback_set_ai_prompt,
@@ -438,6 +507,7 @@ CALLBACK_HANDLERS = {
     'set_media_types': callback_set_media_types,
     'toggle_media_type': callback_toggle_media_type,
     'noop': callback_noop,
+   
 }
 
 

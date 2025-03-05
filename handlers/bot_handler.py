@@ -98,7 +98,7 @@ async def handle_command(client, event):
         'list_keyword': lambda: handle_list_keyword_command(event),
         'lk': lambda: handle_list_keyword_command(event),
         'list_replace': lambda: handle_list_replace_command(event),
-        'lr': lambda: handle_list_replace_command(event),
+        'lrp': lambda: handle_list_replace_command(event),
         'remove_keyword': lambda: handle_remove_command(event, command, parts),
         'rk': lambda: handle_remove_command(event, 'remove_keyword', parts),
         'remove_replace': lambda: handle_remove_command(event, command, parts),
@@ -146,6 +146,10 @@ async def handle_command(client, event):
         'cr': lambda: handle_copy_rule_command(event, 'copy_rule'),
         'changelog': lambda: handle_changelog_command(event),
         'cl': lambda: handle_changelog_command(event),
+        'list_rule': lambda: handle_list_rule_command(event, command, parts),
+        'lr': lambda: handle_list_rule_command(event, command, parts),
+        'delete_rule': lambda: handle_delete_rule_command(event, command, parts),
+        'dr': lambda: handle_delete_rule_command(event, command, parts),
     }
 
     # 执行对应的命令处理器

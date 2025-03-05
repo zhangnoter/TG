@@ -648,7 +648,9 @@ async def handle_help_command(event, command):
         "/changelog(/cl) - 查看更新日志\n\n"
 
         "**转发规则管理**\n"
-        "/copy_rule(/cr) <规则ID> - 复制指定规则到当前规则\n\n"
+        "/copy_rule(/cr) <规则ID> - 复制指定规则到当前规则\n"
+        "/list_rule(/lr) - 列出所有转发规则\n"
+        "/delete_rule(/dr) <规则ID> [规则ID] [规则ID] ... - 删除指定规则\n\n"
 
         "**关键字管理**\n"
         "/add(/a) <关键字> - 添加普通关键字\n"
@@ -665,10 +667,10 @@ async def handle_help_command(event, command):
         "**替换规则管理**\n"
         "/replace(/r) <模式> [替换内容] - 添加替换规则\n"
         "/replace_all(/ra) <模式> [替换内容] - 添加替换规则到所有规则\n"
-        "/list_replace(/lr) - 列出所有替换规则\n"
+        "/list_replace(/lrp) - 列出所有替换规则\n"
         "/remove_replace(/rr) <序号> - 删除替换规则\n"
         "/clear_all_replace(/car) - 清除当前规则的所有替换规则\n"
-        "/copy_replace(/cr) <规则ID> - 复制指定规则的替换规则到当前规则\n\n"
+        "/copy_replace(/crp) <规则ID> - 复制指定规则的替换规则到当前规则\n\n"
 
         "**导入导出**\n"
         "/export_keyword(/ek) - 导出当前规则的关键字\n"
@@ -1642,4 +1644,161 @@ async def handle_replace_all_command(event, parts):
         await event.reply('添加替换规则时出错，请检查日志')
     finally:
         session.close()
+
+async def handle_list_rule_command(event, command, parts):
+    """处理 list_rule 命令"""
+    session = get_session()
+    try:
+        # 获取页码参数，默认为第1页
+        try:
+            page = int(parts[1]) if len(parts) > 1 else 1
+            if page < 1:
+                page = 1
+        except ValueError:
+            await event.reply('页码必须是数字')
+            return
+
+        # 设置每页显示的数量
+        per_page = 30
+        offset = (page - 1) * per_page
+
+        # 获取总规则数
+        total_rules = session.query(ForwardRule).count()
+        
+        if total_rules == 0:
+            await event.reply('当前没有任何转发规则')
+            return
+
+        # 计算总页数
+        total_pages = (total_rules + per_page - 1) // per_page
+
+        # 如果请求的页码超出范围，使用最后一页
+        if page > total_pages:
+            page = total_pages
+            offset = (page - 1) * per_page
+
+        # 获取当前页的规则
+        rules = session.query(ForwardRule).order_by(ForwardRule.id).offset(offset).limit(per_page).all()
+            
+        # 构建规则列表消息
+        message_parts = [f'📋 转发规则列表 (第{page}/{total_pages}页)：\n']
+        
+        for rule in rules:
+            # 获取源聊天和目标聊天的名称
+            source_chat = rule.source_chat
+            target_chat = rule.target_chat
+            
+            # 构建规则描述
+            rule_desc = (
+                f'<b>ID: {rule.id}</b>\n'
+                f'<blockquote>来源: {source_chat.name} ({source_chat.telegram_chat_id})\n'
+                f'目标: {target_chat.name} ({target_chat.telegram_chat_id})\n'
+                '</blockquote>'
+            )
+            message_parts.append(rule_desc)
+
+        # 创建分页按钮
+        buttons = []
+        nav_row = []
+
+        # 添加上一页按钮
+        if page > 1:
+            nav_row.append(Button.inline('⬅️ 上一页', f'page_rule:{page-1}'))
+        else:
+            nav_row.append(Button.inline('⬅️', 'noop'))  # 禁用状态的按钮
+
+        # 添加页码按钮
+        nav_row.append(Button.inline(f'{page}/{total_pages}', 'noop'))
+
+        # 添加下一页按钮
+        if page < total_pages:
+            nav_row.append(Button.inline('下一页 ➡️', f'page_rule:{page+1}'))
+        else:
+            nav_row.append(Button.inline('➡️', 'noop'))  # 禁用状态的按钮
+
+        buttons.append(nav_row)
+        
+        # 发送消息
+        await event.reply('\n'.join(message_parts), buttons=buttons, parse_mode='html')
+        
+    except Exception as e:
+        logger.error(f'列出规则时出错: {str(e)}')
+        logger.exception(e)
+        await event.reply('获取规则列表时发生错误，请检查日志')
+    finally:
+        session.close()
+
+async def handle_delete_rule_command(event, command, parts):
+    """处理 delete_rule 命令"""
+    if len(parts) < 2:
+        await event.reply(f'用法: /{command} <ID1> [ID2] [ID3] ...\n例如: /{command} 1 2 3')
+        return
+        
+    try:
+        ids_to_remove = [int(x) for x in parts[1:]]
+    except ValueError:
+        await event.reply('ID必须是数字')
+        return
+
+    session = get_session()
+    try:
+        success_ids = []
+        failed_ids = []
+        not_found_ids = []
+
+        for rule_id in ids_to_remove:
+            rule = session.query(ForwardRule).get(rule_id)
+            if not rule:
+                not_found_ids.append(rule_id)
+                continue
+
+            try:
+                # 保存源频道ID以供后续检查
+                source_chat_id = rule.source_chat_id
+
+                # 删除规则（关联的替换规则、关键字和媒体类型会自动删除）
+                session.delete(rule)
+
+                # 检查源频道是否还有其他规则引用
+                remaining_rules = session.query(ForwardRule).filter(
+                    ForwardRule.source_chat_id == source_chat_id
+                ).count()
+
+                if remaining_rules == 0:
+                    # 如果没有其他规则引用这个源频道，删除源频道记录
+                    source_chat = session.query(Chat).filter(
+                        Chat.id == source_chat_id
+                    ).first()
+                    if source_chat:
+                        logger.info(f'删除未使用的源频道: {source_chat.name} (ID: {source_chat.telegram_chat_id})')
+                        session.delete(source_chat)
+
+                success_ids.append(rule_id)
+            except Exception as e:
+                logger.error(f'删除规则 {rule_id} 时出错: {str(e)}')
+                failed_ids.append(rule_id)
+
+        # 提交事务
+        session.commit()
+
+        # 构建响应消息
+        response_parts = []
+        if success_ids:
+            response_parts.append(f'✅ 成功删除规则: {", ".join(map(str, success_ids))}')
+        if not_found_ids:
+            response_parts.append(f'❓ 未找到规则: {", ".join(map(str, not_found_ids))}')
+        if failed_ids:
+            response_parts.append(f'❌ 删除失败的规则: {", ".join(map(str, failed_ids))}')
+
+        await event.reply('\n'.join(response_parts) or '没有规则被删除')
+
+    except Exception as e:
+        session.rollback()
+        logger.error(f'删除规则时出错: {str(e)}')
+        logger.exception(e)
+        await event.reply('删除规则时发生错误，请检查日志')
+    finally:
+        session.close()
+
+
 
