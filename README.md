@@ -379,7 +379,6 @@ CLAUDE_API_KEY=your_key
 
 想使用特定的 AI 模型？在 `config/ai_models.txt` 中添加即可。
 
-![img](./images/settings_ai.png)
 
 ## 特殊功能
 
