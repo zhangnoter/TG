@@ -8,8 +8,6 @@ VERSION_INFO = {
     "patch": 0,        # 补丁版本号：Bug修复和小改动
 } 
 
-# 数据库版本号，每次修改数据库结构时递增
-DB_VERSION = 2
 
 UPDATE_INFO = """
 
