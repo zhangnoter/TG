@@ -14,6 +14,7 @@ DB_VERSION = 2
 UPDATE_INFO = """
 
 <blockquote><b>✨ 更新日志 v1.4.1</b>
+
 - 添加 /list_rule （/lr）指令，可以列出所有转发规则
 
 - 添加 /delete_rule （/dr）指令，可以删除指定转发规则
