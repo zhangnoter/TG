@@ -216,7 +216,7 @@ class SenderFilter(BaseFilter):
         
         await client.send_message(
             target_chat_id,
-            message_text,
+            str(message_text),
             parse_mode=parse_mode,
             link_preview=link_preview,
             buttons=context.buttons

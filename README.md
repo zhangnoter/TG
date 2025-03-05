@@ -361,7 +361,11 @@ CLAUDE_API_KEY=your_key
 - 设置定时总结
 - 调整总结时间和提示词
 
-每个转发规则都可以独立配置不同的 AI 处理方案。
+AI处理提示词中可以使用以下格式：
+- {source_message_context:数字} - 获取源聊天窗口最新的指定数量消息
+- {target_message_context:数字} - 获取目标聊天窗口最新的指定数量消息
+- {source_message_time:数字} - 获取源聊天窗口最近指定分钟数的消息
+- {target_message_time:数字} - 获取目标聊天窗口最近指定分钟数的消息
 
 #### AI 处理
 
