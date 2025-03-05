@@ -185,7 +185,7 @@ async def handle_settings_command(event):
         await event.reply('请选择要管理的转发规则:', buttons=buttons)
 
     except Exception as e:
-        logger.error(f'获取转发规则时出错: {str(e)}')
+        logger.info(f'获取转发规则时出错: {str(e)}')
         await event.reply('获取转发规则时出错，请检查日志')
     finally:
         session.close()

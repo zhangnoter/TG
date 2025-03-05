@@ -128,87 +128,93 @@ def migrate_db(engine):
     
     # 连接数据库
     connection = engine.connect()
-    
+        
     try:
-        # 如果media_types表不存在，创建表
-        if 'media_types' not in existing_tables:
-            logging.info("Creating media_types table...")
-            MediaTypes.__table__.create(engine)
-            
-            # 如果forward_rules表中有selected_media_types列，迁移数据到新表
-            if 'selected_media_types' in forward_rules_columns:
-                logging.info("迁移媒体类型数据到新表...")
-                # 查询所有规则
-                rules = connection.execute(text("SELECT id, selected_media_types FROM forward_rules WHERE selected_media_types IS NOT NULL"))
+        with engine.connect() as connection:
+            # 如果media_types表不存在，创建表
+            if 'media_types' not in existing_tables:
+                logging.info("Creating media_types table...")
+                MediaTypes.__table__.create(engine)
                 
-                for rule in rules:
-                    rule_id = rule[0]
-                    selected_types = rule[1]
-                    if selected_types:
-                        # 创建媒体类型记录
-                        media_types_data = {
-                            'photo': 'photo' in selected_types,
-                            'document': 'document' in selected_types,
-                            'video': 'video' in selected_types,
-                            'audio': 'audio' in selected_types,
-                            'voice': 'voice' in selected_types
-                        }
-                        
-                        # 插入数据
-                        connection.execute(
-                            text("""
-                            INSERT INTO media_types (rule_id, photo, document, video, audio, voice)
-                            VALUES (:rule_id, :photo, :document, :video, :audio, :voice)
-                            """),
-                            {
-                                'rule_id': rule_id,
-                                'photo': media_types_data['photo'],
-                                'document': media_types_data['document'],
-                                'video': media_types_data['video'],
-                                'audio': media_types_data['audio'],
-                                'voice': media_types_data['voice']
+                # 如果forward_rules表中有selected_media_types列，迁移数据到新表
+                if 'selected_media_types' in forward_rules_columns:
+                    logging.info("迁移媒体类型数据到新表...")
+                    # 查询所有规则
+                    rules = connection.execute(text("SELECT id, selected_media_types FROM forward_rules WHERE selected_media_types IS NOT NULL"))
+                    
+                    for rule in rules:
+                        rule_id = rule[0]
+                        selected_types = rule[1]
+                        if selected_types:
+                            # 创建媒体类型记录
+                            media_types_data = {
+                                'photo': 'photo' in selected_types,
+                                'document': 'document' in selected_types,
+                                'video': 'video' in selected_types,
+                                'audio': 'audio' in selected_types,
+                                'voice': 'voice' in selected_types
                             }
-                        )
-                
+                            
+                            # 插入数据
+                            connection.execute(
+                                text("""
+                                INSERT INTO media_types (rule_id, photo, document, video, audio, voice)
+                                VALUES (:rule_id, :photo, :document, :video, :audio, :voice)
+                                """),
+                                {
+                                    'rule_id': rule_id,
+                                    'photo': media_types_data['photo'],
+                                    'document': media_types_data['document'],
+                                    'video': media_types_data['video'],
+                                    'audio': media_types_data['audio'],
+                                    'voice': media_types_data['voice']
+                                }
+                            )
+    except Exception as e:
+        logging.error(f'迁移媒体类型数据时出错: {str(e)}')
+    
+            
 
 
-        # 检查forward_rules表的现有列
-        forward_rules_columns = {column['name'] for column in inspector.get_columns('forward_rules')}
+    # 检查forward_rules表的现有列
+    forward_rules_columns = {column['name'] for column in inspector.get_columns('forward_rules')}
 
-        # 检查Keyword表的现有列
-        keyword_columns = {column['name'] for column in inspector.get_columns('keywords')}
+    # 检查Keyword表的现有列
+    keyword_columns = {column['name'] for column in inspector.get_columns('keywords')}
 
-        # 需要添加的新列及其默认值
-        forward_rules_new_columns = {
-            'is_ai': 'ALTER TABLE forward_rules ADD COLUMN is_ai BOOLEAN DEFAULT FALSE',
-            'ai_model': 'ALTER TABLE forward_rules ADD COLUMN ai_model VARCHAR DEFAULT NULL',
-            'ai_prompt': 'ALTER TABLE forward_rules ADD COLUMN ai_prompt VARCHAR DEFAULT NULL',
-            'is_summary': 'ALTER TABLE forward_rules ADD COLUMN is_summary BOOLEAN DEFAULT FALSE',
-            'summary_time': 'ALTER TABLE forward_rules ADD COLUMN summary_time VARCHAR DEFAULT "07:00"',
-            'summary_prompt': 'ALTER TABLE forward_rules ADD COLUMN summary_prompt VARCHAR DEFAULT NULL',
-            'is_delete_original': 'ALTER TABLE forward_rules ADD COLUMN is_delete_original BOOLEAN DEFAULT FALSE',
-            'is_original_sender': 'ALTER TABLE forward_rules ADD COLUMN is_original_sender BOOLEAN DEFAULT FALSE',
-            'is_original_time': 'ALTER TABLE forward_rules ADD COLUMN is_original_time BOOLEAN DEFAULT FALSE',
-            'is_keyword_after_ai': 'ALTER TABLE forward_rules ADD COLUMN is_keyword_after_ai BOOLEAN DEFAULT FALSE',
-            'add_mode': 'ALTER TABLE forward_rules ADD COLUMN add_mode VARCHAR DEFAULT "BLACKLIST"',
-            'enable_rule': 'ALTER TABLE forward_rules ADD COLUMN enable_rule BOOLEAN DEFAULT TRUE',
-            'is_top_summary': 'ALTER TABLE forward_rules ADD COLUMN is_top_summary BOOLEAN DEFAULT TRUE',
-            'is_filter_user_info': 'ALTER TABLE forward_rules ADD COLUMN is_filter_user_info BOOLEAN DEFAULT FALSE',
-            'enable_delay': 'ALTER TABLE forward_rules ADD COLUMN enable_delay BOOLEAN DEFAULT FALSE',
-            'delay_seconds': 'ALTER TABLE forward_rules ADD COLUMN delay_seconds INTEGER DEFAULT 5',
-            'handle_mode': 'ALTER TABLE forward_rules ADD COLUMN handle_mode VARCHAR DEFAULT "FORWARD"',
-            'enable_comment_button': 'ALTER TABLE forward_rules ADD COLUMN enable_comment_button BOOLEAN DEFAULT FALSE',
-            'enable_media_type_filter': 'ALTER TABLE forward_rules ADD COLUMN enable_media_type_filter BOOLEAN DEFAULT FALSE',
-            'enable_media_size_filter': 'ALTER TABLE forward_rules ADD COLUMN enable_media_size_filter BOOLEAN DEFAULT FALSE',
-            'max_media_size': 'ALTER TABLE forward_rules ADD COLUMN max_media_size INTEGER DEFAULT '+ os.getenv('DEFAULT_MAX_MEDIA_SIZE', 10),
-            'is_send_over_media_size_message': 'ALTER TABLE forward_rules ADD COLUMN is_send_over_media_size_message BOOLEAN DEFAULT TRUE',
-        }
+    # 需要添加的新列及其默认值
+    forward_rules_new_columns = {
+        'is_ai': 'ALTER TABLE forward_rules ADD COLUMN is_ai BOOLEAN DEFAULT FALSE',
+        'ai_model': 'ALTER TABLE forward_rules ADD COLUMN ai_model VARCHAR DEFAULT NULL',
+        'ai_prompt': 'ALTER TABLE forward_rules ADD COLUMN ai_prompt VARCHAR DEFAULT NULL',
+        'is_summary': 'ALTER TABLE forward_rules ADD COLUMN is_summary BOOLEAN DEFAULT FALSE',
+        'summary_time': 'ALTER TABLE forward_rules ADD COLUMN summary_time VARCHAR DEFAULT "07:00"',
+        'summary_prompt': 'ALTER TABLE forward_rules ADD COLUMN summary_prompt VARCHAR DEFAULT NULL',
+        'is_delete_original': 'ALTER TABLE forward_rules ADD COLUMN is_delete_original BOOLEAN DEFAULT FALSE',
+        'is_original_sender': 'ALTER TABLE forward_rules ADD COLUMN is_original_sender BOOLEAN DEFAULT FALSE',
+        'is_original_time': 'ALTER TABLE forward_rules ADD COLUMN is_original_time BOOLEAN DEFAULT FALSE',
+        'is_keyword_after_ai': 'ALTER TABLE forward_rules ADD COLUMN is_keyword_after_ai BOOLEAN DEFAULT FALSE',
+        'add_mode': 'ALTER TABLE forward_rules ADD COLUMN add_mode VARCHAR DEFAULT "BLACKLIST"',
+        'enable_rule': 'ALTER TABLE forward_rules ADD COLUMN enable_rule BOOLEAN DEFAULT TRUE',
+        'is_top_summary': 'ALTER TABLE forward_rules ADD COLUMN is_top_summary BOOLEAN DEFAULT TRUE',
+        'is_filter_user_info': 'ALTER TABLE forward_rules ADD COLUMN is_filter_user_info BOOLEAN DEFAULT FALSE',
+        'enable_delay': 'ALTER TABLE forward_rules ADD COLUMN enable_delay BOOLEAN DEFAULT FALSE',
+        'delay_seconds': 'ALTER TABLE forward_rules ADD COLUMN delay_seconds INTEGER DEFAULT 5',
+        'handle_mode': 'ALTER TABLE forward_rules ADD COLUMN handle_mode VARCHAR DEFAULT "FORWARD"',
+        'enable_comment_button': 'ALTER TABLE forward_rules ADD COLUMN enable_comment_button BOOLEAN DEFAULT FALSE',
+        'enable_media_type_filter': 'ALTER TABLE forward_rules ADD COLUMN enable_media_type_filter BOOLEAN DEFAULT FALSE',
+        'enable_media_size_filter': 'ALTER TABLE forward_rules ADD COLUMN enable_media_size_filter BOOLEAN DEFAULT FALSE',
+        'max_media_size': f'ALTER TABLE forward_rules ADD COLUMN max_media_size INTEGER DEFAULT {os.getenv("DEFAULT_MAX_MEDIA_SIZE", 10)}',
+        'is_send_over_media_size_message': 'ALTER TABLE forward_rules ADD COLUMN is_send_over_media_size_message BOOLEAN DEFAULT TRUE',
+    }
 
-        keywords_new_columns = {
-            'is_blacklist': 'ALTER TABLE keywords ADD COLUMN is_blacklist BOOLEAN DEFAULT TRUE',
-        }
+    keywords_new_columns = {
+        'is_blacklist': 'ALTER TABLE keywords ADD COLUMN is_blacklist BOOLEAN DEFAULT TRUE',
+    }
 
-        # 添加缺失的列
+    # 添加缺失的列
+    with engine.connect() as connection:
+        # 添加forward_rules表的列
         for column, sql in forward_rules_new_columns.items():
             if column not in forward_rules_columns:
                 try:
@@ -291,8 +297,6 @@ def migrate_db(engine):
         except Exception as e:
             logging.error(f'更新唯一约束时出错: {str(e)}')
 
-    except Exception as e:
-        logging.error(f'迁移数据库时出错: {str(e)}')
 
 def init_db():
     """初始化数据库"""
