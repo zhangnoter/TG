@@ -1,5 +1,5 @@
 from sqlalchemy.exc import IntegrityError
-from models.models import Keyword, ReplaceRule, ForwardRule
+from models.models import Keyword, ReplaceRule, ForwardRule, MediaTypes
 import logging
 import os
 import json
@@ -384,4 +384,76 @@ class DBOperations:
                 deleted_count += 1
                 
         return deleted_count, await self.get_replace_rules(session, rule_id) 
+
+    async def get_media_types(self, session, rule_id):
+        """获取媒体类型设置"""
+        try:
+            rule = session.query(ForwardRule).get(rule_id)
+            if not rule:
+                return False, "规则不存在", None
+            
+            media_types = session.query(MediaTypes).filter_by(rule_id=rule_id).first()
+            if not media_types:
+                # 如果不存在则创建默认设置
+                media_types = MediaTypes(
+                    rule_id=rule_id,
+                    photo=False,
+                    document=False,
+                    video=False,
+                    audio=False,
+                    voice=False
+                )
+                session.add(media_types)
+                session.commit()
+            
+            return True, "获取媒体类型设置成功", media_types
+        except Exception as e:
+            logger.error(f"获取媒体类型设置时出错: {str(e)}")
+            session.rollback()
+            return False, f"获取媒体类型设置时出错: {str(e)}", None
+
+    async def update_media_types(self, session, rule_id, media_types_dict):
+        """更新媒体类型设置"""
+        try:
+            rule = session.query(ForwardRule).get(rule_id)
+            if not rule:
+                return False, "规则不存在"
+            
+            media_types = session.query(MediaTypes).filter_by(rule_id=rule_id).first()
+            if not media_types:
+                media_types = MediaTypes(rule_id=rule_id)
+                session.add(media_types)
+            
+            # 更新媒体类型设置
+            for field in ['photo', 'document', 'video', 'audio', 'voice']:
+                if field in media_types_dict:
+                    setattr(media_types, field, media_types_dict[field])
+            
+            session.commit()
+            return True, "更新媒体类型设置成功"
+        except Exception as e:
+            logger.error(f"更新媒体类型设置时出错: {str(e)}")
+            session.rollback()
+            return False, f"更新媒体类型设置时出错: {str(e)}"
+
+    async def toggle_media_type(self, session, rule_id, media_type):
+        """切换特定媒体类型的启用状态"""
+        try:
+            if media_type not in ['photo', 'document', 'video', 'audio', 'voice']:
+                return False, f"无效的媒体类型: {media_type}"
+                
+            success, msg, media_types = await self.get_media_types(session, rule_id)
+            if not success:
+                return False, msg
+            
+            # 切换状态
+            current_value = getattr(media_types, media_type)
+            setattr(media_types, media_type, not current_value)
+            
+            session.commit()
+            return True, f"媒体类型 {media_type} 切换为 {not current_value}"
+        except Exception as e:
+            logger.error(f"切换媒体类型时出错: {str(e)}")
+            session.rollback()
+            return False, f"切换媒体类型时出错: {str(e)}"
 

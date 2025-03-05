@@ -11,6 +11,7 @@ from filters.delay_filter import DelayFilter
 from filters.edit_filter import EditFilter
 from filters.comment_button_filter import CommentButtonFilter
 from filters.init_filter import InitFilter
+from filters.reply_filter import ReplyFilter
 logger = logging.getLogger(__name__)
 
 async def process_forward_rule(client, event, chat_id, rule):
@@ -60,6 +61,9 @@ async def process_forward_rule(client, event, chat_id, rule):
     
     # 添加发送过滤器（发送消息）
     filter_chain.add_filter(SenderFilter())
+    
+    # 添加回复过滤器（处理媒体组消息的评论区按钮）
+    filter_chain.add_filter(ReplyFilter())
     
     # 添加删除原始消息过滤器（最后执行）
     filter_chain.add_filter(DeleteOriginalFilter())

@@ -42,7 +42,7 @@ class SenderFilter(BaseFilter):
             if context.is_media_group:
                 await self._send_media_group(context, target_chat_id, parse_mode)
             # 处理单条媒体消息
-            elif context.media_files:
+            elif context.media_files or context.skipped_media:
                 await self._send_single_media(context, target_chat_id, parse_mode)
             # 处理纯文本消息
             else:
@@ -59,14 +59,19 @@ class SenderFilter(BaseFilter):
         """发送媒体组消息"""
         rule = context.rule
         client = context.client
+        event = context.event
+        # 初始化转发消息列表
+        context.forwarded_messages = []
         
         # 如果所有媒体都超限了，但有文本，就发送文本和提示
+        # logger.info(f'是否发送媒体大小超限提醒: {rule.is_send_over_media_size_message}')
         if not context.media_group_messages and context.message_text:
             # 构建提示信息
-            skipped_info = "\n".join(f"- {size/1024/1024:.1f}MB" for _, size in context.skipped_media)
+            skipped_info = "\n".join(f"- {size}MB" for _, size in context.skipped_media)
             text_to_send = (
                 f"{context.message_text}\n\n⚠️ {len(context.skipped_media)} 个媒体文件超过大小限制:\n{skipped_info}"
             )
+            original_link = f"\n原始消息: https://t.me/c/{str(event.chat_id)[4:]}/{event.message.id}"
             
             # 组合完整文本
             text_to_send = context.sender_info + text_to_send + context.time_info + context.original_link
@@ -95,7 +100,7 @@ class SenderFilter(BaseFilter):
                 caption_text = context.sender_info + context.message_text + context.time_info + context.original_link
                 
                 # 作为一个组发送所有文件
-                await client.send_file(
+                sent_messages = await client.send_file(
                     target_chat_id,
                     files,
                     caption=caption_text,
@@ -107,7 +112,13 @@ class SenderFilter(BaseFilter):
                         PreviewMode.FOLLOW: context.event.message.media is not None
                     }[rule.is_preview]
                 )
-                logger.info(f'媒体组消息已发送')
+                # 保存发送的消息到上下文
+                if isinstance(sent_messages, list):
+                    context.forwarded_messages = sent_messages
+                else:
+                    context.forwarded_messages = [sent_messages]
+                
+                logger.info(f'媒体组消息已发送，保存了 {len(context.forwarded_messages)} 条已转发消息')
             
             # 删除临时文件
             for file_path in files:
@@ -123,19 +134,23 @@ class SenderFilter(BaseFilter):
         """发送单条媒体消息"""
         rule = context.rule
         client = context.client
+        event = context.event
+        
+        logger.info(f'发送单条媒体消息')
         
         # 检查是否所有媒体都超限
+        # logger.info(f'是否发送媒体大小超限提醒: {rule.is_send_over_media_size_message}')
         if context.skipped_media and not context.media_files:
             # 构建提示信息
             file_size = context.skipped_media[0][1]
-            original_link = f"https://t.me/c/{str(context.event.chat_id)[4:]}/{context.event.message.id}"
+            file_name = context.skipped_media[0][2]
+            original_link = f"\n原始消息: https://t.me/c/{str(event.chat_id)[4:]}/{event.message.id}"
             
             text_to_send = context.message_text or ''
-            text_to_send += f"\n\n⚠️ 媒体文件 ({file_size/1024/1024:.1f}MB) 超过大小限制"
+            text_to_send += f"\n\n⚠️ 媒体文件 {file_name} ({file_size}MB) 超过大小限制"
             text_to_send = context.sender_info + text_to_send + context.time_info
             
-            if rule.is_original_link:
-                text_to_send += original_link
+            text_to_send += original_link
                 
             await client.send_message(
                 target_chat_id,

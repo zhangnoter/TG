@@ -49,3 +49,19 @@ def load_delay_times():
     except (FileNotFoundError, IOError) as e:
         logger.warning(f"delay_times.txt 加载失败: {e}，使用默认时间列表")
     return [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+def load_max_media_size():
+    """加载媒体大小限制"""
+    try:
+        size_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'max_media_size.txt')
+        if not os.path.exists(size_path):
+            create_default_configs()
+            
+        with open(size_path, 'r', encoding='utf-8') as f:
+            size = [line.strip() for line in f if line.strip()]
+            if size:
+                return size
+            
+    except (FileNotFoundError, IOError) as e:
+        logger.warning(f"max_media_size.txt 加载失败: {e}，使用默认大小限制")
+    return [5,10,15,20,50,100,200,300,500,1024,2048]

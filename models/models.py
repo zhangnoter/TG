@@ -4,8 +4,9 @@ from sqlalchemy.orm import relationship, sessionmaker
 from enums.enums import ForwardMode, PreviewMode, MessageMode, AddMode, HandleMode
 import logging
 import os
+from dotenv import load_dotenv
 
-
+load_dotenv()
 Base = declarative_base()
 
 class Chat(Base):
@@ -43,6 +44,10 @@ class ForwardRule(Base):
     is_filter_user_info = Column(Boolean, default=False)  # 是否过滤用户信息
     handle_mode = Column(Enum(HandleMode), nullable=False, default=HandleMode.FORWARD) # 处理模式,编辑模式和转发模式，默认转发
     enable_comment_button = Column(Boolean, default=False)  # 是否添加对应消息的评论区直达按钮
+    enable_media_type_filter = Column(Boolean, default=False)  # 是否启用媒体类型过滤
+    enable_media_size_filter = Column(Boolean, default=False)  # 是否启用媒体大小过滤
+    max_media_size = Column(Integer, default=os.getenv('DEFAULT_MAX_MEDIA_SIZE', 10))  # 媒体大小限制，单位MB
+    is_send_over_media_size_message = Column(Boolean, default=True)  # 超过限制的媒体是否发送提示消息
     # AI相关字段
     is_ai = Column(Boolean, default=False)  # 是否启用AI处理
     ai_model = Column(String, nullable=True)  # 使用的AI模型
@@ -64,6 +69,7 @@ class ForwardRule(Base):
     target_chat = relationship('Chat', foreign_keys=[target_chat_id], back_populates='target_rules')
     keywords = relationship('Keyword', back_populates='rule')
     replace_rules = relationship('ReplaceRule', back_populates='rule')
+    media_types = relationship('MediaTypes', uselist=False, back_populates='rule', cascade="all, delete-orphan")
 
 
 class Keyword(Base):
@@ -99,45 +105,110 @@ class ReplaceRule(Base):
         UniqueConstraint('rule_id', 'pattern', 'content', name='unique_rule_pattern_content'),
     )
 
+class MediaTypes(Base):
+    __tablename__ = 'media_types'
+
+    id = Column(Integer, primary_key=True)
+    rule_id = Column(Integer, ForeignKey('forward_rules.id'), nullable=False, unique=True)
+    photo = Column(Boolean, default=False)
+    document = Column(Boolean, default=False)
+    video = Column(Boolean, default=False)
+    audio = Column(Boolean, default=False)
+    voice = Column(Boolean, default=False)
+
+    # 关系
+    rule = relationship('ForwardRule', back_populates='media_types')
+
 def migrate_db(engine):
     """数据库迁移函数，确保新字段的添加"""
     inspector = inspect(engine)
+    
+    # 获取当前数据库中所有表
+    existing_tables = inspector.get_table_names()
+    
+    # 连接数据库
+    connection = engine.connect()
+    
+    try:
+        # 如果media_types表不存在，创建表
+        if 'media_types' not in existing_tables:
+            logging.info("Creating media_types table...")
+            MediaTypes.__table__.create(engine)
+            
+            # 如果forward_rules表中有selected_media_types列，迁移数据到新表
+            if 'selected_media_types' in forward_rules_columns:
+                logging.info("迁移媒体类型数据到新表...")
+                # 查询所有规则
+                rules = connection.execute(text("SELECT id, selected_media_types FROM forward_rules WHERE selected_media_types IS NOT NULL"))
+                
+                for rule in rules:
+                    rule_id = rule[0]
+                    selected_types = rule[1]
+                    if selected_types:
+                        # 创建媒体类型记录
+                        media_types_data = {
+                            'photo': 'photo' in selected_types,
+                            'document': 'document' in selected_types,
+                            'video': 'video' in selected_types,
+                            'audio': 'audio' in selected_types,
+                            'voice': 'voice' in selected_types
+                        }
+                        
+                        # 插入数据
+                        connection.execute(
+                            text("""
+                            INSERT INTO media_types (rule_id, photo, document, video, audio, voice)
+                            VALUES (:rule_id, :photo, :document, :video, :audio, :voice)
+                            """),
+                            {
+                                'rule_id': rule_id,
+                                'photo': media_types_data['photo'],
+                                'document': media_types_data['document'],
+                                'video': media_types_data['video'],
+                                'audio': media_types_data['audio'],
+                                'voice': media_types_data['voice']
+                            }
+                        )
+                
 
-    # 检查forward_rules表的现有列
-    forward_rules_columns = {column['name'] for column in inspector.get_columns('forward_rules')}
 
-    # 检查Keyword表的现有列
-    keyword_columns = {column['name'] for column in inspector.get_columns('keywords')}
+        # 检查forward_rules表的现有列
+        forward_rules_columns = {column['name'] for column in inspector.get_columns('forward_rules')}
 
-    # 需要添加的新列及其默认值
-    forward_rules_new_columns = {
-        'is_ai': 'ALTER TABLE forward_rules ADD COLUMN is_ai BOOLEAN DEFAULT FALSE',
-        'ai_model': 'ALTER TABLE forward_rules ADD COLUMN ai_model VARCHAR DEFAULT NULL',
-        'ai_prompt': 'ALTER TABLE forward_rules ADD COLUMN ai_prompt VARCHAR DEFAULT NULL',
-        'is_summary': 'ALTER TABLE forward_rules ADD COLUMN is_summary BOOLEAN DEFAULT FALSE',
-        'summary_time': 'ALTER TABLE forward_rules ADD COLUMN summary_time VARCHAR DEFAULT "07:00"',
-        'summary_prompt': 'ALTER TABLE forward_rules ADD COLUMN summary_prompt VARCHAR DEFAULT NULL',
-        'is_delete_original': 'ALTER TABLE forward_rules ADD COLUMN is_delete_original BOOLEAN DEFAULT FALSE',
-        'is_original_sender': 'ALTER TABLE forward_rules ADD COLUMN is_original_sender BOOLEAN DEFAULT FALSE',
-        'is_original_time': 'ALTER TABLE forward_rules ADD COLUMN is_original_time BOOLEAN DEFAULT FALSE',
-        'is_keyword_after_ai': 'ALTER TABLE forward_rules ADD COLUMN is_keyword_after_ai BOOLEAN DEFAULT FALSE',
-        'add_mode': 'ALTER TABLE forward_rules ADD COLUMN add_mode VARCHAR DEFAULT "BLACKLIST"',
-        'enable_rule': 'ALTER TABLE forward_rules ADD COLUMN enable_rule BOOLEAN DEFAULT TRUE',
-        'is_top_summary': 'ALTER TABLE forward_rules ADD COLUMN is_top_summary BOOLEAN DEFAULT TRUE',
-        'is_filter_user_info': 'ALTER TABLE forward_rules ADD COLUMN is_filter_user_info BOOLEAN DEFAULT FALSE',
-        'enable_delay': 'ALTER TABLE forward_rules ADD COLUMN enable_delay BOOLEAN DEFAULT FALSE',
-        'delay_seconds': 'ALTER TABLE forward_rules ADD COLUMN delay_seconds INTEGER DEFAULT 5',
-        'handle_mode': 'ALTER TABLE forward_rules ADD COLUMN handle_mode VARCHAR DEFAULT "FORWARD"',
-        'enable_comment_button': 'ALTER TABLE forward_rules ADD COLUMN enable_comment_button BOOLEAN DEFAULT FALSE',
-    }
+        # 检查Keyword表的现有列
+        keyword_columns = {column['name'] for column in inspector.get_columns('keywords')}
 
-    keywords_new_columns = {
-        'is_blacklist': 'ALTER TABLE keywords ADD COLUMN is_blacklist BOOLEAN DEFAULT TRUE',
-    }
+        # 需要添加的新列及其默认值
+        forward_rules_new_columns = {
+            'is_ai': 'ALTER TABLE forward_rules ADD COLUMN is_ai BOOLEAN DEFAULT FALSE',
+            'ai_model': 'ALTER TABLE forward_rules ADD COLUMN ai_model VARCHAR DEFAULT NULL',
+            'ai_prompt': 'ALTER TABLE forward_rules ADD COLUMN ai_prompt VARCHAR DEFAULT NULL',
+            'is_summary': 'ALTER TABLE forward_rules ADD COLUMN is_summary BOOLEAN DEFAULT FALSE',
+            'summary_time': 'ALTER TABLE forward_rules ADD COLUMN summary_time VARCHAR DEFAULT "07:00"',
+            'summary_prompt': 'ALTER TABLE forward_rules ADD COLUMN summary_prompt VARCHAR DEFAULT NULL',
+            'is_delete_original': 'ALTER TABLE forward_rules ADD COLUMN is_delete_original BOOLEAN DEFAULT FALSE',
+            'is_original_sender': 'ALTER TABLE forward_rules ADD COLUMN is_original_sender BOOLEAN DEFAULT FALSE',
+            'is_original_time': 'ALTER TABLE forward_rules ADD COLUMN is_original_time BOOLEAN DEFAULT FALSE',
+            'is_keyword_after_ai': 'ALTER TABLE forward_rules ADD COLUMN is_keyword_after_ai BOOLEAN DEFAULT FALSE',
+            'add_mode': 'ALTER TABLE forward_rules ADD COLUMN add_mode VARCHAR DEFAULT "BLACKLIST"',
+            'enable_rule': 'ALTER TABLE forward_rules ADD COLUMN enable_rule BOOLEAN DEFAULT TRUE',
+            'is_top_summary': 'ALTER TABLE forward_rules ADD COLUMN is_top_summary BOOLEAN DEFAULT TRUE',
+            'is_filter_user_info': 'ALTER TABLE forward_rules ADD COLUMN is_filter_user_info BOOLEAN DEFAULT FALSE',
+            'enable_delay': 'ALTER TABLE forward_rules ADD COLUMN enable_delay BOOLEAN DEFAULT FALSE',
+            'delay_seconds': 'ALTER TABLE forward_rules ADD COLUMN delay_seconds INTEGER DEFAULT 5',
+            'handle_mode': 'ALTER TABLE forward_rules ADD COLUMN handle_mode VARCHAR DEFAULT "FORWARD"',
+            'enable_comment_button': 'ALTER TABLE forward_rules ADD COLUMN enable_comment_button BOOLEAN DEFAULT FALSE',
+            'enable_media_type_filter': 'ALTER TABLE forward_rules ADD COLUMN enable_media_type_filter BOOLEAN DEFAULT FALSE',
+            'enable_media_size_filter': 'ALTER TABLE forward_rules ADD COLUMN enable_media_size_filter BOOLEAN DEFAULT FALSE',
+            'max_media_size': 'ALTER TABLE forward_rules ADD COLUMN max_media_size INTEGER DEFAULT '+ os.getenv('DEFAULT_MAX_MEDIA_SIZE', 10),
+            'is_send_over_media_size_message': 'ALTER TABLE forward_rules ADD COLUMN is_send_over_media_size_message BOOLEAN DEFAULT TRUE',
+        }
 
-    # 添加缺失的列
-    with engine.connect() as connection:
-        # 添加forward_rules表的列
+        keywords_new_columns = {
+            'is_blacklist': 'ALTER TABLE keywords ADD COLUMN is_blacklist BOOLEAN DEFAULT TRUE',
+        }
+
+        # 添加缺失的列
         for column, sql in forward_rules_new_columns.items():
             if column not in forward_rules_columns:
                 try:
@@ -219,6 +290,9 @@ def migrate_db(engine):
 
         except Exception as e:
             logging.error(f'更新唯一约束时出错: {str(e)}')
+
+    except Exception as e:
+        logging.error(f'迁移数据库时出错: {str(e)}')
 
 def init_db():
     """初始化数据库"""

@@ -21,6 +21,9 @@ SUMMARY_TIME_COLS = int(os.getenv('SUMMARY_TIME_COLS', 6))
 DELAY_TIME_ROWS = int(os.getenv('DELAY_TIME_ROWS', 10))
 DELAY_TIME_COLS = int(os.getenv('DELAY_TIME_COLS', 6))
 
+MEDIA_SIZE_ROWS = int(os.getenv('MEDIA_SIZE_ROWS', 10))
+MEDIA_SIZE_COLS = int(os.getenv('MEDIA_SIZE_COLS', 6))
+
 # 菜单标题
 AI_SETTINGS_TEXT = """
 当前AI提示词：
@@ -30,4 +33,9 @@ AI_SETTINGS_TEXT = """
 当前总结提示词：
 
 `{summary_prompt}`
+"""
+
+# 媒体设置文本
+MEDIA_SETTINGS_TEXT = """
+媒体设置：
 """

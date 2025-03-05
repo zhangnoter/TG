@@ -1,21 +1,12 @@
-from telethon import events, Button
-from handlers.callback_handlers import handle_callback
-from handlers.message_handler import pre_handle, ai_handle
+from telethon import events
+from handlers.button.callback.callback_handlers import handle_callback
 from handlers.command_handlers import *
-from handlers.link_handlers import handle_message_link, handle_media_group, handle_single_message
-import logging
-import asyncio
-from enums.enums import ForwardMode, PreviewMode, MessageMode
+from handlers.link_handlers import handle_message_link
 from telethon.tl.types import ChannelParticipantsAdmins
 from dotenv import load_dotenv
-import pytz
 from utils.common import *
 from utils.media import *
 from datetime import datetime, timedelta
-from filters.process import process_forward_rule
-
-
-
 
 logger = logging.getLogger(__name__)
 
@@ -150,7 +141,11 @@ async def handle_command(client, event):
         'copy_keywords_regex': lambda: handle_copy_keywords_regex_command(event, command),
         'ckr': lambda: handle_copy_keywords_regex_command(event, 'copy_keywords_regex'),
         'copy_replace': lambda: handle_copy_replace_command(event, command),
-        'cr': lambda: handle_copy_replace_command(event, 'copy_replace'),
+        'crp': lambda: handle_copy_replace_command(event, 'copy_replace'),
+        'copy_rule': lambda: handle_copy_rule_command(event, command),
+        'cr': lambda: handle_copy_rule_command(event, 'copy_rule'),
+        'changelog': lambda: handle_changelog_command(event),
+        'cl': lambda: handle_changelog_command(event),
     }
 
     # 执行对应的命令处理器
@@ -175,11 +170,13 @@ async def send_welcome_message(client):
     main = await get_main_module()
     user_id = await get_user_id()
     welcome_text = (
-        "** 🎉 欢迎使用 TelegramForwarder ! **\n\n"
-        "更新日志请查看：https://github.com/Heavrnl/TelegramForwarder/releases\n\n"
+        "<b>🎉 欢迎使用 TelegramForwarder !</b>\n\n"
+        
         "如果您觉得这个项目对您有帮助，欢迎通过以下方式支持我:\n\n"
-        "⭐ **给项目点个小小的 Star:** [TelegramForwarder](https://github.com/Heavrnl/TelegramForwarder)\n"
-        "☕ **请我喝杯咖啡:** [Ko-fi](https://ko-fi.com/0heavrnl)\n\n"
+        "<blockquote>⭐ <b>给项目点个小小的 Star:</b> <a href='https://github.com/Heavrnl/TelegramForwarder'>TelegramForwarder</a>\n"
+        "☕ <b>请我喝杯咖啡:</b> <a href='https://ko-fi.com/0heavrnl'>Ko-fi</a></blockquote>\n\n"
+        "当前版本: v" + VERSION + "\n"
+        "更新日志: /changelog\n\n"
         "感谢您的支持!"
     )
 
@@ -187,7 +184,7 @@ async def send_welcome_message(client):
     await client.send_message(
         user_id,
         welcome_text,
-        parse_mode='markdown',
+        parse_mode='html',
         link_preview=True
     )
     logger.info("已发送欢迎消息")

@@ -58,6 +58,12 @@ class MessageContext:
         # 记录任何可能的错误
         self.errors = []
         
+        # 记录已转发的消息
+        self.forwarded_messages = []
+        
+        # 评论区链接
+        self.comment_link = None
+        
     def clone(self):
         """创建上下文的副本"""
         return copy.deepcopy(self) 

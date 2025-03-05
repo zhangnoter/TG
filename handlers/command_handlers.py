@@ -1,6 +1,6 @@
 from sqlalchemy.exc import IntegrityError
 from telethon import Button
-
+from models.models import MediaTypes
 from enums.enums import AddMode
 from models.models import get_session, Keyword, ReplaceRule
 from utils.common import *
@@ -8,6 +8,8 @@ from utils.media import *
 from handlers.list_handlers import *
 from utils.constants import TEMP_DIR
 import traceback
+from sqlalchemy import inspect
+from version import VERSION, UPDATE_INFO
 
 logger = logging.getLogger(__name__)
 
@@ -110,7 +112,8 @@ async def handle_bind_command(event, client, parts):
                 f'已设置转发规则:\n'
                 f'源聊天: {source_chat_db.name} ({source_chat_db.telegram_chat_id})\n'
                 f'目标聊天: {target_chat_db.name} ({target_chat_db.telegram_chat_id})\n'
-                f'请使用 /add 或 /add_regex 添加关键字'
+                f'请使用 /add 或 /add_regex 添加关键字',
+                buttons=[Button.inline("⚙️ 打开设置", f"rule_settings:{rule.id}")]
             )
 
         except IntegrityError:
@@ -611,10 +614,19 @@ async def handle_clear_all_command(event):
     finally:
         session.close()
 
+
+async def handle_changelog_command(event):
+    """处理 changelog 命令"""
+    await event.reply(UPDATE_INFO, parse_mode='html')
+
+
 async def handle_start_command(event):
     """处理 start 命令"""
-    welcome_text = """
+    
+    welcome_text = f"""
     👋 欢迎使用 Telegram 消息转发机器人！
+    
+    📱 当前版本：v{VERSION}
 
     📖 查看完整命令列表请使用 /help
 
@@ -624,7 +636,7 @@ async def handle_start_command(event):
 async def handle_help_command(event, command):
     """处理帮助命令"""
     help_text = (
-        "🤖 **命令列表**\n\n"
+        f"🤖 **Telegram 消息转发机器人 v{VERSION}**\n\n"
 
         "**基础命令**\n"
         "/start - 开始使用\n"
@@ -633,6 +645,10 @@ async def handle_help_command(event, command):
         "**绑定和设置**\n"
         "/bind(/b) <目标聊天链接或名称> - 绑定源聊天\n"
         "/settings(/s) - 管理转发规则\n"
+        "/changelog(/cl) - 查看更新日志\n\n"
+
+        "**转发规则管理**\n"
+        "/copy_rule(/cr) <规则ID> - 复制指定规则到当前规则\n\n"
 
         "**关键字管理**\n"
         "/add(/a) <关键字> - 添加普通关键字\n"
@@ -1271,6 +1287,154 @@ async def handle_copy_replace_command(event, command):
         session.rollback()
         logger.error(f'复制替换规则时出错: {str(e)}')
         await event.reply('复制替换规则时出错，请检查日志')
+    finally:
+        session.close()
+
+async def handle_copy_rule_command(event, command):
+    """处理复制规则命令 - 复制一个规则的所有设置到当前规则"""
+    parts = event.message.text.split()
+    if len(parts) != 2:
+        await event.reply('用法: /copy_rule <规则ID>')
+        return
+
+    try:
+        source_rule_id = int(parts[1])
+    except ValueError:
+        await event.reply('规则ID必须是数字')
+        return
+
+    session = get_session()
+    try:
+        # 获取当前规则
+        rule_info = await get_current_rule(session, event)
+        if not rule_info:
+            return
+        target_rule, source_chat = rule_info
+
+        # 获取源规则
+        source_rule = session.query(ForwardRule).get(source_rule_id)
+        if not source_rule:
+            await event.reply(f'找不到规则ID: {source_rule_id}')
+            return
+            
+        if source_rule.id == target_rule.id:
+            await event.reply('不能复制规则到自身')
+            return
+            
+        # 记录复制的各个部分成功数量
+        keywords_normal_success = 0
+        keywords_normal_skip = 0
+        keywords_regex_success = 0
+        keywords_regex_skip = 0
+        replace_rules_success = 0
+        replace_rules_skip = 0
+        
+        # 复制普通关键字
+        for keyword in source_rule.keywords:
+            if not keyword.is_regex:
+                # 检查是否已存在
+                exists = any(k.keyword == keyword.keyword and not k.is_regex and k.is_blacklist == keyword.is_blacklist
+                             for k in target_rule.keywords)
+                if not exists:
+                    new_keyword = Keyword(
+                        rule_id=target_rule.id,
+                        keyword=keyword.keyword,
+                        is_regex=False,
+                        is_blacklist=keyword.is_blacklist
+                    )
+                    session.add(new_keyword)
+                    keywords_normal_success += 1
+                else:
+                    keywords_normal_skip += 1
+        
+        # 复制正则关键字
+        for keyword in source_rule.keywords:
+            if keyword.is_regex:
+                # 检查是否已存在
+                exists = any(k.keyword == keyword.keyword and k.is_regex and k.is_blacklist == keyword.is_blacklist
+                             for k in target_rule.keywords)
+                if not exists:
+                    new_keyword = Keyword(
+                        rule_id=target_rule.id,
+                        keyword=keyword.keyword,
+                        is_regex=True,
+                        is_blacklist=keyword.is_blacklist
+                    )
+                    session.add(new_keyword)
+                    keywords_regex_success += 1
+                else:
+                    keywords_regex_skip += 1
+        
+        # 复制替换规则
+        for replace_rule in source_rule.replace_rules:
+            # 检查是否已存在
+            exists = any(r.pattern == replace_rule.pattern and r.content == replace_rule.content
+                         for r in target_rule.replace_rules)
+            if not exists:
+                new_rule = ReplaceRule(
+                    rule_id=target_rule.id,
+                    pattern=replace_rule.pattern,
+                    content=replace_rule.content
+                )
+                session.add(new_rule)
+                replace_rules_success += 1
+            else:
+                replace_rules_skip += 1
+        
+        # 复制媒体类型设置
+        if hasattr(source_rule, 'media_types') and source_rule.media_types:
+            target_media_types = session.query(MediaTypes).filter_by(rule_id=target_rule.id).first()
+            
+            if not target_media_types:
+                # 如果目标规则没有媒体类型设置，创建新的
+                target_media_types = MediaTypes(rule_id=target_rule.id)
+                
+                # 使用inspect自动复制所有字段（除了id和rule_id）
+                media_inspector = inspect(MediaTypes)
+                for column in media_inspector.columns:
+                    column_name = column.key
+                    if column_name not in ['id', 'rule_id']:
+                        setattr(target_media_types, column_name, getattr(source_rule.media_types, column_name))
+                
+                session.add(target_media_types)
+            else:
+                # 如果已有设置，更新现有设置
+                # 使用inspect自动复制所有字段（除了id和rule_id）
+                media_inspector = inspect(MediaTypes)
+                for column in media_inspector.columns:
+                    column_name = column.key
+                    if column_name not in ['id', 'rule_id']:
+                        setattr(target_media_types, column_name, getattr(source_rule.media_types, column_name))
+                
+        # 复制规则设置
+        # 获取ForwardRule模型的所有字段
+        inspector = inspect(ForwardRule)
+        for column in inspector.columns:
+            column_name = column.key
+            if column_name not in ['id', 'source_chat_id', 'target_chat_id', 'source_chat', 'target_chat', 
+                                      'keywords', 'replace_rules', 'media_types']:
+                # 获取源规则的值并设置到目标规则
+                value = getattr(source_rule, column_name)
+                setattr(target_rule, column_name, value)
+            
+        session.commit()
+
+        
+
+        # 发送结果消息
+        await event.reply(
+            f"✅ 已从规则 `{source_rule_id}` 复制到规则 `{target_rule.id}`\n\n"
+            f"普通关键字: 成功复制 {keywords_normal_success} 个, 跳过重复 {keywords_normal_skip} 个\n"
+            f"正则关键字: 成功复制 {keywords_regex_success} 个, 跳过重复 {keywords_regex_skip} 个\n"
+            f"替换规则: 成功复制 {replace_rules_success} 个, 跳过重复 {replace_rules_skip} 个\n"
+            f"媒体类型设置和其他规则设置已复制\n",
+            parse_mode='markdown'
+        )
+
+    except Exception as e:
+        session.rollback()
+        logger.error(f'复制规则时出错: {str(e)}')
+        await event.reply('复制规则时出错，请检查日志')
     finally:
         session.close()
 

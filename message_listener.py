@@ -6,12 +6,9 @@ from handlers.prompt_handlers import handle_prompt_setting
 import asyncio
 import os
 from dotenv import load_dotenv
-import re
 from telethon.tl.types import ChannelParticipantsAdmins
-from managers.settings_manager import create_buttons
 from managers.state_manager import state_manager
 from telethon.tl import types
-from utils.common import get_ai_settings_text
 from filters.process import process_forward_rule
 # 加载环境变量
 load_dotenv()

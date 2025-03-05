@@ -233,6 +233,14 @@ async def register_bot_commands(bot):
             command='copy_replace',
             description='复制参数规则的替换规则到当前规则'
         ),
+        BotCommand(
+            command='copy_rule',
+            description='复制参数规则到当前规则'
+        ),
+        BotCommand(
+            command='changelog',
+            description='查看更新日志'
+        ),
 
         # BotCommand(
         #     command='clear_all',

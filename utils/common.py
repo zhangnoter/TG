@@ -9,7 +9,7 @@ from models.models import Chat, ForwardRule
 import re
 import telethon
 
-from utils.constants import AI_SETTINGS_TEXT
+from utils.constants import AI_SETTINGS_TEXT,MEDIA_SETTINGS_TEXT
 
 logger = logging.getLogger(__name__)
 
@@ -301,6 +301,9 @@ async def is_admin(channel_id, user_id, client):
         logger.error(f"检查管理员权限时出错: {str(e)}")
         return False
 
+async def get_media_settings_text():
+    """生成媒体设置页面的文本"""
+    return MEDIA_SETTINGS_TEXT
 
 async def get_ai_settings_text(rule):
     """生成AI设置页面的文本"""

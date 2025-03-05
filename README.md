@@ -405,6 +405,8 @@ CLAUDE_API_KEY=your_key
 /clear_all_keywords_regex(/cakr) - 清除当前规则的所有正则关键字
 /copy_keywords(/ck) <规则ID> - 复制指定规则的关键字到当前规则
 /copy_keywords_regex(/ckr) <规则ID> - 复制指定规则的正则关键字到当前规则
+/copy_replace(/crp) <规则ID> - 复制指定规则的替换规则到当前规则
+/copy_rule(/cr) <规则ID> - 复制指定规则的所有设置到当前规则（包括关键字、正则、替换规则、媒体设置等）
 
 替换规则管理
 /replace(/r) <模式> [替换内容] - 添加替换规则

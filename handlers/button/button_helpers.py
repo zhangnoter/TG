@@ -1,12 +1,12 @@
 from telethon import Button
 from utils.constants import *
-from utils.settings import load_summary_times, load_ai_models, load_delay_times
-from managers.settings_manager import AI_SETTINGS, AI_MODELS
+from utils.settings import load_summary_times, load_ai_models, load_delay_times, load_max_media_size
+from handlers.button.settings_manager import AI_SETTINGS, AI_MODELS, MEDIA_SETTINGS
 
 SUMMARY_TIMES = load_summary_times()
 AI_MODELS= load_ai_models()
 DELAY_TIMES = load_delay_times()
-
+MEDIA_SIZE = load_max_media_size()
 async def create_ai_settings_buttons(rule):
     """创建 AI 设置按钮"""
     buttons = []
@@ -32,6 +32,35 @@ async def create_ai_settings_buttons(rule):
     buttons.append([Button.inline('👈 返回规则设置', f"rule_settings:{rule.id}")])
 
     return buttons
+
+async def create_media_settings_buttons(rule):
+    """创建媒体设置按钮"""
+    buttons = []
+
+    for field, config in MEDIA_SETTINGS.items():
+        # 特殊处理selected_media_types字段，因为它已经移动到单独的表中
+        if field == 'selected_media_types':
+            display_value = f"{config['display_name']}"
+            callback_data = f"{config['toggle_action']}:{rule.id}"
+            buttons.append([Button.inline(display_value, callback_data)])
+            continue
+        elif field == 'max_media_size':
+            display_value = f"{config['display_name']}: {rule.max_media_size} MB"
+            callback_data = f"{config['toggle_action']}:{rule.id}"
+            buttons.append([Button.inline(display_value, callback_data)])
+            continue
+        else:
+            current_value = getattr(rule, field)
+            display_value = config['values'].get(current_value, str(current_value))
+        button_text = f"{config['display_name']}: {display_value}"
+        callback_data = f"{config['toggle_action']}:{rule.id}"
+        buttons.append([Button.inline(button_text, callback_data)])
+    
+    # 添加返回按钮
+    buttons.append([Button.inline('👈 返回规则设置', f"rule_settings:{rule.id}")])
+
+    return buttons
+
 
 
 async def create_list_buttons(total_pages, current_page, command):
@@ -61,6 +90,8 @@ async def create_list_buttons(total_pages, current_page, command):
 
     buttons.append(row)
     return buttons
+
+
 
 
 # 添加模型选择按钮创建函数
@@ -158,6 +189,63 @@ async def create_summary_time_buttons(rule_id, page=0):
     return buttons
 
 
+async def create_media_size_buttons(rule_id, page=0):
+    """创建媒体大小选择按钮"""
+    # 从环境变量获取布局设置
+    rows = MEDIA_SIZE_ROWS
+    cols = MEDIA_SIZE_COLS
+    size_select_per_page = rows * cols
+
+    buttons = []
+    total_size = len(MEDIA_SIZE)
+    start_idx = page * size_select_per_page
+    end_idx = min(start_idx + size_select_per_page, total_size)
+
+    # 检查是否是频道消息
+    buttons = []
+    total_size = len(MEDIA_SIZE)
+
+    # 添加媒体大小按钮
+    current_row = []
+    for i, size in enumerate(MEDIA_SIZE[start_idx:end_idx], start=1):
+        current_row.append(Button.inline(
+            str(size),
+            f"select_max_media_size:{rule_id}:{size}"
+        ))
+
+        # 当达到每行的列数时，添加当前行并重置
+        if i % cols == 0:
+            buttons.append(current_row)
+            current_row = []
+
+    # 添加最后一个不完整的行
+    if current_row:
+        buttons.append(current_row)
+
+    # 添加导航按钮
+    nav_buttons = []
+    if page > 0:
+        nav_buttons.append(Button.inline(
+            "⬅️ 上一页",
+            f"media_size_page:{rule_id}:{page - 1}"
+        ))
+
+    nav_buttons.append(Button.inline(
+        f"{page + 1}/{(total_size + size_select_per_page - 1) // size_select_per_page}",
+        "noop:0"
+    ))
+
+    if end_idx < total_size:
+        nav_buttons.append(Button.inline(
+            "下一页 ➡️",
+            f"media_size_page:{rule_id}:{page + 1}"
+        ))
+
+    buttons.append(nav_buttons)
+    buttons.append([Button.inline("👈 返回", f"rule_settings:{rule_id}")])
+
+    return buttons
+
 async def create_delay_time_buttons(rule_id, page=0):
     """创建延迟时间选择按钮"""
     # 从环境变量获取布局设置
@@ -214,4 +302,38 @@ async def create_delay_time_buttons(rule_id, page=0):
     buttons.append(nav_buttons)
     buttons.append([Button.inline("👈 返回", f"rule_settings:{rule_id}")])
 
+    return buttons
+
+async def create_media_types_buttons(rule_id, media_types):
+    """创建媒体类型选择按钮
+    
+    Args:
+        rule_id: 规则ID
+        media_types: MediaTypes对象
+    
+    Returns:
+        按钮列表
+    """
+    buttons = []
+    
+    # 媒体类型按钮
+    media_type_names = {
+        'photo': '📷 图片',
+        'document': '📄 文档',
+        'video': '🎬 视频',
+        'audio': '🎵 音频',
+        'voice': '🎤 语音'
+    }
+    
+    for field, display_name in media_type_names.items():
+        # 获取当前值
+        current_value = getattr(media_types, field, False)
+        # 如果为True，添加勾选标记
+        button_text = f"{'✅ ' if current_value else ''}{display_name}"
+        callback_data = f"toggle_media_type:{rule_id}:{field}"
+        buttons.append([Button.inline(button_text, callback_data)])
+    
+    # 添加返回按钮
+    buttons.append([Button.inline("👈 返回媒体设置", f"media_settings:{rule_id}")])
+    
     return buttons
