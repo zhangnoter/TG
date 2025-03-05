@@ -71,12 +71,6 @@ class MediaFilter(BaseFilter):
                 max_id=event.message.id + 10
             ):
                 if message.grouped_id == event.message.grouped_id:
-                    # # 保存第一条消息的文本和按钮
-                    # if not context.message_text:
-                    #     context.message_text = message.text or ''
-                    #     context.buttons = message.buttons if hasattr(message, 'buttons') else None
-                    #     logger.info(f'获取到媒体组文本: {context.message_text}')
-                    
                     # 检查媒体类型
                     if rule.enable_media_type_filter and media_types and message.media:
                         if await self._is_media_type_blocked(message.media, media_types):
@@ -86,14 +80,23 @@ class MediaFilter(BaseFilter):
                     # 检查媒体大小
                     if message.media:
                         file_size = await get_media_size(message.media)
+                        file_size = round(file_size/1024/1024, 2)  # 转换为MB
+                        logger.info(f'媒体文件大小: {file_size}MB')
+                        logger.info(f'规则最大媒体大小: {rule.max_media_size}MB')
                         logger.info(f'是否启用媒体大小过滤: {rule.enable_media_size_filter}')
-                        if rule.enable_media_size_filter:
-                            if rule.max_media_size and file_size > rule.max_media_size:
-                                if rule.is_send_over_media_size_message:
-                                    logger.info(f'是否发送媒体大小超限提醒: {rule.is_send_over_media_size_message}')
-                                    context.should_forward = False
-                                context.skipped_media.append((message, file_size))
-                                continue
+                        logger.info(f'是否发送媒体大小超限提醒: {rule.is_send_over_media_size_message}')
+                        
+                        if rule.max_media_size and (file_size > rule.max_media_size) and rule.enable_media_size_filter:
+                            file_name = ''
+                            if hasattr(message.media, 'document') and message.media.document:
+                                for attr in message.media.document.attributes:
+                                    if hasattr(attr, 'file_name'):
+                                        file_name = attr.file_name
+                                        break
+                            logger.info(f'媒体文件 {file_name} 超过大小限制 ({rule.max_media_size}MB)')
+                            context.skipped_media.append((message, file_size, file_name))
+                            continue
+                    
                     context.media_group_messages.append(message)
                     logger.info(f'找到媒体组消息: ID={message.id}, 类型={type(message.media).__name__ if message.media else "无媒体"}')
         except Exception as e:
@@ -101,6 +104,11 @@ class MediaFilter(BaseFilter):
             context.errors.append(f"收集媒体组消息错误: {str(e)}")
         
         logger.info(f'共找到 {len(context.media_group_messages)} 条媒体组消息，{len(context.skipped_media)} 条超限')
+        
+        # 如果所有媒体都超限且不发送超限提醒，则设置不转发
+        if len(context.skipped_media) > 0 and len(context.media_group_messages) == 0 and not rule.is_send_over_media_size_message:
+            context.should_forward = False
+            logger.info('所有媒体都超限且不发送超限提醒，设置不转发')
     
     async def _process_single_media(self, context):
         """处理单条媒体消息"""
@@ -162,6 +170,8 @@ class MediaFilter(BaseFilter):
                 logger.info(f'媒体文件超过大小限制 ({rule.max_media_size}MB)')
                 if rule.is_send_over_media_size_message:
                     logger.info(f'是否发送媒体大小超限提醒: {rule.is_send_over_media_size_message}')
+                    context.should_forward = True
+                else:
                     context.should_forward = False
                 context.skipped_media.append((event.message, file_size, file_name))
             else:

@@ -39,13 +39,16 @@ class SenderFilter(BaseFilter):
         
         try:
             # 处理媒体组消息
-            if context.is_media_group:
+            if context.is_media_group or (context.media_group_messages and context.skipped_media):
+                logger.info(f'准备发送媒体组消息')
                 await self._send_media_group(context, target_chat_id, parse_mode)
             # 处理单条媒体消息
             elif context.media_files or context.skipped_media:
+                logger.info(f'准备发送单条媒体消息')
                 await self._send_single_media(context, target_chat_id, parse_mode)
             # 处理纯文本消息
             else:
+                logger.info(f'准备发送纯文本消息')
                 await self._send_text_message(context, target_chat_id, parse_mode)
                 
             logger.info(f'消息已发送到: {target_chat.name} ({target_chat_id})')
@@ -63,18 +66,25 @@ class SenderFilter(BaseFilter):
         # 初始化转发消息列表
         context.forwarded_messages = []
         
-        # 如果所有媒体都超限了，但有文本，就发送文本和提示
+        
+        
+        # 如果所有媒体都超限了，就发送文本和提示
         # logger.info(f'是否发送媒体大小超限提醒: {rule.is_send_over_media_size_message}')
-        if not context.media_group_messages and context.message_text:
+        if not context.media_group_messages:
+            logger.info(f'所有媒体都超限，发送文本和提示')
             # 构建提示信息
-            skipped_info = "\n".join(f"- {size}MB" for _, size in context.skipped_media)
-            text_to_send = (
-                f"{context.message_text}\n\n⚠️ {len(context.skipped_media)} 个媒体文件超过大小限制:\n{skipped_info}"
-            )
-            original_link = f"\n原始消息: https://t.me/c/{str(event.chat_id)[4:]}/{event.message.id}"
+            text_to_send = context.message_text or ''
+
+            # 设置原始消息链接
+            context.original_link = f"\n原始消息: https://t.me/c/{str(event.chat_id)[4:]}/{event.message.id}"
             
-            # 组合完整文本
+            # 添加每个超限文件的信息
+            for message, size, name in context.skipped_media:
+                text_to_send += f"\n\n⚠️ 媒体文件 {name if name else '未命名文件'} ({size}MB) 超过大小限制"
+            
+                # 组合完整文本
             text_to_send = context.sender_info + text_to_send + context.time_info + context.original_link
+            
             
             await client.send_message(
                 target_chat_id,
@@ -96,8 +106,17 @@ class SenderFilter(BaseFilter):
                         files.append(file_path)
             
             if files:
-                # 添加发送者信息、时间信息和原始链接
-                caption_text = context.sender_info + context.message_text + context.time_info + context.original_link
+                # 添加发送者信息和消息文本
+                caption_text = context.sender_info + context.message_text
+                
+                # 如果有超限文件，添加提示信息
+                for message, size, name in context.skipped_media:
+                    caption_text += f"\n\n⚠️ 媒体文件 {name if name else '未命名文件'} ({size}MB) 超过大小限制"
+                
+                if context.skipped_media:
+                    context.original_link = f"\n原始消息: https://t.me/c/{str(event.chat_id)[4:]}/{event.message.id}"
+                # 添加时间信息和原始链接
+                caption_text += context.time_info + context.original_link
                 
                 # 作为一个组发送所有文件
                 sent_messages = await client.send_file(
