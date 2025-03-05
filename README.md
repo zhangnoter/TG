@@ -410,9 +410,13 @@ CLAUDE_API_KEY=your_key
 /changelog(/cl) - 查看更新日志
 
 转发规则管理
+<<<<<<< HEAD
 /copy_rule(/cr) <规则ID> - 复制指定规则的所有设置到当前规则
 /delete_rule(/dr) <规则ID> [规则ID] [规则ID] ... - 删除指定规则
 /list_rule(/lr) - 列出所有转发规则
+=======
+/copy_rule(/cr) <规则ID> - 复制指定规则的所有设置到当前规则（包括关键字、正则、替换规则、媒体设置等）
+>>>>>>> 61dc7c98575c5481d8be629612c434f0a293c711
 
 关键字管理
 /add(/a) <关键字> - 添加普通关键字
