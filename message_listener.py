@@ -170,7 +170,8 @@ async def handle_bot_message(event, bot_client):
         
         
         # 处理提示词设置
-        if await handle_prompt_setting(event, bot_client, sender_id, chat_id, current_state):
+        if current_state:
+            await handle_prompt_setting(event, bot_client, sender_id, chat_id, current_state)
             return
 
         # 如果没有特殊状态，则处理常规命令
