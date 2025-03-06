@@ -142,7 +142,7 @@ GROK_API_KEY=your_grok_api_key
 GROK_API_BASE=     
 
 # 默认AI提示词
-DEFAULT_AI_PROMPT=请将以下内容翻译成自然流畅的中文，除此之外不需要更改任何内容。
+DEFAULT_AI_PROMPT=请尊重原意，保持原有格式不变，用简体中文重写下面的内容：
 
 # 默认AI总结提示词
 DEFAULT_SUMMARY_PROMPT=请总结以下频道/群组24小时内的消息。
