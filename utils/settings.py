@@ -65,3 +65,20 @@ def load_max_media_size():
     except (FileNotFoundError, IOError) as e:
         logger.warning(f"max_media_size.txt 加载失败: {e}，使用默认大小限制")
     return [5,10,15,20,50,100,200,300,500,1024,2048]
+
+
+def load_media_extensions():
+    """加载媒体扩展名"""
+    try:
+        size_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'media_extensions.txt')
+        if not os.path.exists(size_path):
+            create_default_configs()
+            
+        with open(size_path, 'r', encoding='utf-8') as f:
+            size = [line.strip() for line in f if line.strip()]
+            if size:
+                return size
+            
+    except (FileNotFoundError, IOError) as e:
+        logger.warning(f"media_extensions.txt 加载失败: {e}，使用默认扩展名")
+    return ['无扩展名','txt','jpg','png','gif','mp4','mp3','wav','ogg','flac','aac','wma','m4a','m4v','mov','avi','mkv','webm','mpg','mpeg','mpe','mp3','mp2','m4a','m4p','m4b','m4r','m4v','mpg','mpeg','mp2','mp3','mp4','mpc','oga','ogg','wav','wma','3gp','3g2','3gpp','3gpp2','amr','awb','caf','flac','m4a','m4b','m4p','oga','ogg','opus','spx','vorbis','wav','wma','webm','aac','ac3','dts','dtshd','flac','mp3','mp4','m4a','m4b','m4p','oga','ogg','wav','wma','webm','aac','ac3','dts','dtshd','flac','mp3','mp4','m4a','m4b','m4p','oga','ogg','wav','wma','webm','aac','ac3','dts','dtshd','flac','mp3','mp4','m4a','m4b','m4p','oga','ogg','wav','wma','webm','aac','ac3','dts','dtshd','flac','mp3','mp4','m4a','m4b','m4p','oga','ogg','wav','wma','webm','aac','ac3','dts','dtshd','flac','mp3','mp4','m4a','m4b','m4p','oga','ogg','wav','wma','webm']

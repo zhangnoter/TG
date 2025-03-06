@@ -286,6 +286,30 @@ MEDIA_SETTINGS = {
         },
         'toggle_action': 'toggle_send_over_media_size_message',
         'toggle_func': lambda current: not current
+    },
+    'enable_extension_filter': {
+        'display_name': '媒体扩展名过滤',
+        'values': {
+            True: '开启',
+            False: '关闭'
+        },
+        'toggle_action': 'toggle_enable_media_extension_filter',
+        'toggle_func': lambda current: not current
+    },
+    'extension_filter_mode': {
+        'display_name': '媒体扩展名过滤模式',
+        'values': {
+            AddMode.BLACKLIST: '黑名单',
+            AddMode.WHITELIST: '白名单'
+        },
+        'toggle_action': 'toggle_media_extension_filter_mode',
+        'toggle_func': lambda current: AddMode.WHITELIST if current == AddMode.BLACKLIST else AddMode.BLACKLIST
+    },
+    'media_extensions': {
+        'display_name': '设置媒体扩展名',
+        'toggle_action': 'set_media_extensions',
+        'toggle_func': None,
+        'values': {}
     }
 }
 

@@ -48,6 +48,8 @@ class ForwardRule(Base):
     enable_media_size_filter = Column(Boolean, default=False)  # 是否启用媒体大小过滤
     max_media_size = Column(Integer, default=os.getenv('DEFAULT_MAX_MEDIA_SIZE', 10))  # 媒体大小限制，单位MB
     is_send_over_media_size_message = Column(Boolean, default=True)  # 超过限制的媒体是否发送提示消息
+    enable_extension_filter = Column(Boolean, default=False)  # 是否启用媒体扩展名过滤
+    extension_filter_mode = Column(Enum(AddMode), nullable=False, default=AddMode.BLACKLIST)  # 媒体扩展名过滤模式，默认黑名单
     # AI相关字段
     is_ai = Column(Boolean, default=False)  # 是否启用AI处理
     ai_model = Column(String, nullable=True)  # 使用的AI模型
@@ -70,6 +72,7 @@ class ForwardRule(Base):
     keywords = relationship('Keyword', back_populates='rule')
     replace_rules = relationship('ReplaceRule', back_populates='rule')
     media_types = relationship('MediaTypes', uselist=False, back_populates='rule', cascade="all, delete-orphan")
+    media_extensions = relationship('MediaExtensions', back_populates='rule', cascade="all, delete-orphan")
 
 
 class Keyword(Base):
@@ -119,6 +122,23 @@ class MediaTypes(Base):
     # 关系
     rule = relationship('ForwardRule', back_populates='media_types')
 
+
+class MediaExtensions(Base):
+    __tablename__ = 'media_extensions'
+
+    id = Column(Integer, primary_key=True)
+    rule_id = Column(Integer, ForeignKey('forward_rules.id'), nullable=False)
+    extension = Column(String, nullable=False)  # 存储不带点的扩展名，如 "jpg", "pdf"
+
+    # 关系
+    rule = relationship('ForwardRule', back_populates='media_extensions')
+
+    # 添加唯一约束
+    __table_args__ = (
+        UniqueConstraint('rule_id', 'extension', name='unique_rule_extension'),
+    )
+
+
 def migrate_db(engine):
     """数据库迁移函数，确保新字段的添加"""
     inspector = inspect(engine)
@@ -133,7 +153,7 @@ def migrate_db(engine):
         with engine.connect() as connection:
             # 如果media_types表不存在，创建表
             if 'media_types' not in existing_tables:
-                logging.info("Creating media_types table...")
+                logging.info("创建media_types表...")
                 MediaTypes.__table__.create(engine)
                 
                 # 如果forward_rules表中有selected_media_types列，迁移数据到新表
@@ -170,6 +190,10 @@ def migrate_db(engine):
                                     'voice': media_types_data['voice']
                                 }
                             )
+            if 'media_extensions' not in existing_tables:
+                logging.info("创建media_extensions表...")
+                MediaExtensions.__table__.create(engine)
+                
     except Exception as e:
         logging.error(f'迁移媒体类型数据时出错: {str(e)}')
     
@@ -206,6 +230,8 @@ def migrate_db(engine):
         'enable_media_size_filter': 'ALTER TABLE forward_rules ADD COLUMN enable_media_size_filter BOOLEAN DEFAULT FALSE',
         'max_media_size': f'ALTER TABLE forward_rules ADD COLUMN max_media_size INTEGER DEFAULT {os.getenv("DEFAULT_MAX_MEDIA_SIZE", 10)}',
         'is_send_over_media_size_message': 'ALTER TABLE forward_rules ADD COLUMN is_send_over_media_size_message BOOLEAN DEFAULT TRUE',
+        'enable_extension_filter': 'ALTER TABLE forward_rules ADD COLUMN enable_extension_filter BOOLEAN DEFAULT FALSE',
+        'extension_filter_mode': 'ALTER TABLE forward_rules ADD COLUMN extension_filter_mode VARCHAR DEFAULT "BLACKLIST"',
     }
 
     keywords_new_columns = {

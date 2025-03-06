@@ -1,19 +1,26 @@
-VERSION = "1.4.2.2"
+VERSION = "1.4.3"
 
 # 版本号说明
 VERSION_INFO = {
     "major": 1,        # 主版本号：重大更新，可能不兼容旧版本
     "feature": 4,      # 功能版本号：添加重要新功能
-    "minor": 2,        # 次要版本号：添加小功能或优化
-    "patch": 2,        # 补丁版本号：Bug修复和小改动
+    "minor": 3,        # 次要版本号：添加小功能或优化
+    "patch": 0,        # 补丁版本号：Bug修复和小改动
 } 
 
 
 UPDATE_INFO = """
 
-<blockquote><b>✨ 更新日志 v1.4.2.2</b>
+<blockquote><b>✨ 更新日志 v1.4.3</b>
 
-- 修复设置关键字没有反应的问题
+- 添加媒体扩展名过滤，可在 config/media_extensions.txt 中添加自定义扩展名
+
+- （可选）请在 .env 中添加以下设置
+
+# 媒体大小列表（行）
+MEDIA_SIZE_ROWS=10
+# 媒体大小列表（列）
+MEDIA_SIZE_COLS=6
 
 </blockquote>
 """

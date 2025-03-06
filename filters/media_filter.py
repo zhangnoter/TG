@@ -8,7 +8,9 @@ from utils.media import get_max_media_size
 from enums.enums import PreviewMode
 from models.models import MediaTypes
 from models.models import get_session
-
+from sqlalchemy import text
+from utils.common import get_db_ops
+from enums.enums import AddMode
 logger = logging.getLogger(__name__)
 
 class MediaFilter(BaseFilter):
@@ -77,6 +79,12 @@ class MediaFilter(BaseFilter):
                             logger.info(f'媒体类型被屏蔽，跳过消息 ID={message.id}')
                             continue
                     
+                    # 检查媒体扩展名
+                    if rule.enable_extension_filter and message.media:
+                        if not await self._is_media_extension_allowed(rule, message.media):
+                            logger.info(f'媒体扩展名被屏蔽，跳过消息 ID={message.id}')
+                            continue
+                    
                     # 检查媒体大小
                     if message.media:
                         file_size = await get_media_size(message.media)
@@ -139,7 +147,7 @@ class MediaFilter(BaseFilter):
                 getattr(event.message.media, 'voice', None)
             ])
         )
-        
+
         # 处理实际媒体
         if has_media:
             # 检查媒体类型是否被屏蔽
@@ -153,6 +161,13 @@ class MediaFilter(BaseFilter):
                         return True
                 finally:
                     session.close()
+            
+            # 检查媒体扩展名
+            if rule.enable_extension_filter and event.message.media:
+                if not await self._is_media_extension_allowed(rule, event.message.media):
+                    logger.info(f'媒体扩展名被屏蔽，跳过消息 ID={event.message.id}')
+                    context.should_forward = False
+                    return True
             
             # 检查媒体大小
             file_size = await get_media_size(event.message.media)
@@ -222,3 +237,78 @@ class MediaFilter(BaseFilter):
             return True
         
         return False 
+    
+    async def _is_media_extension_allowed(self, rule, media):
+        """
+        检查媒体扩展名是否被允许
+        
+        Args:
+            rule: 转发规则
+            media: 媒体对象
+            
+        Returns:
+            bool: 如果扩展名被允许返回True，否则返回False
+        """
+        # 如果没有启用扩展名过滤，默认允许
+        if not rule.enable_extension_filter:
+            return True
+            
+        # 获取文件名
+        file_name = None
+     
+        for attr in media.document.attributes:
+            if hasattr(attr, 'file_name'):
+                file_name = attr.file_name
+                break
+
+            
+        # 如果没有文件名，则无法判断扩展名，默认允许
+        if not file_name:
+            logger.info("无法获取文件名，无法判断扩展名")
+            return True
+            
+        # 提取扩展名
+        _, extension = os.path.splitext(file_name)
+        extension = extension.lstrip('.').lower()  # 移除点号并转为小写
+        
+        # 特殊处理：如果文件没有扩展名，将extension设为特殊值"无扩展名"
+        if not extension:
+            logger.info(f"文件 {file_name} 没有扩展名")
+            extension = "无扩展名"
+        else:
+            logger.info(f"文件 {file_name} 的扩展名: {extension}")
+        
+        # 获取规则中保存的扩展名列表
+        db_ops = await get_db_ops()
+        session = get_session()
+        allowed = True
+        try:
+            # 使用db_operations中的函数获取扩展名列表
+            extensions = await db_ops.get_media_extensions(session, rule.id)
+            extension_list = [ext["extension"].lower() for ext in extensions]
+            
+            # 判断是否允许该扩展名
+            if rule.extension_filter_mode == AddMode.BLACKLIST:
+                # 黑名单模式：如果扩展名在列表中，则不允许
+                if extension in extension_list:
+                    logger.info(f"扩展名 {extension} 在黑名单中，不允许")
+                    allowed = False
+                else:
+                    logger.info(f"扩展名 {extension} 不在黑名单中，允许")
+                    allowed = True
+            else:
+                # 白名单模式：如果扩展名不在列表中，则不允许
+                if extension in extension_list:
+                    logger.info(f"扩展名 {extension} 在白名单中，允许")
+                    allowed = True
+                else:
+                    logger.info(f"扩展名 {extension} 不在白名单中，不允许")
+                    allowed = False
+        except Exception as e:
+            logger.error(f"检查媒体扩展名时出错: {str(e)}")
+            allowed = True  # 出错时默认允许
+        finally:
+            session.close()
+            
+        return allowed
+

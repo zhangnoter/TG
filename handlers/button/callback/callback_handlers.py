@@ -503,9 +503,14 @@ CALLBACK_HANDLERS = {
     'toggle_enable_media_size_filter': callback_toggle_enable_media_size_filter,
     'toggle_send_over_media_size_message': callback_toggle_send_over_media_size_message,
     'toggle_enable_media_type_filter': callback_toggle_enable_media_type_filter,
+    'toggle_enable_media_extension_filter': callback_toggle_enable_media_extension_filter,
+    'toggle_media_extension_filter_mode': callback_toggle_media_extension_filter_mode,
     'media_settings': callback_media_settings,
     'set_media_types': callback_set_media_types,
     'toggle_media_type': callback_toggle_media_type,
+    'set_media_extensions': callback_set_media_extensions,
+    'media_extensions_page': callback_media_extensions_page,
+    'toggle_media_extension': callback_toggle_media_extension,
     'noop': callback_noop,
    
 }

@@ -1,12 +1,16 @@
 from telethon import Button
 from utils.constants import *
-from utils.settings import load_summary_times, load_ai_models, load_delay_times, load_max_media_size
+from utils.settings import load_summary_times, load_ai_models, load_delay_times, load_max_media_size, load_media_extensions
 from handlers.button.settings_manager import AI_SETTINGS, AI_MODELS, MEDIA_SETTINGS
+from utils.common import get_db_ops
+from models.models import get_session
+from sqlalchemy import text
 
 SUMMARY_TIMES = load_summary_times()
 AI_MODELS= load_ai_models()
 DELAY_TIMES = load_delay_times()
 MEDIA_SIZE = load_max_media_size()
+MEDIA_EXTENSIONS = load_media_extensions()
 async def create_ai_settings_buttons(rule):
     """创建 AI 设置按钮"""
     buttons = []
@@ -46,6 +50,11 @@ async def create_media_settings_buttons(rule):
             continue
         elif field == 'max_media_size':
             display_value = f"{config['display_name']}: {rule.max_media_size} MB"
+            callback_data = f"{config['toggle_action']}:{rule.id}"
+            buttons.append([Button.inline(display_value, callback_data)])
+            continue
+        elif field == 'media_extensions':
+            display_value = f"{config['display_name']}"
             callback_data = f"{config['toggle_action']}:{rule.id}"
             buttons.append([Button.inline(display_value, callback_data)])
             continue
@@ -333,7 +342,91 @@ async def create_media_types_buttons(rule_id, media_types):
         callback_data = f"toggle_media_type:{rule_id}:{field}"
         buttons.append([Button.inline(button_text, callback_data)])
     
-    # 添加返回按钮
     buttons.append([Button.inline("👈 返回媒体设置", f"media_settings:{rule_id}")])
     
     return buttons
+
+
+
+async def create_media_extensions_buttons(rule_id, page=0):
+    """创建媒体扩展名选择按钮
+    
+    Args:
+        rule_id: 规则ID
+        page: 当前页码
+    
+    Returns:
+        按钮列表
+    """
+    # 从环境变量获取布局设置
+    rows = MEDIA_EXTENSIONS_ROWS
+    cols = MEDIA_EXTENSIONS_COLS
+    
+    extensions_per_page = rows * cols
+    
+    buttons = []
+    total_extensions = len(MEDIA_EXTENSIONS)
+    start_idx = page * extensions_per_page
+    end_idx = min(start_idx + extensions_per_page, total_extensions)
+    
+    # 获取当前规则已选择的扩展名
+    db_ops = await get_db_ops()
+    session = get_session()
+    selected_extensions = []
+    try:
+        # 使用db_ops.get_media_extensions方法获取已选择的扩展名
+        selected_extensions = await db_ops.get_media_extensions(session, rule_id)
+        selected_extension_list = [ext["extension"] for ext in selected_extensions]
+    
+        # 创建扩展名按钮
+        current_row = []
+        for i in range(start_idx, end_idx):
+            ext = MEDIA_EXTENSIONS[i]
+            # 检查是否已选择
+            is_selected = ext in selected_extension_list
+            button_text = f"{'✅ ' if is_selected else ''}{ext}"
+            # 在回调数据中包含页码信息
+            callback_data = f"toggle_media_extension:{rule_id}:{ext}:{page}"
+            
+            current_row.append(Button.inline(button_text, callback_data))
+            
+            # 每行放置cols个按钮
+            if len(current_row) == cols:
+                buttons.append(current_row)
+                current_row = []
+        
+        # 添加剩余的按钮
+        if current_row:
+            buttons.append(current_row)
+        
+        # 添加分页按钮
+        page_buttons = []
+        total_pages = (total_extensions + extensions_per_page - 1) // extensions_per_page
+        
+        if total_pages > 1:
+            # 上一页按钮
+            if page > 0:
+                page_buttons.append(Button.inline("⬅️", f"media_extensions_page:{rule_id}:{page-1}"))
+            else:
+                page_buttons.append(Button.inline("⬅️", f"noop"))
+            
+            # 页码指示
+            page_buttons.append(Button.inline(f"{page+1}/{total_pages}", f"noop"))
+            
+            # 下一页按钮
+            if page < total_pages - 1:
+                page_buttons.append(Button.inline("➡️", f"media_extensions_page:{rule_id}:{page+1}"))
+            else:
+                page_buttons.append(Button.inline("➡️", f"noop"))
+        
+        if page_buttons:
+            buttons.append(page_buttons)
+        
+        # 添加返回按钮
+        buttons.append([Button.inline("👈 返回媒体设置", f"media_settings:{rule_id}")])
+    finally:
+        session.close()
+    
+    return buttons
+
+

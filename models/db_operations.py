@@ -1,5 +1,5 @@
 from sqlalchemy.exc import IntegrityError
-from models.models import Keyword, ReplaceRule, ForwardRule, MediaTypes
+from models.models import Keyword, ReplaceRule, ForwardRule, MediaTypes, MediaExtensions
 import logging
 import os
 import json
@@ -456,4 +456,113 @@ class DBOperations:
             logger.error(f"切换媒体类型时出错: {str(e)}")
             session.rollback()
             return False, f"切换媒体类型时出错: {str(e)}"
+
+    async def add_media_extensions(self, session, rule_id, extensions):
+        """添加媒体扩展名
+        
+        Args:
+            session: 数据库会话
+            rule_id: 规则ID
+            extensions: 扩展名列表，比如 ['jpg', 'png', 'pdf']
+        
+        Returns:
+            (bool, str): 成功状态和消息
+        """
+        try:
+            added_count = 0
+            for ext in extensions:
+                # 确保扩展名不带点，去除可能存在的点
+                ext = ext.lstrip('.')
+                
+                # 检查是否已存在相同的扩展名
+                existing = session.execute(
+                    text("SELECT id FROM media_extensions WHERE rule_id = :rule_id AND extension = :extension"),
+                    {"rule_id": rule_id, "extension": ext}
+                )
+                
+                if existing.first() is None:
+                    # 添加新的扩展名
+                    new_extension = MediaExtensions(rule_id=rule_id, extension=ext)
+                    session.add(new_extension)
+                    added_count += 1
+            
+            if added_count > 0:
+                session.commit()
+                return True, f"成功添加 {added_count} 个媒体扩展名"
+            else:
+                return False, "所有扩展名已存在，未添加任何新扩展名"
+        
+        except Exception as e:
+            session.rollback()
+            logger.error(f"添加媒体扩展名失败: {str(e)}")
+            return False, f"添加媒体扩展名失败: {str(e)}"
+
+    async def get_media_extensions(self, session, rule_id):
+        """获取规则的媒体扩展名列表
+        
+        Args:
+            session: 数据库会话
+            rule_id: 规则ID
+        
+        Returns:
+            list: 媒体扩展名对象列表
+        """
+        try:
+            # 使用SQLAlchemy文本SQL查询，不需要await
+            result = session.execute(
+                text("SELECT id, extension FROM media_extensions WHERE rule_id = :rule_id ORDER BY id"),
+                {"rule_id": rule_id}
+            )
+            
+            # 构建返回结果
+            extensions = []
+            for row in result:
+                extensions.append({
+                    "id": row[0],
+                    "extension": row[1]
+                })
+            
+            # 返回扩展名列表
+            return extensions
+        
+        except Exception as e:
+            # 记录错误并返回空列表
+            logger.error(f"获取媒体扩展名失败: {str(e)}")
+            return []
+
+    async def delete_media_extensions(self, session, rule_id, indices):
+        """删除媒体扩展名
+        
+        Args:
+            session: 数据库会话
+            rule_id: 规则ID
+            indices: 要删除的扩展名ID列表
+        
+        Returns:
+            (bool, str): 成功状态和消息
+        """
+        try:
+            if not indices:
+                return False, "未指定要删除的扩展名"
+            
+            for index in indices:
+                # 查找并删除扩展名
+                result = session.execute(
+                    text("SELECT id FROM media_extensions WHERE id = :id AND rule_id = :rule_id"),
+                    {"id": index, "rule_id": rule_id}
+                )
+                
+                extension = result.first()
+                if extension:
+                    session.execute(
+                        text("DELETE FROM media_extensions WHERE id = :id"),
+                        {"id": extension[0]}
+                    )
+            
+            session.commit()
+            return True, f"成功删除 {len(indices)} 个媒体扩展名"
+        except Exception as e:
+            session.rollback()
+            logger.error(f"删除媒体扩展名失败: {str(e)}")
+            return False, f"删除媒体扩展名失败: {str(e)}"
 

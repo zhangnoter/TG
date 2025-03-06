@@ -1,6 +1,6 @@
 from sqlalchemy.exc import IntegrityError
 from telethon import Button
-from models.models import MediaTypes
+from models.models import MediaTypes, MediaExtensions
 from enums.enums import AddMode
 from models.models import get_session, Keyword, ReplaceRule
 from utils.common import *
@@ -1330,6 +1330,9 @@ async def handle_copy_rule_command(event, command):
         keywords_regex_skip = 0
         replace_rules_success = 0
         replace_rules_skip = 0
+        media_extensions_success = 0 
+        media_extensions_skip = 0 
+
         
         # 复制普通关键字
         for keyword in source_rule.keywords:
@@ -1383,6 +1386,21 @@ async def handle_copy_rule_command(event, command):
             else:
                 replace_rules_skip += 1
         
+        # 复制媒体扩展名设置
+        if hasattr(source_rule, 'media_extensions') and source_rule.media_extensions:
+            for extension in source_rule.media_extensions:
+                # 检查是否已存在
+                exists = any(e.extension == extension.extension for e in target_rule.media_extensions)
+                if not exists:
+                    new_extension = MediaExtensions(
+                        rule_id=target_rule.id,
+                        extension=extension.extension
+                    )
+                    session.add(new_extension)
+                    media_extensions_success += 1
+                else:
+                    media_extensions_skip += 1
+        
         # 复制媒体类型设置
         if hasattr(source_rule, 'media_types') and source_rule.media_types:
             target_media_types = session.query(MediaTypes).filter_by(rule_id=target_rule.id).first()
@@ -1429,6 +1447,7 @@ async def handle_copy_rule_command(event, command):
             f"普通关键字: 成功复制 {keywords_normal_success} 个, 跳过重复 {keywords_normal_skip} 个\n"
             f"正则关键字: 成功复制 {keywords_regex_success} 个, 跳过重复 {keywords_regex_skip} 个\n"
             f"替换规则: 成功复制 {replace_rules_success} 个, 跳过重复 {replace_rules_skip} 个\n"
+            f"媒体扩展名: 成功复制 {media_extensions_success} 个, 跳过重复 {media_extensions_skip} 个\n"
             f"媒体类型设置和其他规则设置已复制\n",
             parse_mode='markdown'
         )

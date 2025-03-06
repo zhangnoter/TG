@@ -24,6 +24,9 @@ DELAY_TIME_COLS = int(os.getenv('DELAY_TIME_COLS', 6))
 MEDIA_SIZE_ROWS = int(os.getenv('MEDIA_SIZE_ROWS', 10))
 MEDIA_SIZE_COLS = int(os.getenv('MEDIA_SIZE_COLS', 6))
 
+MEDIA_EXTENSIONS_ROWS = int(os.getenv('MEDIA_EXTENSIONS_ROWS', 10))
+MEDIA_EXTENSIONS_COLS = int(os.getenv('MEDIA_EXTENSIONS_COLS', 6))
+
 # 菜单标题
 AI_SETTINGS_TEXT = """
 当前AI提示词：
