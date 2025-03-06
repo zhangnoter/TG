@@ -30,7 +30,7 @@ async def callback_set_summary_time(event, rule_id, session, message, data):
     await event.edit("请选择总结时间：", buttons=await create_summary_time_buttons(rule_id, page=0))
     return
 
-async def callback_set_summary_prompt(event, rule_id, session, message):
+async def callback_set_summary_prompt(event, rule_id, session, message, data):
     """处理设置AI总结提示词的回调"""
     logger.info(f"开始处理设置AI总结提示词回调 - event: {event}, rule_id: {rule_id}")
     

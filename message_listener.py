@@ -76,6 +76,7 @@ async def handle_user_message(event, user_client, bot_client):
 
     # 检查用户状态
     current_state = state_manager.get_state(sender_id, chat_id)
+    logger.info(f'handle_user_message：当前是否有状态: {state_manager.check_state()}')
     logger.info(f"handle_user_message：当前用户状态: {current_state}")
     logger.info(f"handle_user_message：当前用户ID和聊天ID: {sender_id}, {chat_id}")
     if current_state:
@@ -165,6 +166,7 @@ async def handle_bot_message(event, bot_client):
 
         # 检查用户状态
         current_state = state_manager.get_state(sender_id, chat_id)
+        logger.info(f'handle_bot_message：当前是否有状态: {state_manager.check_state()}')
         logger.info(f'handle_bot_message：当前用户ID和聊天ID: {sender_id}, {chat_id}')
         logger.info(f'handle_bot_message：当前用户状态: {current_state}')
         
