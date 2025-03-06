@@ -7,14 +7,6 @@ assignees: ''
 
 ---
 
----
-name: 报告问题
-about: 提交一个问题报告以便我们进行排查和修复
-labels: bug
----
-
-## 报告问题
-
 ### 问题描述
 请简要描述你遇到的问题。
 
@@ -33,14 +25,14 @@ labels: bug
 ### 环境信息
 - 应用程序版本（使用/start查看）:
 
-## 如何收集日志
+## （可选）如何收集日志
 
 1. 请打开 `.env` 文件，将 `DEBUG` 设置为 `true`
 2. 重启容器：
    ```sh
    docker-compose down && docker-compose up -d
    ```
-3. 运行以下命令收集日志，并再次处理问题：
+3. 运行以下命令收集日志，并再次重复出现问题的操作：
    ```sh
    docker-compose logs -f
    ```
