@@ -204,7 +204,7 @@ docker-compose up -d
 ```
 
 ### 4. 更新
-注意：docker-compose运行不需要拉取仓库源码，只需要在项目目录执行以下命令即可更新。
+注意：docker-compose运行不需要拉取仓库源码，除非你打算自己build，否则只需要在项目目录执行以下命令即可更新。
 ```bash
 docker-compose down
 ```
