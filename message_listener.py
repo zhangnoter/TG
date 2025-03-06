@@ -164,6 +164,9 @@ async def handle_bot_message(event, bot_client):
 
         # 检查用户状态
         current_state = state_manager.get_state(sender_id, chat_id)
+        logger.info(f'当前用户ID和聊天ID: {sender_id}, {chat_id}')
+        logger.info(f'当前用户状态: {current_state}')
+        
         
         # 处理提示词设置
         if await handle_prompt_setting(event, bot_client, sender_id, chat_id, current_state):
