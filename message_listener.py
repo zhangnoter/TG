@@ -63,27 +63,37 @@ def setup_listeners(user_client, bot_client):
 
 async def handle_user_message(event, user_client, bot_client):
     """处理用户客户端收到的消息"""
+    # logger.info("handle_user_message:开始处理用户消息")
+    
     chat = await event.get_chat()
     chat_id = abs(chat.id)
+    # logger.info(f"handle_user_message:获取到聊天ID: {chat_id}")
 
     # 检查是否频道消息
     if isinstance(event.chat, types.Channel) and state_manager.check_state():
+        # logger.info("handle_user_message:检测到频道消息且存在状态")
         sender_id = os.getenv('USER_ID')
         # 频道ID需要加上100前缀
         chat_id = int(f"100{chat_id}")
+        # logger.info(f"handle_user_message:频道消息处理: sender_id={sender_id}, chat_id={chat_id}")
     else:
         sender_id = event.sender_id
+        # logger.info(f"handle_user_message:非频道消息处理: sender_id={sender_id}")
 
     # 检查用户状态
     current_state = state_manager.get_state(sender_id, chat_id)
-    logger.info(f'handle_user_message：当前是否有状态: {state_manager.check_state()}')
-    logger.info(f"handle_user_message：当前用户ID和聊天ID: {sender_id}, {chat_id}")
-    logger.info(f"handle_user_message：获取当前聊天窗口的用户状态: {current_state}")
+    # logger.info(f'handle_user_message：当前是否有状态: {state_manager.check_state()}')
+    # logger.info(f"handle_user_message：当前用户ID和聊天ID: {sender_id}, {chat_id}")
+    # logger.info(f"handle_user_message：获取当前聊天窗口的用户状态: {current_state}")
     
     if current_state:
+        # logger.info(f"检测到用户状态: {current_state}")
         # 处理提示词设置
+        # logger.info("准备处理提示词设置")
         if await handle_prompt_setting(event, bot_client, sender_id, chat_id, current_state):
+            # logger.info("提示词设置处理完成，返回")
             return
+        # logger.info("提示词设置处理未完成，继续执行")
 
     # 检查是否是媒体组消息
     if event.message.grouped_id:
@@ -161,15 +171,28 @@ async def handle_user_message(event, user_client, bot_client):
 async def handle_bot_message(event, bot_client):
     """处理机器人客户端收到的消息（命令）"""
     try:
-        # 获取用户ID和聊天ID
-        sender_id = event.sender_id
-        chat_id = abs(event.chat_id)
+        # logger.info("handle_bot_message:开始处理机器人消息")
+        
+        chat = await event.get_chat()
+        chat_id = abs(chat.id)
+        # logger.info(f"handle_bot_message:获取到聊天ID: {chat_id}")
+
+        # 检查是否频道消息
+        if isinstance(event.chat, types.Channel) and state_manager.check_state():
+            # logger.info("handle_bot_message:检测到频道消息且存在状态")
+            sender_id = os.getenv('USER_ID')
+            # 频道ID需要加上100前缀
+            chat_id = int(f"100{chat_id}")
+            # logger.info(f"handle_bot_message:频道消息处理: sender_id={sender_id}, chat_id={chat_id}")
+        else:
+            sender_id = event.sender_id
+            # logger.info(f"handle_bot_message:非频道消息处理: sender_id={sender_id}")
 
         # 检查用户状态
         current_state = state_manager.get_state(sender_id, chat_id)
-        logger.info(f'handle_bot_message：当前是否有状态: {state_manager.check_state()}')
-        logger.info(f"handle_bot_message：当前用户ID和聊天ID: {sender_id}, {chat_id}")
-        logger.info(f"handle_bot_message：获取当前聊天窗口的用户状态: {current_state}")
+        # logger.info(f'handle_bot_message：当前是否有状态: {state_manager.check_state()}')
+        # logger.info(f"handle_bot_message：当前用户ID和聊天ID: {sender_id}, {chat_id}")
+        # logger.info(f"handle_bot_message：获取当前聊天窗口的用户状态: {current_state}")
 
         
         
