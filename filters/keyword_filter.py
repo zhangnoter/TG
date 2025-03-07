@@ -23,8 +23,8 @@ class KeywordFilter(BaseFilter):
         """
         rule = context.rule
         message_text = context.message_text
-        
-        should_forward = await check_keywords(rule, message_text)
+        event = context.event
+        should_forward = await check_keywords(rule, message_text, event)
         
         return should_forward
     
