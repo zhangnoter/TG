@@ -141,17 +141,22 @@ async def check_keywords(rule, message_text, event = None):
         bool: 是否应该转发消息
     """
 
-
     if rule.is_filter_user_info:
-            sender_info = await get_sender_info(event, rule.id)  # 调用新的函数获取 sender_info
-    if sender_info:
-        message_text = f"{sender_info}:\n{message_text}"
-        logger.info(f'附带用户信息后的消息: {message_text}')
-    else:
-        logger.warning(f"规则 ID: {rule.id} - 无法获取发送者信息")
+        username = await get_sender_info(event, rule.id)  # 调用新的函数获取 sender_info
+        name = (
+            event.sender.title if hasattr(event.sender, 'title')
+            else f"{event.sender.first_name or ''} {event.sender.last_name or ''}".strip()
+        )
+        if username and name:
+            message_text = f"{username} {name}:\n{message_text}"
+        elif username:
+            message_text = f"{username}:\n{message_text}"
+        elif name:
+            message_text = f"{name}:\n{message_text}"
+        else:
+            logger.warning(f"规则 ID: {rule.id} - 无法获取发送者信息")
 
-    
-    logger.info(f'最终决定: {"转发" if should_forward else "不转发"}')
+        logger.info(f'附带用户信息后的消息: {message_text}')
 
 
     if rule.is_filter_user_info:
