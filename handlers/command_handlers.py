@@ -243,7 +243,7 @@ async def handle_add_command(event, command, parts):
     logger.info(f"分离出的参数部分: {args_text}")
 
     keywords = []
-    if command in ['add', 'a']:  # 修改这里，同时支持 'add' 和 'a'
+    if command in ['add', 'a']: 
         try:
             # 使用 shlex 来正确处理带引号的参数
             logger.info("开始使用 shlex 解析参数")
@@ -679,11 +679,12 @@ async def handle_help_command(event, command):
         "**关键字管理**\n"
         "/add(/a) <关键字> [关键字] [\"关 键 字\"] [\'关 键 字\'] ... - 添加普通关键字\n"
         "/add_regex(/ar) <正则表达式> [正则表达式] [正则表达式] ... - 添加正则表达式\n"
-        "/add_all(/aa) <关键字> [关键字] [关键字] ... - 添加普通关键字到所有规则\n"
+        "/add_all(/aa) <关键字> [关键字] [关键字] ... - 添加普通关键字到当前频道绑定的所有规则\n"
         "/add_regex_all(/ara) <正则表达式> [正则表达式] [正则表达式] ... - 添加正则表达式到所有规则\n"
         "/list_keyword(/lk) - 列出所有关键字\n"
         "/remove_keyword(/rk) <关键词1> [\"关 键 字\"] [\'关 键 字\'] ... - 删除关键字\n"
         "/remove_keyword_by_id(/rkbi) <ID> [ID] [ID] ... - 按ID删除关键字\n"
+        "/remove_all_keyword(/rak) [关键字] [\"关 键 字\"] [\'关 键 字\'] ... - 删除当前频道绑定的所有规则的指定关键字\n"
         "/clear_all_keywords(/cak) - 清除当前规则的所有关键字\n"
         "/clear_all_keywords_regex(/cakr) - 清除当前规则的所有正则关键字\n"
         "/copy_keywords(/ck) <规则ID> - 复制指定规则的关键字到当前规则\n"
@@ -1534,52 +1535,140 @@ async def handle_export_replace_command(event, client):
     finally:
         session.close()
 
-async def handle_add_all_command(event, command, parts):
-    """处理 add_all 和 add_regex_all 命令"""
+
+async def handle_remove_all_keyword_command(event, command, parts):
+    """处理 remove_all_keyword 命令"""
     message_text = event.message.text
+    logger.info(f"收到原始消息: {message_text}")
+    
     if len(message_text.split(None, 1)) < 2:
         await event.reply(f'用法: /{command} <关键字1> [关键字2] ...\n例如:\n/{command} keyword1 "key word 2" \'key word 3\'')
         return
 
     # 分离命令和参数部分
     _, args_text = message_text.split(None, 1)
+    logger.info(f"分离出的参数部分: {args_text}")
+
+    try:
+        # 使用 shlex 来正确处理带引号的参数
+        logger.info("开始使用 shlex 解析参数")
+        keywords_to_remove = shlex.split(args_text)
+        logger.info(f"shlex 解析结果: {keywords_to_remove}")
+    except ValueError as e:
+        logger.error(f"shlex 解析出错: {str(e)}")
+        # 处理未闭合的引号等错误
+        await event.reply('参数格式错误：请确保引号正确配对')
+        return
+
+    if not keywords_to_remove:
+        logger.warning("没有提供任何关键字")
+        await event.reply('请提供至少一个关键字')
+        return
+
+    session = get_session()
+    try:
+        # 获取当前规则以确定黑白名单模式
+        rule_info = await get_current_rule(session, event)
+        if not rule_info:
+            return
+        current_rule, source_chat = rule_info
+        mode_name = "黑名单" if current_rule.add_mode == AddMode.BLACKLIST else "白名单"
+
+        # 获取所有相关规则
+        rules = await get_all_rules(session, event)
+        if not rules:
+            return
+
+        db_ops = await get_db_ops()
+        total_removed = 0
+        total_not_found = 0
+        removed_details = {}  # 用于记录每个规则删除的关键字
+
+        # 从每个规则中删除关键字
+        for rule in rules:
+            # 获取当前规则的关键字
+            rule_mode = "blacklist" if rule.add_mode == AddMode.BLACKLIST else "whitelist"
+            keywords = await db_ops.get_keywords(session, rule.id, rule_mode)
+            
+            if not keywords:
+                continue
+
+            rule_removed = 0
+            rule_removed_keywords = []
+            
+            # 删除匹配的关键字
+            for keyword in keywords:
+                if keyword.keyword in keywords_to_remove:
+                    logger.info(f"在规则 {rule.id} 中删除关键字: {keyword.keyword}")
+                    session.delete(keyword)
+                    rule_removed += 1
+                    rule_removed_keywords.append(keyword.keyword)
+
+            if rule_removed > 0:
+                removed_details[rule.id] = rule_removed_keywords
+                total_removed += rule_removed
+            else:
+                total_not_found += 1
+
+        session.commit()
+
+        # 构建回复消息
+        if total_removed > 0:
+            result_text = f"已从{mode_name}中删除关键字:\n\n"
+            for rule_id, keywords in removed_details.items():
+                rule = next((r for r in rules if r.id == rule_id), None)
+                if rule:
+                    result_text += f"规则 {rule_id} (来自: {rule.source_chat.name}):\n"
+                    result_text += "\n".join(f"- {k}" for k in keywords)
+                    result_text += "\n\n"
+            result_text += f"总计删除: {total_removed} 个关键字"
+            
+            logger.info(f"发送回复消息: {result_text}")
+            await event.reply(result_text)
+        else:
+            msg = f"在{mode_name}中未找到匹配的关键字"
+            logger.info(msg)
+            await event.reply(msg)
+
+    except Exception as e:
+        session.rollback()
+        logger.error(f'批量删除关键字时出错: {str(e)}\n{traceback.format_exc()}')
+        await event.reply('删除关键字时出错，请检查日志')
+    finally:
+        session.close()
+
+async def handle_add_all_command(event, command, parts):
+    """处理 add_all 和 add_regex_all 命令"""
+    message_text = event.message.text
+    logger.info(f"收到原始消息: {message_text}")
+    
+    if len(message_text.split(None, 1)) < 2:
+        await event.reply(f'用法: /{command} <关键字1> [关键字2] ...\n例如:\n/{command} keyword1 "key word 2" \'key word 3\'')
+        return
+
+    # 分离命令和参数部分
+    _, args_text = message_text.split(None, 1)
+    logger.info(f"分离出的参数部分: {args_text}")
 
     keywords = []
     if command == 'add_all':
-        # 解析带引号的参数
-        current_word = []
-        in_quotes = False
-        quote_char = None
-
-        for char in args_text:
-            if char in ['"', "'"]:  # 处理引号
-                if not in_quotes:  # 开始引号
-                    in_quotes = True
-                    quote_char = char
-                elif char == quote_char:  # 结束匹配的引号
-                    in_quotes = False
-                    quote_char = None
-                    if current_word:  # 添加当前词
-                        keywords.append(''.join(current_word))
-                        current_word = []
-            elif char.isspace() and not in_quotes:  # 非引号中的空格
-                if current_word:  # 添加当前词
-                    keywords.append(''.join(current_word))
-                    current_word = []
-            else:  # 普通字符
-                current_word.append(char)
-
-        # 处理最后一个词
-        if current_word:
-            keywords.append(''.join(current_word))
-
-        # 过滤空字符串
-        keywords = [k.strip() for k in keywords if k.strip()]
+        try:
+            # 使用 shlex 来正确处理带引号的参数
+            logger.info("开始使用 shlex 解析参数")
+            keywords = shlex.split(args_text)
+            logger.info(f"shlex 解析结果: {keywords}")
+        except ValueError as e:
+            logger.error(f"shlex 解析出错: {str(e)}")
+            # 处理未闭合的引号等错误
+            await event.reply('参数格式错误：请确保引号正确配对')
+            return
     else:
         # add_regex_all 命令保持原样
         keywords = parts[1:]
+        logger.info(f"add_regex_all 命令，使用原始参数: {keywords}")
 
     if not keywords:
+        logger.warning("没有提供任何关键字")
         await event.reply('请提供至少一个关键字')
         return
 
@@ -1621,11 +1710,12 @@ async def handle_add_all_command(event, command, parts):
             result_text += f'跳过重复: {duplicate_count} 个\n'
         result_text += f'关键字列表:\n{keywords_text}'
 
+        logger.info(f"发送回复消息: {result_text}")
         await event.reply(result_text)
 
     except Exception as e:
         session.rollback()
-        logger.error(f'批量添加关键字时出错: {str(e)}')
+        logger.error(f'批量添加关键字时出错: {str(e)}\n{traceback.format_exc()}')
         await event.reply('添加关键字时出错，请检查日志')
     finally:
         session.close()

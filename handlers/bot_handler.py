@@ -116,6 +116,8 @@ async def handle_command(client, event):
         'rkbi': lambda: handle_remove_command(event, 'remove_keyword_by_id', parts),
         'remove_replace': lambda: handle_remove_command(event, command, parts),
         'rr': lambda: handle_remove_command(event, 'remove_replace', parts),
+        'remove_all_keyword': lambda: handle_remove_all_keyword_command(event, command, parts),
+        'rak': lambda: handle_remove_all_keyword_command(event, 'remove_all_keyword', parts),
         'clear_all': lambda: handle_clear_all_command(event),
         'ca': lambda: handle_clear_all_command(event),
         'start': lambda: handle_start_command(event),
