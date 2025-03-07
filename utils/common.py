@@ -129,6 +129,7 @@ async def get_all_rules(session, event):
 
 
 async def check_keywords(rule, message_text, event = None):
+async def check_keywords(rule, message_text, event = None):
     """
     检查消息是否匹配关键字规则
 
@@ -152,6 +153,23 @@ async def check_keywords(rule, message_text, event = None):
     
     logger.info(f'最终决定: {"转发" if should_forward else "不转发"}')
 
+
+    if rule.is_filter_user_info:
+        username = await get_sender_info(event, rule.id)  # 调用新的函数获取 sender_info
+        name =  (
+                event.sender.title if hasattr(event.sender, 'title')
+                else f"{event.sender.first_name or ''} {event.sender.last_name or ''}".strip()
+                )
+        if username and name:
+            message_text = f"{username} {name}:\n{message_text}"
+        elif username:
+            message_text = f"{username}:\n{message_text}"
+        elif name:
+            message_text = f"{name}:\n{message_text}"
+        else:
+            logger.warning(f"规则 ID: {rule.id} - 无法获取发送者信息")
+            
+        logger.info(f'附带用户信息后的消息: {message_text}')    
 
     logger.info("开始检查关键字规则")
     logger.info(f"当前转发模式: {rule.forward_mode}")
