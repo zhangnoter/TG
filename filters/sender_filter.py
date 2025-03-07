@@ -68,8 +68,6 @@ class SenderFilter(BaseFilter):
         
         
         
-        # 如果所有媒体都超限了，就发送文本和提示
-        # logger.info(f'是否发送媒体大小超限提醒: {rule.is_send_over_media_size_message}')
         if not context.media_group_messages:
             logger.info(f'所有媒体都超限，发送文本和提示')
             # 构建提示信息

@@ -65,6 +65,8 @@ class MediaFilter(BaseFilter):
                 session.close()
         
         # 收集媒体组的所有消息
+        total_media_count = 0  # 总媒体数量
+        blocked_media_count = 0  # 被屏蔽的媒体数量
         try:
             async for message in event.client.iter_messages(
                 event.chat_id,
@@ -73,17 +75,21 @@ class MediaFilter(BaseFilter):
                 max_id=event.message.id + 10
             ):
                 if message.grouped_id == event.message.grouped_id:
-                    # 检查媒体类型
-                    if rule.enable_media_type_filter and media_types and message.media:
-                        if await self._is_media_type_blocked(message.media, media_types):
-                            logger.info(f'媒体类型被屏蔽，跳过消息 ID={message.id}')
-                            continue
-                    
-                    # 检查媒体扩展名
-                    if rule.enable_extension_filter and message.media:
-                        if not await self._is_media_extension_allowed(rule, message.media):
-                            logger.info(f'媒体扩展名被屏蔽，跳过消息 ID={message.id}')
-                            continue
+                    if message.media:
+                        total_media_count += 1
+                        # 检查媒体类型
+                        if rule.enable_media_type_filter and media_types and message.media:
+                            if await self._is_media_type_blocked(message.media, media_types):
+                                logger.info(f'媒体类型被屏蔽，跳过消息 ID={message.id}')
+                                blocked_media_count += 1
+                                continue
+                        
+                        # 检查媒体扩展名
+                        if rule.enable_extension_filter and message.media:
+                            if not await self._is_media_extension_allowed(rule, message.media):
+                                logger.info(f'媒体扩展名被屏蔽，跳过消息 ID={message.id}')
+                                blocked_media_count += 1
+                                continue
                     
                     # 检查媒体大小
                     if message.media:
@@ -113,6 +119,12 @@ class MediaFilter(BaseFilter):
         
         logger.info(f'共找到 {len(context.media_group_messages)} 条媒体组消息，{len(context.skipped_media)} 条超限')
         
+        # 如果所有媒体都被屏蔽，设置不转发
+        if total_media_count > 0 and total_media_count == blocked_media_count:
+            logger.info('媒体组中所有媒体都被屏蔽，设置不转发')
+            context.should_forward = False
+            return True
+            
         # 如果所有媒体都超限且不发送超限提醒，则设置不转发
         if len(context.skipped_media) > 0 and len(context.media_group_messages) == 0 and not rule.is_send_over_media_size_message:
             context.should_forward = False
