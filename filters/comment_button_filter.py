@@ -89,8 +89,36 @@ class CommentButtonFilter(BaseFilter):
                     # 获取关联群组实体
                     linked_group = await client.get_entity(linked_group_id)
                     
-                    # 获取频道消息ID
+                    # 检查消息是否属于媒体组
                     channel_msg_id = event.message.id
+                    
+                    if hasattr(event.message, 'grouped_id') and event.message.grouped_id:
+                        logger.info(f"检测到媒体组消息，组ID: {event.message.grouped_id}")
+                        # 获取同一媒体组的所有消息
+                        media_group_messages = []
+                        
+                        try:
+                            # 获取频道历史消息
+                            async for message in client.iter_messages(
+                                channel_entity,
+                                limit=20,  # 限制查询消息数量
+                                offset_date=event.message.date,  # 从当前消息时间开始查询
+                                reverse=False  # 从新到旧
+                            ):
+                                # 检查是否属于同一媒体组
+                                if (hasattr(message, 'grouped_id') and 
+                                    message.grouped_id == event.message.grouped_id):
+                                    media_group_messages.append(message)
+                            
+                            if media_group_messages:
+                                # 找出ID最小的消息
+                                min_id_message = min(media_group_messages, key=lambda x: x.id)
+                                channel_msg_id = min_id_message.id
+                                logger.info(f"使用媒体组中ID最小的消息: {channel_msg_id}")
+                        except Exception as e:
+                            logger.error(f"获取媒体组消息失败: {e}")
+                            # 失败时使用原始消息ID
+                            logger.info(f"使用原始消息ID: {channel_msg_id}")
                     
                     # 添加短暂延迟，等待消息同步完成
                     logger.info("等待2秒，确保消息同步完成...")
@@ -132,7 +160,7 @@ class CommentButtonFilter(BaseFilter):
                         
                         # 2. 如果无法完全匹配，尝试使用SequenceMatcher进行前20字符相似度匹配
                         if not matched_msg and original_message and len(original_message) > 20:
-                            from difflib import SequenceMatcher
+                            
                             message_start = original_message[:20]
                             logger.info(f"尝试对前20字符进行相似度匹配: '{message_start}'")
                             

@@ -59,7 +59,7 @@ class ReplyFilter(BaseFilter):
                 entity=target_chat_id,
                 message="💬 评论区",
                 buttons=buttons,
-                reply_to=first_forwarded_msg.id
+                reply_to=first_forwarded_msg.id,
             )
             logger.info("成功发送评论区按钮回复")
                 
