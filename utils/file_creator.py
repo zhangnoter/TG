@@ -24,6 +24,7 @@ gemini-1.5-flash-8b
 gemini-1.5-pro
 grok-2-latest
 deepseek-chat
+claude-3-7-sonnet-latest
 claude-3-5-sonnet-latest
 claude-3-5-haiku-latest
 claude-3-opus-latest
