@@ -112,6 +112,8 @@ async def handle_command(client, event):
         'lrp': lambda: handle_list_replace_command(event),
         'remove_keyword': lambda: handle_remove_command(event, command, parts),
         'rk': lambda: handle_remove_command(event, 'remove_keyword', parts),
+        'remove_keyword_by_id': lambda: handle_remove_command(event, command, parts),
+        'rkbi': lambda: handle_remove_command(event, 'remove_keyword_by_id', parts),
         'remove_replace': lambda: handle_remove_command(event, command, parts),
         'rr': lambda: handle_remove_command(event, 'remove_replace', parts),
         'clear_all': lambda: handle_clear_all_command(event),

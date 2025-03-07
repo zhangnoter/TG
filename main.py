@@ -169,6 +169,10 @@ async def register_bot_commands(bot):
             command='remove_keyword',
             description='删除关键字'
         ),
+        BotCommand(
+            command='remove_keyword_by_id',
+            description='按ID删除关键字'
+        ),
         # 替换规则管理
         BotCommand(
             command='replace',

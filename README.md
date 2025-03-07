@@ -427,12 +427,13 @@ AI处理提示词中可以使用以下格式：
 /list_rule(/lr) - 列出所有转发规则
 
 关键字管理
-/add(/a) <关键字> [关键字] [关键字] ... - 添加普通关键字
+/add(/a) <关键字> [关键字] ["关 键 字"] ['关 键 字'] ... - 添加普通关键字
 /add_regex(/ar) <正则表达式> [正则表达式] [正则表达式] ... - 添加正则表达式
 /add_all(/aa) <关键字> [关键字] [关键字] ... - 添加普通关键字到所有规则
 /add_regex_all(/ara) <正则表达式> [正则表达式] [正则表达式] ... - 添加正则关键字到所有规则
 /list_keyword(/lk) - 列出所有关键字
-/remove_keyword(/rk) <关键词> [关键词] [关键词] ... - 删除关键字
+/remove_keyword(/rk) <关键词> ["关 键 字"] ['关 键 字'] ... - 删除关键字
+/remove_keyword_by_id(/rkbi) <ID> [ID] [ID] ... - 按ID删除关键字
 /clear_all_keywords(/cak) - 清除当前规则的所有关键字
 /clear_all_keywords_regex(/cakr) - 清除当前规则的所有正则关键字
 /copy_keywords(/ck) <规则ID> - 复制指定规则的关键字到当前规则
