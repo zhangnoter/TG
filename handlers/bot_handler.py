@@ -65,18 +65,29 @@ async def handle_command(client, event):
             logger.info(f'非管理员的消息，已忽略')
             return
 
-    logger.info(f'收到管理员命令: {event.message.text}')
+    
     # 处理命令逻辑
     message = event.message
     if not message.text:
         return
+    
+    chat = await event.get_chat()
+    user_id = await get_user_id()
+    chat_id = abs(chat.id)
+    user_id = int(user_id)
+    
 
-    if not message.text.startswith('/'):
-        # 检查是否是 Telegram 消息链接
+    # 链接转发功能
+    if not message.text.startswith('/') and chat_id == user_id:
+        # 检查是否是 Telegram 消息链接且是用户自己的消息
+        logger.info(f'进入链接转发功能：{message.text}')
         if 't.me/' in message.text:
             await handle_message_link(client, event)
         return
-
+    if not message.text.startswith('/'):
+        return
+    
+    logger.info(f'收到管理员命令: {event.message.text}')
     # 分割命令，处理可能带有机器人用户名的情况
     parts = message.text.split()
     command = parts[0].split('@')[0][1:]  # 移除开头的 '/' 并处理可能的 @username

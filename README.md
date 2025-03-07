@@ -151,10 +151,12 @@ DEFAULT_AI_PROMPT=请尊重原意，保持原有格式不变，用简体中文�
 
 # 默认AI总结提示词
 DEFAULT_SUMMARY_PROMPT=请总结以下频道/群组24小时内的消息。
-# 默认总结时间
+# 默认总结时间 (24小时制)
 DEFAULT_SUMMARY_TIME=07:00
 # 默认时区
 DEFAULT_TIMEZONE=Asia/Shanghai
+# 聊天信息更新时间 (24小时制)
+CHAT_UPDATE_TIME=03:00
 
 # AI总结每次爬取消息数量
 SUMMARY_BATCH_SIZE=20

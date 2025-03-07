@@ -2,7 +2,6 @@ from models.models import ForwardMode
 import re
 import logging
 import asyncio
-from handlers.message_handler import pre_handle
 from utils.common import check_keywords, get_sender_info
 
 
@@ -12,7 +11,6 @@ async def process_forward_rule(client, event, chat_id, rule):
     """处理转发规则（用户模式）"""
     message_text = event.message.text or ''
     check_message_text = message_text
-    # check_message_text = await pre_handle(message_text)
     # 添加日志
     logger.info(f'处理规则 ID: {rule.id}')
     logger.info(f'消息内容: {message_text}')
