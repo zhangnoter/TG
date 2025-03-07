@@ -371,10 +371,10 @@ CLAUDE_API_KEY=your_key
 #### AI 处理
 
 AI处理提示词中可以使用以下格式：
-- {source_message_context:数字} - 获取源聊天窗口最新的指定数量消息
-- {target_message_context:数字} - 获取目标聊天窗口最新的指定数量消息
-- {source_message_time:数字} - 获取源聊天窗口最近指定分钟数的消息
-- {target_message_time:数字} - 获取目标聊天窗口最近指定分钟数的消息
+- `{source_message_context:数字}` - 获取源聊天窗口最新的指定数量消息
+- `{target_message_context:数字}` - 获取目标聊天窗口最新的指定数量消息
+- `{source_message_time:数字}` - 获取源聊天窗口最近指定分钟数的消息
+- `{target_message_time:数字}` - 获取目标聊天窗口最近指定分钟数的消息
 
 
 #### 定时总结
