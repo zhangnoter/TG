@@ -61,6 +61,11 @@ class ForwardRule(Base):
     is_top_summary = Column(Boolean, default=True) # 是否顶置总结消息
     enable_delay = Column(Boolean, default=False)  # 是否启用延迟处理
     delay_seconds = Column(Integer, default=5)  # 延迟处理秒数
+    # RSS相关字段
+    enable_rss = Column(Boolean, default=False)  # 是否启用RSS
+    rss_title = Column(String, nullable=True)  # RSS标题
+    rss_description = Column(String, nullable=True)  # RSS描述
+    rss_max_items = Column(Integer, default=os.getenv('DEFAULT_RSS_MAX_ITEMS', 20))  # RSS最大条目数
     # 添加唯一约束
     __table_args__ = (
         UniqueConstraint('source_chat_id', 'target_chat_id', name='unique_source_target'),
@@ -232,6 +237,10 @@ def migrate_db(engine):
         'is_send_over_media_size_message': 'ALTER TABLE forward_rules ADD COLUMN is_send_over_media_size_message BOOLEAN DEFAULT TRUE',
         'enable_extension_filter': 'ALTER TABLE forward_rules ADD COLUMN enable_extension_filter BOOLEAN DEFAULT FALSE',
         'extension_filter_mode': 'ALTER TABLE forward_rules ADD COLUMN extension_filter_mode VARCHAR DEFAULT "BLACKLIST"',
+        'enable_rss': 'ALTER TABLE forward_rules ADD COLUMN enable_rss BOOLEAN DEFAULT FALSE',
+        'rss_title': 'ALTER TABLE forward_rules ADD COLUMN rss_title VARCHAR DEFAULT NULL',
+        'rss_description': 'ALTER TABLE forward_rules ADD COLUMN rss_description VARCHAR DEFAULT NULL',
+        'rss_max_items': f'ALTER TABLE forward_rules ADD COLUMN rss_max_items INTEGER DEFAULT {os.getenv("DEFAULT_RSS_MAX_ITEMS", 20)}',
     }
 
     keywords_new_columns = {

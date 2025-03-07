@@ -128,7 +128,7 @@ async def get_all_rules(session, event):
         return None
 
 
-async def check_keywords(rule, message_text):
+async def check_keywords(rule, message_text, event = None):
     """
     检查消息是否匹配关键字规则
 
@@ -139,6 +139,18 @@ async def check_keywords(rule, message_text):
     Returns:
         bool: 是否应该转发消息
     """
+
+
+    if rule.is_filter_user_info:
+            sender_info = await get_sender_info(event, rule.id)  # 调用新的函数获取 sender_info
+    if sender_info:
+        message_text = f"{sender_info}:\n{message_text}"
+        logger.info(f'附带用户信息后的消息: {message_text}')
+    else:
+        logger.warning(f"规则 ID: {rule.id} - 无法获取发送者信息")
+
+    
+    logger.info(f'最终决定: {"转发" if should_forward else "不转发"}')
 
 
     logger.info("开始检查关键字规则")
@@ -201,6 +213,7 @@ async def check_keywords(rule, message_text):
                 should_forward = True
                 logger.info(f"匹配到白名单关键词 '{keyword.keyword}'，设置 should_forward 为: True")
                 break
+        
 
         # 如果白名单匹配成功，再检查黑名单
         if should_forward:
