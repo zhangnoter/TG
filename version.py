@@ -17,10 +17,10 @@ UPDATE_INFO = """
 
 - （可选）请在 .env 中添加以下设置
 
-# 媒体大小列表（行）
-MEDIA_SIZE_ROWS=10
-# 媒体大小列表（列）
-MEDIA_SIZE_COLS=6
+# 媒体扩展名列表（行）
+MEDIA_EXTENSIONS_ROWS=10
+# 媒体扩展名列表（列）
+MEDIA_EXTENSIONS_COLS=6
 
 </blockquote>
 """
