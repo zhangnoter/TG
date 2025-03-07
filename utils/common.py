@@ -128,7 +128,7 @@ async def get_all_rules(session, event):
         return None
 
 
-async def check_keywords(rule, message_text, event = None):
+
 async def check_keywords(rule, message_text, event = None):
     """
     检查消息是否匹配关键字规则
