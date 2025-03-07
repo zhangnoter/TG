@@ -18,7 +18,18 @@ class ClaudeProvider(BaseAIProvider):
         if not api_key:
             raise ValueError("未设置CLAUDE_API_KEY环境变量")
             
-        self.client = anthropic.Anthropic(api_key=api_key)
+        # 检查是否配置了自定义API基础URL
+        api_base = os.getenv('CLAUDE_API_BASE', '').strip()
+        if api_base:
+            logger.info(f"使用自定义Claude API基础URL: {api_base}")
+            self.client = anthropic.Anthropic(
+                api_key=api_key,
+                base_url=api_base
+            )
+        else:
+            # 使用默认URL
+            self.client = anthropic.Anthropic(api_key=api_key)
+            
         self.model = kwargs.get('model', self.default_model)
         
     async def process_message(self, 
