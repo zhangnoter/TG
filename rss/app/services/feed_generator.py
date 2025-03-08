@@ -385,4 +385,58 @@ class FeedService:
             # 将单个换行符转换为<br>
             text = text.replace('\n', '<br>')
             
-            return f"<p>{text}</p>" 
+            return f"<p>{text}</p>"
+    
+    @staticmethod
+    def generate_test_feed(rule_id: int) -> FeedGenerator:
+        """生成测试Feed，当没有真实条目数据时使用
+        
+        Args:
+            rule_id: 规则ID
+            
+        Returns:
+            FeedGenerator: 配置好的测试Feed生成器
+        """
+        fg = FeedGenerator()
+        # 设置编码
+        fg.load_extension('base', atom=True)
+        
+        # 设置Feed基本信息
+        fg.title(f'TG Forwarder RSS - Rule {rule_id} (测试数据)')
+        fg.description(f'TG Forwarder RSS - 规则 {rule_id} 的测试消息')
+        
+        # 设置Feed链接
+        base_url = f"http://{settings.HOST}:{settings.PORT}"
+        fg.link(href=f'{base_url}/rss/feed/{rule_id}')
+        fg.language('zh-CN')
+        
+        # 添加测试条目
+        for i in range(1, 4):  # 生成3个测试条目
+            fe = fg.add_entry()
+            
+            # 设置测试条目ID和标题
+            entry_id = f"test-{rule_id}-{i}"
+            fe.id(entry_id)
+            fe.title(f"测试条目 {i} - 规则 {rule_id}")
+            
+            # 生成内容，包括测试说明
+            content = f'''
+            <p>这是一个测试条目，由系统自动生成，因为规则 {rule_id} 当前没有任何消息数据。</p>
+            <p>当有消息被转发时，真实的条目将会在这里显示。</p>
+            <hr>
+            <p>此测试条目生成于: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+            '''
+            
+            # 设置内容和描述
+            fe.content(content, type='html')
+            fe.description(content)
+            
+            # 设置测试条目的发布时间，依次递减，模拟时间顺序
+            dt = datetime.now() - timedelta(hours=i)
+            fe.published(dt)
+            
+            # 设置测试条目的作者和链接
+            fe.author(name="TG Forwarder System")
+            fe.link(href=f"{base_url}/rss/feed/{rule_id}?entry={entry_id}")
+        
+        return fg 

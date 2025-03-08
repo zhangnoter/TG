@@ -151,7 +151,6 @@ class RSSConfig(Base):
     rule_description = Column(String, nullable=True)  # RSS feed 描述
     language = Column(String, default='zh-CN')  # RSS feed 语言
     max_items = Column(Integer, default=50)  # RSS feed 最大条目数
-    ttl = Column(Integer, default=5)  # RSS feed 更新间隔(秒)
     # 是否启用自动提取标题和内容
     is_auto_title = Column(Boolean, default=False)
     is_auto_content = Column(Boolean, default=False)
