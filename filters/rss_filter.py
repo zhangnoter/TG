@@ -9,6 +9,7 @@ from datetime import datetime
 import shutil
 from filters.base_filter import BaseFilter
 import uuid
+from utils.constants import TEMP_DIR, RSS_MEDIA_DIR, get_rule_media_dir
 
 logger = logging.getLogger(__name__)
 
@@ -24,18 +25,19 @@ class RSSFilter(BaseFilter):
         self.rss_port = int(os.getenv('RSS_PORT', '8000'))
         self.rss_base_url = f"http://{self.rss_host}:{self.rss_port}"
         
-        # 使用环境变量中的RSS_MEDIA_PATH
-        self.rss_media_path = os.getenv('RSS_MEDIA_PATH', './rss/media')
+        # 使用统一的路径常量
+        self.rss_media_path = RSS_MEDIA_DIR
+        self.temp_dir = TEMP_DIR
         
-        # 获取绝对路径
-        if not os.path.isabs(self.rss_media_path):
-            # 如果是相对路径，转换为绝对路径
-            self.rss_media_path = os.path.abspath(self.rss_media_path)
+        logger.info(f"RSS媒体文件根目录: {self.rss_media_path}")
+        logger.info(f"临时文件存储路径: {self.temp_dir}")
         
-        logger.info(f"RSS媒体文件存储路径: {self.rss_media_path}")
-        
-        # 确保媒体文件存储路径存在
+        # 确保媒体文件存储根目录存在
         Path(self.rss_media_path).mkdir(parents=True, exist_ok=True)
+    
+    def _get_rule_media_path(self, rule_id):
+        """获取规则特定的媒体目录"""
+        return get_rule_media_dir(rule_id)
     
     async def _process(self, context):
         """处理RSS过滤器逻辑"""
@@ -250,7 +252,7 @@ class RSSFilter(BaseFilter):
             logger.error(f"获取消息链接时出错: {str(e)}")
             return ""
     
-    async def _process_media(self, client, message, context=None):
+    async def _process_media(self, client, message, context=None, rule_id=None):
         """处理媒体内容"""
         media_list = []
         
@@ -269,8 +271,16 @@ class RSSFilter(BaseFilter):
                 file_name = original_name if original_name else f"document_{message_id}"
                 file_name = self._sanitize_filename(file_name)
                 
+                # 获取规则ID，优先使用传入的rule_id
+                current_rule_id = rule_id
+                if current_rule_id is None and context and hasattr(context, 'rule') and hasattr(context.rule, 'id'):
+                    current_rule_id = context.rule.id
+                
+                # 使用规则特定的媒体目录
+                rule_media_path = self._get_rule_media_path(current_rule_id) if current_rule_id else self.rss_media_path
+                
                 # 下载文件
-                local_path = os.path.join(self.rss_media_path, file_name)
+                local_path = os.path.join(rule_media_path, file_name)
                 try:
                     if not os.path.exists(local_path):
                         await message.download_media(local_path)
@@ -280,9 +290,9 @@ class RSSFilter(BaseFilter):
                     file_size = os.path.getsize(local_path)
                     mime_type = message.document.mime_type or mimetypes.guess_type(file_name)[0] or "application/octet-stream"
                     
-                    # 添加到媒体列表
+                    # 添加到媒体列表，使用规则特定的URL
                     media_info = {
-                        "url": f"/media/{file_name}",
+                        "url": f"/media/{current_rule_id}/{file_name}" if current_rule_id else f"/media/{file_name}",
                         "type": mime_type,
                         "size": file_size,
                         "filename": file_name,
@@ -296,8 +306,15 @@ class RSSFilter(BaseFilter):
             # 处理图片类型
             elif hasattr(message, 'photo') and message.photo:
                 message_id = getattr(message, 'id', 'unknown')
-                file_name = f"photo_{message_id}.jpg"
-                local_path = os.path.join(self.rss_media_path, file_name)
+                
+                # 获取规则ID，优先使用传入的rule_id
+                current_rule_id = rule_id
+                if current_rule_id is None and context and hasattr(context, 'rule') and hasattr(context.rule, 'id'):
+                    current_rule_id = context.rule.id
+                
+                # 使用规则特定的媒体目录
+                rule_media_path = self._get_rule_media_path(current_rule_id) if current_rule_id else self.rss_media_path
+                local_path = os.path.join(rule_media_path, f"photo_{message_id}.jpg")
                 
                 try:
                     if not os.path.exists(local_path):
@@ -307,21 +324,23 @@ class RSSFilter(BaseFilter):
                     # 获取文件大小
                     file_size = os.path.getsize(local_path)
                     
-                    # 添加到媒体列表
+                    # 添加到媒体列表，使用规则特定的URL
                     media_info = {
-                        "url": f"/media/{file_name}",
+                        "url": f"/media/{current_rule_id}/{f'photo_{message_id}.jpg'}" if current_rule_id else f"/media/{f'photo_{message_id}.jpg'}",
                         "type": "image/jpeg",
                         "size": file_size,
-                        "filename": file_name,
-                        "original_name": "photo.jpg"  # 图片类型没有原始文件名
+                        "filename": f"photo_{message_id}.jpg",
+                        "original_name": "photo.jpg"  # 照片没有原始文件名
                     }
                     media_list.append(media_info)
-                    logger.info(f"添加图片到RSS: {file_name}")
+                    logger.info(f"添加图片到RSS: {f'photo_{message_id}.jpg'}")
                 except Exception as e:
                     logger.error(f"处理图片时出错: {str(e)}")
             
             # 处理视频类型
             elif hasattr(message, 'video') and message.video:
+                message_id = getattr(message, 'id', 'unknown')
+                
                 # 获取原始文件名
                 original_name = None
                 for attr in message.video.attributes:
@@ -329,34 +348,44 @@ class RSSFilter(BaseFilter):
                         original_name = attr.file_name
                         break
                 
-                message_id = getattr(message, 'id', 'unknown')
                 file_name = original_name if original_name else f"video_{message_id}.mp4"
                 file_name = self._sanitize_filename(file_name)
-                local_path = os.path.join(self.rss_media_path, file_name)
+                
+                # 获取规则ID，优先使用传入的rule_id
+                current_rule_id = rule_id
+                if current_rule_id is None and context and hasattr(context, 'rule') and hasattr(context.rule, 'id'):
+                    current_rule_id = context.rule.id
+                
+                # 使用规则特定的媒体目录
+                rule_media_path = self._get_rule_media_path(current_rule_id) if current_rule_id else self.rss_media_path
+                local_path = os.path.join(rule_media_path, file_name)
                 
                 try:
                     if not os.path.exists(local_path):
                         await message.download_media(local_path)
                         logger.info(f"下载视频到: {local_path}")
                     
-                    # 获取文件大小
+                    # 获取文件大小和MIME类型
                     file_size = os.path.getsize(local_path)
+                    mime_type = message.video.mime_type or "video/mp4"
                     
-                    # 添加到媒体列表
+                    # 添加到媒体列表，使用规则特定的URL
                     media_info = {
-                        "url": f"/media/{file_name}",
-                        "type": "video/mp4",
+                        "url": f"/media/{current_rule_id}/{file_name}" if current_rule_id else f"/media/{file_name}",
+                        "type": mime_type,
                         "size": file_size,
                         "filename": file_name,
                         "original_name": original_name or file_name
                     }
                     media_list.append(media_info)
-                    logger.info(f"添加视频到RSS: {file_name}, 原始文件名: {original_name or '未知'}")
+                    logger.info(f"添加视频到RSS: {file_name}")
                 except Exception as e:
                     logger.error(f"处理视频时出错: {str(e)}")
             
             # 处理音频类型
             elif hasattr(message, 'audio') and message.audio:
+                message_id = getattr(message, 'id', 'unknown')
+                
                 # 获取原始文件名
                 original_name = None
                 for attr in message.audio.attributes:
@@ -364,29 +393,37 @@ class RSSFilter(BaseFilter):
                         original_name = attr.file_name
                         break
                 
-                message_id = getattr(message, 'id', 'unknown')
                 file_name = original_name if original_name else f"audio_{message_id}.mp3"
                 file_name = self._sanitize_filename(file_name)
-                local_path = os.path.join(self.rss_media_path, file_name)
+                
+                # 获取规则ID，优先使用传入的rule_id
+                current_rule_id = rule_id
+                if current_rule_id is None and context and hasattr(context, 'rule') and hasattr(context.rule, 'id'):
+                    current_rule_id = context.rule.id
+                
+                # 使用规则特定的媒体目录
+                rule_media_path = self._get_rule_media_path(current_rule_id) if current_rule_id else self.rss_media_path
+                local_path = os.path.join(rule_media_path, file_name)
                 
                 try:
                     if not os.path.exists(local_path):
                         await message.download_media(local_path)
                         logger.info(f"下载音频到: {local_path}")
                     
-                    # 获取文件大小
+                    # 获取文件大小和MIME类型
                     file_size = os.path.getsize(local_path)
+                    mime_type = message.audio.mime_type or "audio/mpeg"
                     
-                    # 添加到媒体列表
+                    # 添加到媒体列表，使用规则特定的URL
                     media_info = {
-                        "url": f"/media/{file_name}",
-                        "type": "audio/mpeg",
+                        "url": f"/media/{current_rule_id}/{file_name}" if current_rule_id else f"/media/{file_name}",
+                        "type": mime_type,
                         "size": file_size,
                         "filename": file_name,
                         "original_name": original_name or file_name
                     }
                     media_list.append(media_info)
-                    logger.info(f"添加音频到RSS: {file_name}, 原始文件名: {original_name or '未知'}")
+                    logger.info(f"添加音频到RSS: {file_name}")
                 except Exception as e:
                     logger.error(f"处理音频时出错: {str(e)}")
             
@@ -394,7 +431,15 @@ class RSSFilter(BaseFilter):
             elif hasattr(message, 'voice') and message.voice:
                 message_id = getattr(message, 'id', 'unknown')
                 file_name = f"voice_{message_id}.ogg"
-                local_path = os.path.join(self.rss_media_path, file_name)
+                
+                # 获取规则ID，优先使用传入的rule_id
+                current_rule_id = rule_id
+                if current_rule_id is None and context and hasattr(context, 'rule') and hasattr(context.rule, 'id'):
+                    current_rule_id = context.rule.id
+                
+                # 使用规则特定的媒体目录
+                rule_media_path = self._get_rule_media_path(current_rule_id) if current_rule_id else self.rss_media_path
+                local_path = os.path.join(rule_media_path, file_name)
                 
                 try:
                     if not os.path.exists(local_path):
@@ -404,9 +449,9 @@ class RSSFilter(BaseFilter):
                     # 获取文件大小
                     file_size = os.path.getsize(local_path)
                     
-                    # 添加到媒体列表
+                    # 添加到媒体列表，使用规则特定的URL
                     media_info = {
-                        "url": f"/media/{file_name}",
+                        "url": f"/media/{current_rule_id}/{file_name}" if current_rule_id else f"/media/{file_name}",
                         "type": "audio/ogg",
                         "size": file_size,
                         "filename": file_name,
@@ -466,6 +511,12 @@ class RSSFilter(BaseFilter):
     async def _process_media_group(self, context, rule):
         """处理媒体组消息"""
         try:
+            # 获取规则ID
+            rule_id = rule.id
+            
+            # 获取规则特定的媒体目录
+            rule_media_path = self._get_rule_media_path(rule_id)
+            
             # 获取已下载的本地媒体文件
             local_media_files = []
             if hasattr(context, 'media_files') and context.media_files:
@@ -486,8 +537,8 @@ class RSSFilter(BaseFilter):
                         media_type = mimetypes.guess_type(local_file)[0] or "application/octet-stream"
                         filename = os.path.basename(local_file)
                         
-                        # 复制文件到RSS媒体目录
-                        target_path = os.path.join(self.rss_media_path, filename)
+                        # 复制文件到规则特定的RSS媒体目录
+                        target_path = os.path.join(rule_media_path, filename)
                         if not os.path.exists(target_path):
                             shutil.copy2(local_file, target_path)
                             logger.info(f"复制媒体文件到: {target_path}")
@@ -503,9 +554,9 @@ class RSSFilter(BaseFilter):
                                 if original_name:
                                     break
                         
-                        # 添加到媒体列表
+                        # 添加到媒体列表，使用规则特定的URL
                         media_info = {
-                            "url": f"/media/{filename}",
+                            "url": f"/media/{rule_id}/{filename}",
                             "type": media_type,
                             "size": file_size,
                             "filename": filename,
@@ -529,7 +580,8 @@ class RSSFilter(BaseFilter):
                                 file_name = f"photo_{message_id}.jpg"
                                 
                                 try:
-                                    local_path = os.path.join(self.rss_media_path, file_name)
+                                    # 使用规则特定的媒体目录
+                                    local_path = os.path.join(rule_media_path, file_name)
                                     
                                     # 如果文件已存在且大小正常，跳过下载
                                     if os.path.exists(local_path) and os.path.getsize(local_path) > 0:
@@ -563,9 +615,9 @@ class RSSFilter(BaseFilter):
                                     if os.path.exists(local_path):
                                         file_size = os.path.getsize(local_path)
                                         
-                                        # 添加到媒体列表
+                                        # 添加到媒体列表，使用规则特定的URL
                                         media_info = {
-                                            "url": f"/media/{file_name}",
+                                            "url": f"/media/{rule_id}/{file_name}",
                                             "type": "image/jpeg",
                                             "size": file_size,
                                             "filename": file_name,
@@ -588,7 +640,8 @@ class RSSFilter(BaseFilter):
                                 file_name = self._sanitize_filename(file_name)
                                 
                                 try:
-                                    local_path = os.path.join(self.rss_media_path, file_name)
+                                    # 使用规则特定的媒体目录
+                                    local_path = os.path.join(rule_media_path, file_name)
                                     
                                     # 如果文件已存在且大小正常，跳过下载
                                     if os.path.exists(local_path) and os.path.getsize(local_path) > 0:
@@ -623,9 +676,9 @@ class RSSFilter(BaseFilter):
                                         file_size = os.path.getsize(local_path)
                                         mime_type = msg.document.mime_type or mimetypes.guess_type(file_name)[0] or "application/octet-stream"
                                         
-                                        # 添加到媒体列表
+                                        # 添加到媒体列表，使用规则特定的URL
                                         media_info = {
-                                            "url": f"/media/{file_name}",
+                                            "url": f"/media/{rule_id}/{file_name}",
                                             "type": mime_type,
                                             "size": file_size,
                                             "filename": file_name,
@@ -642,10 +695,20 @@ class RSSFilter(BaseFilter):
                             logger.error(f"处理媒体组消息时出错: {str(e)}")
             
             # 准备条目数据
-            # 构建标题
-            title = "媒体组消息"
-            if media_list:
-                title = f"媒体组消息 ({len(media_list)}个文件)"
+            # 获取消息文本内容
+            message_text = context.message_text or ""
+            
+            # 构建标题：优先使用消息文本内容，没有文本内容时使用默认标题
+            if message_text.strip():
+                # 使用第一行文本或前30个字符（以较短者为准）作为标题
+                first_line = message_text.split('\n')[0].strip()
+                title = first_line[:30] + ('...' if len(first_line) > 30 else '')
+            else:
+                # 没有文本内容时，使用默认标题
+                if media_list:
+                    title = f"媒体组消息 ({len(media_list)}个文件)"
+                else:
+                    title = "媒体组消息"
             
             # 构建条目数据
             entry_data = {

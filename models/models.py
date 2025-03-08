@@ -61,11 +61,7 @@ class ForwardRule(Base):
     is_top_summary = Column(Boolean, default=True) # 是否顶置总结消息
     enable_delay = Column(Boolean, default=False)  # 是否启用延迟处理
     delay_seconds = Column(Integer, default=5)  # 延迟处理秒数
-    # RSS相关字段
-    enable_rss = Column(Boolean, default=False)  # 是否启用RSS
-    rss_title = Column(String, nullable=True)  # RSS标题
-    rss_description = Column(String, nullable=True)  # RSS描述
-    rss_max_items = Column(Integer, default=os.getenv('DEFAULT_RSS_MAX_ITEMS', 20))  # RSS最大条目数
+
     # 添加唯一约束
     __table_args__ = (
         UniqueConstraint('source_chat_id', 'target_chat_id', name='unique_source_target'),
@@ -78,6 +74,7 @@ class ForwardRule(Base):
     replace_rules = relationship('ReplaceRule', back_populates='rule')
     media_types = relationship('MediaTypes', uselist=False, back_populates='rule', cascade="all, delete-orphan")
     media_extensions = relationship('MediaExtensions', back_populates='rule', cascade="all, delete-orphan")
+    rss_config = relationship('RSSConfig', uselist=False, back_populates='rule', cascade="all, delete-orphan")
 
 
 class Keyword(Base):
@@ -144,6 +141,61 @@ class MediaExtensions(Base):
     )
 
 
+class RSSConfig(Base):
+    __tablename__ = 'rss_configs'
+
+    id = Column(Integer, primary_key=True)
+    rule_id = Column(Integer, ForeignKey('forward_rules.id'), nullable=False, unique=True)
+    enable_rss = Column(Boolean, default=False)  # 是否启用RSS
+    rule_title = Column(String, nullable=True)  # RSS feed 标题
+    rule_description = Column(String, nullable=True)  # RSS feed 描述
+    language = Column(String, default='zh-CN')  # RSS feed 语言
+    max_items = Column(Integer, default=50)  # RSS feed 最大条目数
+    ttl = Column(Integer, default=5)  # RSS feed 更新间隔(秒)
+    # 是否启用自动提取标题和内容
+    is_auto_title = Column(Boolean, default=False)
+    is_auto_content = Column(Boolean, default=False)
+    # 是否启用ai提取标题和内容
+    is_ai_extract = Column(Boolean, default=False)
+    # ai提取标题和内容的prompt
+    ai_extract_prompt = Column(String, nullable=True)
+    # 是否开启自动markdown转html
+    is_auto_markdown_to_html = Column(Boolean, default=False)
+    # 是否启用自定义提取标题和内容的正则表达式
+    enable_custom_title_pattern = Column(Boolean, default=False)
+    enable_custom_content_pattern = Column(Boolean, default=False)
+
+    # 关系
+    rule = relationship('ForwardRule', back_populates='rss_config')
+    patterns = relationship('RSSPattern', back_populates='rss_config', cascade="all, delete-orphan")
+
+
+class RSSPattern(Base):
+    __tablename__ = 'rss_patterns'
+
+
+    id = Column(Integer, primary_key=True)
+    rss_config_id = Column(Integer, ForeignKey('rss_configs.id'), nullable=False)
+    pattern = Column(String, nullable=False)  # 正则表达式模式
+    pattern_type = Column(String, nullable=False)  # 模式类型: 'title' 或 'content'
+    priority = Column(Integer, default=0)  # 执行优先级,数字越小优先级越高
+
+
+    # 关系
+    rss_config = relationship('RSSConfig', back_populates='patterns')
+
+    # 添加联合唯一约束
+    __table_args__ = (
+        UniqueConstraint('rss_config_id', 'pattern', 'pattern_type', name='unique_rss_pattern'),
+    )
+
+class User(Base):
+    __tablename__ = 'users'
+
+    id = Column(Integer, primary_key=True)
+    username = Column(String, nullable=False)  
+    password = Column(String, nullable=False)  
+
 def migrate_db(engine):
     """数据库迁移函数，确保新字段的添加"""
     inspector = inspect(engine)
@@ -156,6 +208,24 @@ def migrate_db(engine):
         
     try:
         with engine.connect() as connection:
+            # 如果users表不存在，创建表
+            if 'users' not in existing_tables:
+                logging.info("创建users表...")
+                User.__table__.create(engine)
+
+            # 如果rss_configs表不存在，创建表
+            if 'rss_configs' not in existing_tables:
+                logging.info("创建rss_configs表...")
+                RSSConfig.__table__.create(engine)
+                
+
+            # 如果rss_patterns表不存在，创建表
+            if 'rss_patterns' not in existing_tables:
+                logging.info("创建rss_patterns表...")
+                RSSPattern.__table__.create(engine)
+
+   
+                
             # 如果media_types表不存在，创建表
             if 'media_types' not in existing_tables:
                 logging.info("创建media_types表...")
@@ -237,10 +307,6 @@ def migrate_db(engine):
         'is_send_over_media_size_message': 'ALTER TABLE forward_rules ADD COLUMN is_send_over_media_size_message BOOLEAN DEFAULT TRUE',
         'enable_extension_filter': 'ALTER TABLE forward_rules ADD COLUMN enable_extension_filter BOOLEAN DEFAULT FALSE',
         'extension_filter_mode': 'ALTER TABLE forward_rules ADD COLUMN extension_filter_mode VARCHAR DEFAULT "BLACKLIST"',
-        'enable_rss': 'ALTER TABLE forward_rules ADD COLUMN enable_rss BOOLEAN DEFAULT FALSE',
-        'rss_title': 'ALTER TABLE forward_rules ADD COLUMN rss_title VARCHAR DEFAULT NULL',
-        'rss_description': 'ALTER TABLE forward_rules ADD COLUMN rss_description VARCHAR DEFAULT NULL',
-        'rss_max_items': f'ALTER TABLE forward_rules ADD COLUMN rss_max_items INTEGER DEFAULT {os.getenv("DEFAULT_RSS_MAX_ITEMS", 20)}',
     }
 
     keywords_new_columns = {

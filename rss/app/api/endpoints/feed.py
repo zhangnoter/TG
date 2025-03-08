@@ -10,6 +10,7 @@ from ...models.entry import Entry
 from ...core.config import settings
 from ...crud.entry import get_entries, create_entry, update_entry, delete_entry
 from ...core.exceptions import ValidationError
+import mimetypes
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -22,7 +23,7 @@ async def root():
         "service": "TG Forwarder RSS"
     }
 
-@router.get("/rss/{rule_id}")
+@router.get("/rss/feed/{rule_id}")
 async def get_feed(rule_id: int):
     """返回规则对应的RSS Feed"""
     try:
@@ -47,40 +48,43 @@ async def get_feed(rule_id: int):
         logger.error(f"生成RSS feed时出错: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
-@router.get("/media/{filename}")
-async def get_media(filename: str):
+@router.get("/media/{rule_id}/{filename}")
+async def get_media(rule_id: int, filename: str):
     """返回媒体文件"""
-    # 构建媒体文件路径
-    media_path = Path(settings.MEDIA_PATH) / filename
+    # 构建规则特定的媒体文件路径
+    media_path = Path(settings.get_rule_media_path(rule_id)) / filename
     
     # 记录尝试访问的路径
     logger.info(f"尝试访问媒体文件: {media_path}")
     
     # 检查文件是否存在
     if not media_path.exists():
-        # 尝试在RSS_MEDIA_PATH中查找，以防配置问题
-        alt_path = Path(os.getenv("RSS_MEDIA_PATH", "./rss/media")) / filename
-        if os.path.exists(alt_path):
-            logger.warning(f"在主路径找不到文件，但在替代路径找到: {alt_path}")
-            return FileResponse(alt_path)
-            
-        # 尝试不同的相对路径
-        relative_paths = [
-            Path("./rss/media") / filename,
-            Path("../rss/media") / filename,
-            Path("../../rss/media") / filename,
-        ]
-        
-        for path in relative_paths:
-            if path.exists():
-                logger.warning(f"在相对路径找到文件: {path}")
-                return FileResponse(path)
-        
-        logger.error(f"媒体文件未找到: {filename}, 已尝试路径: {media_path}")
-        raise HTTPException(status_code=404, detail=f"媒体文件未找到: {filename}, 已尝试路径: {media_path}")
+        # 文件不存在，返回404
+        logger.error(f"媒体文件未找到: {filename}")
+        raise HTTPException(status_code=404, detail=f"媒体文件未找到: {filename}")
     
-    # 返回文件
-    return FileResponse(media_path)
+    # 确定正确的MIME类型
+    mime_type = mimetypes.guess_type(str(media_path))[0]
+    if not mime_type:
+        # 如果无法确定MIME类型，根据文件扩展名猜测
+        ext = filename.split('.')[-1].lower() if '.' in filename else ''
+        if ext in ['mp4', 'mov', 'avi', 'webm']:
+            mime_type = f"video/{ext}"
+        elif ext in ['mp3', 'wav', 'ogg', 'flac']:
+            mime_type = f"audio/{ext}"
+        elif ext in ['jpg', 'jpeg', 'png', 'gif']:
+            mime_type = f"image/{ext}"
+        else:
+            mime_type = "application/octet-stream"
+            
+    logger.info(f"发送媒体文件: {filename}, MIME类型: {mime_type}")
+    
+    # 返回文件，并设置正确的Content-Type
+    return FileResponse(
+        path=media_path,
+        media_type=mime_type,
+        filename=filename
+    )
 
 @router.post("/api/entries/{rule_id}/add")
 async def add_entry(rule_id: int, entry_data: Dict[str, Any] = Body(...)):

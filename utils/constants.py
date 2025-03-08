@@ -9,6 +9,18 @@ load_dotenv()
 BASE_DIR = Path(__file__).parent.parent
 TEMP_DIR = os.path.join(BASE_DIR, 'temp')
 
+# RSS相关路径配置
+RSS_MEDIA_PATH = os.getenv('RSS_MEDIA_PATH', './rss/media')
+# 转换为绝对路径
+RSS_MEDIA_DIR = os.path.abspath(os.path.join(BASE_DIR, RSS_MEDIA_PATH) 
+                              if not os.path.isabs(RSS_MEDIA_PATH) 
+                              else RSS_MEDIA_PATH)
+
+# RSS数据路径
+RSS_DATA_PATH = os.getenv('RSS_DATA_PATH', './rss/data')
+RSS_DATA_DIR = os.path.abspath(os.path.join(BASE_DIR, RSS_DATA_PATH)
+                            if not os.path.isabs(RSS_DATA_PATH)
+                            else RSS_DATA_PATH)
 
 # 分页配置
 MODELS_PER_PAGE = int(os.getenv('AI_MODELS_PER_PAGE', 10))
@@ -42,3 +54,18 @@ AI_SETTINGS_TEXT = """
 MEDIA_SETTINGS_TEXT = """
 媒体设置：
 """
+
+# 为每个规则生成特定的路径
+def get_rule_media_dir(rule_id):
+    """获取指定规则的媒体目录"""
+    rule_path = os.path.join(RSS_MEDIA_DIR, str(rule_id))
+    # 确保目录存在
+    os.makedirs(rule_path, exist_ok=True)
+    return rule_path
+
+def get_rule_data_dir(rule_id):
+    """获取指定规则的数据目录"""
+    rule_path = os.path.join(RSS_DATA_DIR, str(rule_id))
+    # 确保目录存在
+    os.makedirs(rule_path, exist_ok=True)
+    return rule_path

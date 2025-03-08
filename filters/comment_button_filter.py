@@ -48,8 +48,8 @@ class CommentButtonFilter(BaseFilter):
                 
                 # 获取频道的真实用户名
                 channel_username = None
-                logger.info(f"获取频道实体: {channel_entity}")
-                logger.info(f"频道属性内容: {channel_entity.__dict__}")
+                # logger.info(f"获取频道实体: {channel_entity}")
+                # logger.info(f"频道属性内容: {channel_entity.__dict__}")
                 if hasattr(channel_entity, 'username') and channel_entity.username:
                     channel_username = channel_entity.username
                     logger.info(f"获取到频道用户名: {channel_username}")

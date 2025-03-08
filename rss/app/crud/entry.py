@@ -19,8 +19,9 @@ def ensure_storage_exists():
 # 获取规则对应的条目存储文件路径
 def get_rule_entries_path(rule_id: int) -> Path:
     """获取规则对应的条目存储文件路径"""
-    ensure_storage_exists()
-    return Path(settings.DATA_PATH) / f"rule_{rule_id}_entries.json"
+    # 使用规则特定的数据目录
+    rule_data_path = settings.get_rule_data_path(rule_id)
+    return Path(rule_data_path) / "entries.json"
 
 async def get_entries(rule_id: int, limit: int = 100, offset: int = 0) -> List[Entry]:
     """获取规则对应的条目"""

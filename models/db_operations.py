@@ -1,5 +1,7 @@
 from sqlalchemy.exc import IntegrityError
-from models.models import Keyword, ReplaceRule, ForwardRule, MediaTypes, MediaExtensions
+from models.models import Keyword, ReplaceRule, ForwardRule, MediaTypes, MediaExtensions, RSSConfig, RSSPattern, User
+from werkzeug.security import check_password_hash, generate_password_hash
+from sqlalchemy.orm import joinedload
 import logging
 import os
 import json
@@ -566,3 +568,148 @@ class DBOperations:
             logger.error(f"删除媒体扩展名失败: {str(e)}")
             return False, f"删除媒体扩展名失败: {str(e)}"
 
+    # RSS配置相关操作
+    async def get_rss_config(self, session, rule_id):
+        """获取指定规则的RSS配置"""
+        return session.query(RSSConfig).filter(RSSConfig.rule_id == rule_id).first()
+
+    async def create_rss_config(self, session, rule_id, **kwargs):
+        """创建RSS配置"""
+        rss_config = RSSConfig(rule_id=rule_id, **kwargs)
+        session.add(rss_config)
+        session.commit()
+        return rss_config
+
+    async def update_rss_config(self, session, rule_id, **kwargs):
+        """更新RSS配置"""
+        rss_config = await self.get_rss_config(session, rule_id)
+        if rss_config:
+            for key, value in kwargs.items():
+                setattr(rss_config, key, value)
+            session.commit()
+        return rss_config
+
+    async def delete_rss_config(self, session, rule_id):
+        """删除RSS配置"""
+        rss_config = await self.get_rss_config(session, rule_id)
+        if rss_config:
+            session.delete(rss_config)
+            session.commit()
+            return True
+        return False
+
+    # RSS模式相关操作
+    async def get_rss_patterns(self, session, rss_config_id):
+        """获取指定RSS配置的所有模式"""
+        return session.query(RSSPattern).filter(RSSPattern.rss_config_id == rss_config_id).order_by(RSSPattern.priority).all()
+
+    async def get_rss_pattern(self, session, pattern_id):
+        """获取指定的RSS模式"""
+        return session.query(RSSPattern).filter(RSSPattern.id == pattern_id).first()
+
+    async def create_rss_pattern(self, session, rss_config_id, pattern, pattern_type, priority=0):
+        """创建RSS模式"""
+        logger.info(f"创建RSS模式：config_id={rss_config_id}, pattern={pattern}, type={pattern_type}, priority={priority}")
+        try:
+            pattern_obj = RSSPattern(
+                rss_config_id=rss_config_id,
+                pattern=pattern,
+                pattern_type=pattern_type,
+                priority=priority
+            )
+            session.add(pattern_obj)
+            session.commit()
+            logger.info(f"RSS模式创建成功：{pattern_obj.id}")
+            return pattern_obj
+        except Exception as e:
+            logger.error(f"创建RSS模式失败：{str(e)}")
+            session.rollback()
+            raise
+
+    async def update_rss_pattern(self, session, pattern_id, **kwargs):
+        """更新RSS模式"""
+        logger.info(f"更新RSS模式：pattern_id={pattern_id}, kwargs={kwargs}")
+        try:
+            pattern = session.query(RSSPattern).filter(RSSPattern.id == pattern_id).first()
+            if not pattern:
+                logger.error(f"RSS模式不存在：pattern_id={pattern_id}")
+                raise ValueError("RSS模式不存在")
+            
+            for key, value in kwargs.items():
+                setattr(pattern, key, value)
+            
+            session.commit()
+            logger.info(f"RSS模式更新成功：{pattern.id}")
+            return pattern
+        except Exception as e:
+            logger.error(f"更新RSS模式失败：{str(e)}")
+            session.rollback()
+            raise
+
+    async def delete_rss_pattern(self, session, pattern_id):
+        """删除RSS模式"""
+        rss_pattern = await self.get_rss_pattern(session, pattern_id)
+        if rss_pattern:
+            session.delete(rss_pattern)
+            session.commit()
+            return True
+        return False
+
+    async def reorder_rss_patterns(self, session, rss_config_id, pattern_ids):
+        """重新排序RSS模式"""
+        patterns = await self.get_rss_patterns(session, rss_config_id)
+        pattern_dict = {p.id: p for p in patterns}
+        
+        for index, pattern_id in enumerate(pattern_ids):
+            if pattern_id in pattern_dict:
+                pattern_dict[pattern_id].priority = index
+        
+        session.commit()
+
+    # 用户相关操作
+    async def get_user(self, session, username):
+        """通过用户名获取用户"""
+        return session.query(User).filter(User.username == username).first()
+
+    async def get_user_by_id(self, session, user_id):
+        """通过ID获取用户"""
+        return session.query(User).filter(User.id == user_id).first()
+
+    async def create_user(self, session, username, password):
+        """创建用户"""
+
+        user = User(
+            username=username,
+            password=generate_password_hash(password)
+        )
+        session.add(user)
+        session.commit()
+        return user
+
+    async def update_user_password(self, session, username, new_password):
+        """更新用户密码"""
+
+        user = await self.get_user(session, username)
+        if user:
+            user.password = generate_password_hash(new_password)
+            session.commit()
+        return user
+
+    async def verify_user(self, session, username, password):
+        """验证用户密码"""
+        
+        user = await self.get_user(session, username)
+        if user and check_password_hash(user.password, password):
+            return user
+        return None
+
+    # 批量操作
+    async def get_all_enabled_rss_configs(self, session):
+        """获取所有启用的RSS配置"""
+        return session.query(RSSConfig).filter(RSSConfig.enable_rss == True).all()
+
+    async def get_rss_config_with_patterns(self, session, rule_id):
+        """获取RSS配置及其所有模式"""
+        return session.query(RSSConfig).options(
+            joinedload(RSSConfig.patterns)
+        ).filter(RSSConfig.rule_id == rule_id).first() 
