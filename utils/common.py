@@ -140,7 +140,7 @@ async def check_keywords(rule, message_text, event = None):
         bool: 是否应该转发消息
     """
 
-
+    logger.info(f"是否开启过滤用户选项: {rule.is_filter_user_info}")
     if rule.is_filter_user_info:
         username = await get_sender_info(event, rule.id)  # 调用新的函数获取 sender_info
         name =  (
@@ -148,10 +148,13 @@ async def check_keywords(rule, message_text, event = None):
                 else f"{event.sender.first_name or ''} {event.sender.last_name or ''}".strip()
                 )
         if username and name:
+            logger.info(f"成功获取用户信息: {username} {name}")
             message_text = f"{username} {name}:\n{message_text}"
         elif username:
+            logger.info(f"成功获取用户信息: {username}")
             message_text = f"{username}:\n{message_text}"
         elif name:
+            logger.info(f"成功获取用户信息: {name}")
             message_text = f"{name}:\n{message_text}"
         else:
             logger.warning(f"规则 ID: {rule.id} - 无法获取发送者信息")
