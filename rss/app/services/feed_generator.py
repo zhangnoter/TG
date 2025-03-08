@@ -11,6 +11,11 @@ from pathlib import Path
 import markdown  # 添加markdown包导入
 import re
 import json
+from models.models import get_session, RSSConfig  # 添加 get_session 和 RSSConfig 导入
+from fastapi import HTTPException
+from ..crud.entry import delete_entry
+
+
 logger = logging.getLogger(__name__)
 
 class FeedService:
@@ -128,22 +133,38 @@ class FeedService:
         fg = FeedGenerator()
         # 设置编码
         fg.load_extension('base', atom=True)
-        
-        # 获取第一个条目作为Feed标题和描述的来源
-        if entries:
-            first_entry = entries[0]
-            # 尝试获取频道名作为Feed标题
-            chat_name = FeedService._extract_chat_name(first_entry.link)
-            fg.title(f'TG Forwarder - {chat_name or f"Rule {rule_id}"}')
-            fg.description(f'TG Forwarder RSS - 规则 {rule_id} 的消息')
-        else:
-            fg.title(f'TG Forwarder RSS - Rule {rule_id}')
-            fg.description('TG Forwarder RSS Feed')
+        rss_config = None
+        # 使用直接导入的方式获取数据库配置
+        session = get_session()
+        try:
+            rss_config = session.query(RSSConfig).filter(RSSConfig.rule_id == rule_id).first()
+            logger.info(f"获取RSS配置: {rss_config.__dict__}")
+            # 获取 Feed 标题和描述
+            if rss_config and rss_config.enable_rss:
+                if rss_config.rule_title:
+                    fg.title(rss_config.rule_title)
+                else:
+                    fg.title(f'TG Forwarder RSS - Rule {rule_id}')
+    
+                if rss_config.rule_description:
+                    fg.description(rss_config.rule_description)
+                else:
+                    fg.description(f'TG Forwarder RSS - 规则 {rule_id} 的消息')
+                    
+                # 设置语言
+                fg.language(rss_config.language or 'zh-CN')
+            else:
+                # 默认标题和描述
+                fg.title(f'TG Forwarder RSS - Rule {rule_id}')
+                fg.description(f'TG Forwarder RSS - 规则 {rule_id} 的消息')
+                fg.language('zh-CN')
+        finally:
+            # 确保会话被关闭
+            session.close()
         
         # 设置Feed链接
         base_url = f"http://{settings.HOST}:{settings.PORT}"
         fg.link(href=f'{base_url}/rss/{rule_id}')
-        fg.language('zh-CN')
         
         # 添加条目
         for entry in entries:
@@ -420,11 +441,12 @@ class FeedService:
             fe.title(f"测试条目 {i} - 规则 {rule_id}")
             
             # 生成内容，包括测试说明
+            current_time = datetime.now(settings.DEFAULT_TIMEZONE)
             content = f'''
             <p>这是一个测试条目，由系统自动生成，因为规则 {rule_id} 当前没有任何消息数据。</p>
             <p>当有消息被转发时，真实的条目将会在这里显示。</p>
             <hr>
-            <p>此测试条目生成于: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+            <p>此测试条目生成于: {current_time.strftime('%Y-%m-%d %H:%M:%S %Z')}</p>
             '''
             
             # 设置内容和描述
@@ -432,7 +454,7 @@ class FeedService:
             fe.description(content)
             
             # 设置测试条目的发布时间，依次递减，模拟时间顺序
-            dt = datetime.now() - timedelta(hours=i)
+            dt = datetime.now(settings.DEFAULT_TIMEZONE) - timedelta(hours=i)
             fe.published(dt)
             
             # 设置测试条目的作者和链接

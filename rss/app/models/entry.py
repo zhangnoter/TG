@@ -26,6 +26,7 @@ class Entry(BaseModel):
     link: str = ""
     media: List[Media] = []
     created_at: Optional[str] = None  # 添加到系统的时间 
+    context: Optional[Any] = None  # 原始消息上下文对象
     
     def __init__(self, **data):
         # 处理媒体数据，确保它是Media对象列表

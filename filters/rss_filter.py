@@ -10,6 +10,8 @@ import shutil
 from filters.base_filter import BaseFilter
 import uuid
 from utils.constants import TEMP_DIR, RSS_MEDIA_DIR, get_rule_media_dir
+from models.models import get_session
+from utils.common import get_db_ops
 
 logger = logging.getLogger(__name__)
 
@@ -45,11 +47,16 @@ class RSSFilter(BaseFilter):
             logger.info("消息被前置过滤器过滤，跳过RSS处理")
             return False
         
+        db_ops = await get_db_ops()
+        session = get_session()
+        rss_config = await db_ops.get_rss_config(session, context.rule.id)
+
+
         # 执行RSS规则前，先确保媒体文件已经下载
         # 媒体组消息需要特殊处理
         if context.is_media_group:
             rule = context.rule
-            if rule.enable_rss:
+            if rss_config.enable_rss:
                 await self._process_media_group(context, rule)
         else:
             # 获取消息和规则
@@ -58,7 +65,7 @@ class RSSFilter(BaseFilter):
             rule = context.rule
             
             # 检查规则是否启用RSS
-            if rule.enable_rss:
+            if rss_config.enable_rss:
                 try:
                     # 准备条目数据
                     entry_data = await self._prepare_entry_data(client, message, rule, context)
@@ -157,6 +164,55 @@ class RSSFilter(BaseFilter):
                 "link": link,
                 "media": media_list
             }
+            
+            # 添加原始上下文
+            if context:
+                try:
+                    # 创建一个简化版的上下文对象，只保留可序列化的基本属性
+                    serializable_context = {
+                        'is_media_group': getattr(context, 'is_media_group', False),
+                        'media_group_id': getattr(context, 'media_group_id', None),
+                        'original_message_text': getattr(context, 'original_message_text', ''),
+                        'message_text': getattr(context, 'message_text', ''),
+                        'check_message_text': getattr(context, 'check_message_text', ''),
+                        'sender_info': getattr(context, 'sender_info', ''),
+                        'time_info': getattr(context, 'time_info', ''),
+                        'original_link': getattr(context, 'original_link', ''),
+                        'comment_link': getattr(context, 'comment_link', None),
+                        'should_forward': getattr(context, 'should_forward', True),
+                        'errors': getattr(context, 'errors', [])
+                    }
+                    
+                    # 添加媒体信息，但确保它是可序列化的
+                    if hasattr(context, 'media_files') and context.media_files:
+                        media_info = []
+                        for media in context.media_files:
+                            if isinstance(media, dict):
+                                media_info.append(media)
+                            elif hasattr(media, '__dict__'):
+                                media_info.append(vars(media))
+                            else:
+                                media_info.append(str(media))
+                        serializable_context['media_files'] = media_info
+                    
+                    # 同样处理跳过的媒体
+                    if hasattr(context, 'skipped_media') and context.skipped_media:
+                        skipped_info = []
+                        for media in context.skipped_media:
+                            if isinstance(media, dict):
+                                skipped_info.append(media)
+                            elif hasattr(media, '__dict__'):
+                                skipped_info.append(vars(media))
+                            else:
+                                skipped_info.append(str(media))
+                        serializable_context['skipped_media'] = skipped_info
+                    
+                    logger.debug(f"添加可序列化的上下文数据到Entry")
+                    entry_data['context'] = serializable_context
+                except Exception as e:
+                    logger.error(f"处理上下文数据时出错: {str(e)}")
+                    # 如果序列化失败，不添加上下文
+                    entry_data['context'] = None
             
             return entry_data
             

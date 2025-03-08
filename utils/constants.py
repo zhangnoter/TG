@@ -9,6 +9,9 @@ load_dotenv()
 BASE_DIR = Path(__file__).parent.parent
 TEMP_DIR = os.path.join(BASE_DIR, 'temp')
 
+RSS_HOST = os.getenv('RSS_HOST', '127.0.0.1')
+RSS_PORT = os.getenv('RSS_PORT', '8000')
+
 # RSS相关路径配置
 RSS_MEDIA_PATH = os.getenv('RSS_MEDIA_PATH', './rss/media')
 # 转换为绝对路径

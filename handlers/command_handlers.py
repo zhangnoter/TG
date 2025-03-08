@@ -11,6 +11,10 @@ import traceback
 from sqlalchemy import inspect
 from version import VERSION, UPDATE_INFO
 import shlex
+import logging
+import os
+import aiohttp
+from utils.constants import RSS_HOST, RSS_PORT
 
 logger = logging.getLogger(__name__)
 
@@ -1909,6 +1913,21 @@ async def handle_delete_rule_command(event, command, parts):
                     if source_chat:
                         logger.info(f'删除未使用的源频道: {source_chat.name} (ID: {source_chat.telegram_chat_id})')
                         session.delete(source_chat)
+
+                # 尝试删除RSS服务中的相关数据
+                try:
+                    
+                    rss_url = f"http://{RSS_HOST}:{RSS_PORT}/api/rule/{rule_id}"
+                    async with aiohttp.ClientSession() as session:
+                        async with session.delete(rss_url) as response:
+                            if response.status == 200:
+                                logger.info(f"成功删除RSS规则数据: {rule_id}")
+                            else:
+                                response_text = await response.text()
+                                logger.warning(f"删除RSS规则数据失败 {rule_id}, 状态码: {response.status}, 响应: {response_text}")
+                except Exception as rss_err:
+                    logger.error(f"调用RSS删除API时出错: {str(rss_err)}")
+                    # 不影响主要流程，继续执行
 
                 success_ids.append(rule_id)
             except Exception as e:

@@ -5,6 +5,9 @@ from models.models import Chat, ReplaceRule, Keyword,get_session
 from telethon import Button
 from handlers.button.callback.ai_callback import *
 from handlers.button.callback.media_callback import *
+import logging
+import aiohttp
+from utils.constants import RSS_HOST, RSS_PORT
 
 logger = logging.getLogger(__name__)
 
@@ -122,13 +125,30 @@ async def callback_delete(event, rule_id, session, message, data):
                 logger.info(f'删除未使用的源频道: {source_chat.name} (ID: {source_chat.telegram_chat_id})')
                 session.delete(source_chat)
 
+        # 提交所有更改
         session.commit()
+        
+        # 尝试删除RSS服务中的相关数据
+        try:
+            
+            rss_url = f"http://{RSS_HOST}:{RSS_PORT}/api/rule/{rule_id}"
+            async with aiohttp.ClientSession() as client_session:
+                async with client_session.delete(rss_url) as response:
+                    if response.status == 200:
+                        logger.info(f"成功删除RSS规则数据: {rule_id}")
+                    else:
+                        response_text = await response.text()
+                        logger.warning(f"删除RSS规则数据失败 {rule_id}, 状态码: {response.status}, 响应: {response_text}")
+        except Exception as rss_err:
+            logger.error(f"调用RSS删除API时出错: {str(rss_err)}")
+            # 不影响主要流程，继续执行
 
-        # 删除机器人的消息
+        # 更新消息
+                # 删除机器人的消息
         await message.delete()
         # 发送新的通知消息
-        await event.respond('已删除转发链')
-        await event.answer('已删除转发链')
+        await event.respond('✅ 已删除规则')
+        await event.answer('已删除规则')
 
     except Exception as e:
         session.rollback()
