@@ -16,22 +16,25 @@ logger = logging.getLogger(__name__)
 
 async def handle_bind_command(event, client, parts):
     """处理 bind 命令"""
-    # 重新解析命令，支持带引号的名称
+    # 使用shlex解析命令
     message_text = event.message.text
-    if len(message_text.split(None, 1)) != 2:
+    try:
+        # 去掉命令前缀，获取原始参数字符串
+        if ' ' in message_text:
+            command, args_str = message_text.split(' ', 1)
+            args = shlex.split(args_str)
+            if args:
+                target = args[0]
+            else:
+                raise ValueError("参数不足")
+        else:
+            raise ValueError("参数不足")
+    except ValueError:
         await event.reply('用法: /bind <目标聊天链接或名称>\n例如:\n/bind https://t.me/channel_name\n/bind "频道 名称"')
         return
 
-    # 分离命令和参数
-    _, target = message_text.split(None, 1)
-    target = target.strip()
-
-    # 检查是否是带引号的名称
-    if target.startswith('"') and target.endswith('"'):
-        target = target[1:-1]  # 移除引号
-        is_link = False
-    else:
-        is_link = target.startswith(('https://', 't.me/'))
+    # 检查是否是链接
+    is_link = target.startswith(('https://', 't.me/'))
 
     source_chat = await event.get_chat()
 
