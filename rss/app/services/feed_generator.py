@@ -160,15 +160,8 @@ class FeedService:
                 # 设置内容字段
                 fe.content(content, type='html')
                 
-                # 确保description也包含同样的内容 - 有些阅读器依赖这个字段
-                # 注意：使用pydantic模型的set方法
-                for i, element in enumerate(fe._FeedEntry__atom_specificElements):
-                    if element.get('name') == 'description':
-                        fe._FeedEntry__atom_specificElements[i] = {'name': 'description', 'content': content}
-                        break
-                else:
-                    # 如果没有找到description，添加一个
-                    fe._FeedEntry__atom_specificElements.append({'name': 'description', 'content': content})
+                # 设置描述字段 - 使用标准API而不是访问内部属性
+                fe.description(content)
                 
                 # 解析ISO格式时间字符串，设置发布时间
                 try:

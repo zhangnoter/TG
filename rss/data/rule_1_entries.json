@@ -30,5 +30,98 @@
     "link": "https://t.me/c/2447792814/570",
     "media": [],
     "created_at": "2025-03-08T01:03:41.024289"
+  },
+  {
+    "id": "d1ee023e-f094-464d-ad84-999c08fd6162",
+    "rule_id": 1,
+    "message_id": "587",
+    "title": "媒体组消息 (2个文件)",
+    "content": "",
+    "published": "2025-03-07T17:43:35+00:00",
+    "author": "dfg",
+    "link": "https://t.me/c/2447792814/587",
+    "media": [
+      {
+        "url": "/media/birefnet.py",
+        "type": "text/x-python",
+        "size": 91320,
+        "filename": "birefnet.py",
+        "original_name": "birefnet.py"
+      },
+      {
+        "url": "/media/birefnet.py",
+        "type": "text/x-python",
+        "size": 91320,
+        "filename": "birefnet.py",
+        "original_name": "birefnet.py"
+      }
+    ],
+    "created_at": "2025-03-08T01:43:38.762760"
+  },
+  {
+    "id": "dd9f9e78-e831-4087-aaa2-0e3f7cc4b32f",
+    "rule_id": 1,
+    "message_id": "589",
+    "title": "as7d98a79d8ad8a",
+    "content": "as7d98a79d8ad8a",
+    "published": "2025-03-07T17:44:36+00:00",
+    "author": "dfg",
+    "link": "https://t.me/c/2447792814/589",
+    "media": [],
+    "created_at": "2025-03-08T01:44:37.583307"
+  },
+  {
+    "id": "f23c3509-d9c6-4ddb-8dc9-9f85dd346e90",
+    "rule_id": 1,
+    "message_id": "590",
+    "title": "媒体组消息 (2个文件)",
+    "content": "",
+    "published": "2025-03-07T17:44:38+00:00",
+    "author": "dfg",
+    "link": "https://t.me/c/2447792814/590",
+    "media": [
+      {
+        "url": "/media/BiRefNet_config.py",
+        "type": "text/x-python",
+        "size": 309,
+        "filename": "BiRefNet_config.py",
+        "original_name": "BiRefNet_config.py"
+      },
+      {
+        "url": "/media/birefnet.py",
+        "type": "text/x-python",
+        "size": 91320,
+        "filename": "birefnet.py",
+        "original_name": "birefnet.py"
+      }
+    ],
+    "created_at": "2025-03-08T01:44:41.675462"
+  },
+  {
+    "id": "133f20db-d730-4c72-9a05-90bfa3a250df",
+    "rule_id": 1,
+    "message_id": "594",
+    "title": "媒体组消息 (2个文件)",
+    "content": "test2",
+    "published": "2025-03-07T17:45:53+00:00",
+    "author": "dfg",
+    "link": "https://t.me/c/2447792814/594",
+    "media": [
+      {
+        "url": "/media/photo_595.jpg",
+        "type": "image/jpeg",
+        "size": 138573,
+        "filename": "photo_595.jpg",
+        "original_name": "photo.jpg"
+      },
+      {
+        "url": "/media/photo_594.jpg",
+        "type": "image/jpeg",
+        "size": 138573,
+        "filename": "photo_594.jpg",
+        "original_name": "photo.jpg"
+      }
+    ],
+    "created_at": "2025-03-08T01:45:57.528407"
   }
 ]

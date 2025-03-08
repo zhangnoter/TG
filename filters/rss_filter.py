@@ -466,143 +466,19 @@ class RSSFilter(BaseFilter):
     async def _process_media_group(self, context, rule):
         """处理媒体组消息"""
         try:
-            # 获取第一条消息作为基础消息
-            base_message = context.event.message
+            # 获取已下载的本地媒体文件
+            local_media_files = []
+            if hasattr(context, 'media_files') and context.media_files:
+                local_media_files = context.media_files
+            
+            # 记录已下载的媒体文件数量
+            logger.info(f"处理媒体组消息，已下载的媒体文件: {len(local_media_files)}")
             
             # 准备媒体列表
             media_list = []
             
-            # 从context.media_files获取已下载的媒体文件
-            # media_files由MediaFilter填充
-            local_media_files = context.media_files if hasattr(context, 'media_files') else []
-            
-            # 记录调试信息
-            logger.info(f"处理媒体组消息，已下载的媒体文件: {len(local_media_files)}")
-            for file in local_media_files:
-                logger.info(f"已下载媒体文件: {file}")
-            
-            # 如果没有已下载的媒体文件，尝试从media_group_messages直接获取
-            if not local_media_files and context.media_group_messages:
-                logger.warning("媒体组没有已下载的文件，尝试从media_group_messages获取")
-                
-                # 直接处理媒体组消息列表
-                for idx, msg in enumerate(context.media_group_messages):
-                    try:
-                        # 尝试从消息中获取媒体信息
-                        if hasattr(msg, 'photo') and msg.photo:
-                            # 获取消息ID，用于生成默认文件名
-                            message_id = getattr(msg, 'id', 'unknown')
-                            file_name = f"photo_{message_id}.jpg"
-                            file_name = self._sanitize_filename(file_name)
-                            
-                            # 直接下载媒体
-                            try:
-                                local_path = os.path.join(self.rss_media_path, file_name)
-                                
-                                # 如果文件已存在且大小正常，跳过下载
-                                if os.path.exists(local_path) and os.path.getsize(local_path) > 0:
-                                    logger.info(f"媒体文件已存在，跳过下载: {local_path}")
-                                else:
-                                    # 尝试直接下载
-                                    try:
-                                        await msg.download_media(local_path)
-                                        logger.info(f"直接下载媒体组图片到: {local_path}")
-                                    except Exception as e:
-                                        if "file reference has expired" in str(e):
-                                            # 如果文件引用过期，尝试重新获取消息
-                                            try:
-                                                # 重新获取消息
-                                                new_msg = await context.client.get_messages(
-                                                    msg.chat_id,
-                                                    ids=msg.id
-                                                )
-                                                if new_msg and new_msg.media:
-                                                    await new_msg.download_media(local_path)
-                                                    logger.info(f"通过重新获取消息下载媒体: {local_path}")
-                                                else:
-                                                    logger.error("无法重新获取消息或消息没有媒体")
-                                                    continue
-                                            except Exception as e2:
-                                                logger.error(f"重新获取消息并下载失败: {str(e2)}")
-                                                continue
-                                        else:
-                                            logger.error(f"下载媒体组图片时出错: {str(e)}")
-                                            continue
-                                
-                                # 获取文件大小
-                                if os.path.exists(local_path):
-                                    file_size = os.path.getsize(local_path)
-                                    
-                                    # 添加到媒体列表
-                                    media_info = {
-                                        "url": f"/media/{file_name}",
-                                        "type": "image/jpeg",
-                                        "size": file_size,
-                                        "filename": file_name,
-                                        "original_name": "photo.jpg"  # 照片没有原始文件名
-                                    }
-                                    media_list.append(media_info)
-                                    logger.info(f"添加媒体组图片到RSS: {file_name}")
-                            except Exception as e:
-                                logger.error(f"处理媒体组图片时出错: {str(e)}")
-                        elif hasattr(msg, 'document') and msg.document:
-                            # 获取消息ID，用于生成默认文件名
-                            message_id = getattr(msg, 'id', 'unknown')
-                            original_name = getattr(msg.document, 'file_name', None)
-                            file_name = original_name if original_name else f"document_{message_id}"
-                            file_name = self._sanitize_filename(file_name)
-                            
-                            try:
-                                local_path = os.path.join(self.rss_media_path, file_name)
-                                
-                                # 如果文件已存在且大小正常，跳过下载
-                                if os.path.exists(local_path) and os.path.getsize(local_path) > 0:
-                                    logger.info(f"媒体文件已存在，跳过下载: {local_path}")
-                                else:
-                                    try:
-                                        await msg.download_media(local_path)
-                                        logger.info(f"直接下载文档到: {local_path}")
-                                    except Exception as e:
-                                        if "file reference has expired" in str(e):
-                                            try:
-                                                new_msg = await context.client.get_messages(
-                                                    msg.chat_id,
-                                                    ids=msg.id
-                                                )
-                                                if new_msg and new_msg.media:
-                                                    await new_msg.download_media(local_path)
-                                                    logger.info(f"通过重新获取消息下载文档: {local_path}")
-                                                else:
-                                                    logger.error("无法重新获取消息或消息没有媒体")
-                                                    continue
-                                            except Exception as e2:
-                                                logger.error(f"重新获取消息并下载失败: {str(e2)}")
-                                                continue
-                                        else:
-                                            logger.error(f"下载文档时出错: {str(e)}")
-                                            continue
-                                
-                                # 获取文件大小
-                                if os.path.exists(local_path):
-                                    file_size = os.path.getsize(local_path)
-                                    media_type = mimetypes.guess_type(file_name)[0] or "application/octet-stream"
-                                    
-                                    # 添加到媒体列表
-                                    media_info = {
-                                        "url": f"/media/{file_name}",
-                                        "type": media_type,
-                                        "size": file_size,
-                                        "filename": file_name,
-                                        "original_name": original_name
-                                    }
-                                    media_list.append(media_info)
-                                    logger.info(f"添加文档到RSS: {file_name}")
-                            except Exception as e:
-                                logger.error(f"处理文档时出错: {str(e)}")
-                        # 可以添加对其他媒体类型的支持（视频、音频等）
-                    except Exception as e:
-                        logger.error(f"处理媒体组消息 #{idx} 时出错: {str(e)}")
-            else:
+            # 如果有已下载的媒体文件，使用它们
+            if local_media_files:
                 # 使用已下载的媒体文件
                 for local_file in local_media_files:
                     try:
@@ -639,41 +515,161 @@ class RSSFilter(BaseFilter):
                         logger.info(f"添加媒体组文件到RSS: {filename}, 原始文件名: {original_name or '未知'}")
                     except Exception as e:
                         logger.error(f"处理媒体组文件时出错: {str(e)}")
+            else:
+                # 没有已下载的媒体文件，尝试直接从媒体组消息下载
+                if hasattr(context, 'media_group_messages') and context.media_group_messages:
+                    logger.warning("媒体组没有已下载的文件，尝试从media_group_messages获取")
+                    
+                    # 直接处理媒体组消息
+                    for msg in context.media_group_messages:
+                        try:
+                            # 处理图片类型
+                            if hasattr(msg, 'photo') and msg.photo:
+                                message_id = getattr(msg, 'id', 'unknown')
+                                file_name = f"photo_{message_id}.jpg"
+                                
+                                try:
+                                    local_path = os.path.join(self.rss_media_path, file_name)
+                                    
+                                    # 如果文件已存在且大小正常，跳过下载
+                                    if os.path.exists(local_path) and os.path.getsize(local_path) > 0:
+                                        logger.info(f"媒体文件已存在，跳过下载: {local_path}")
+                                    else:
+                                        try:
+                                            await msg.download_media(local_path)
+                                            logger.info(f"直接下载图片到: {local_path}")
+                                        except Exception as e:
+                                            if "file reference has expired" in str(e):
+                                                logger.warning(f"文件引用已过期，尝试重新获取消息")
+                                                try:
+                                                    # 尝试重新获取消息
+                                                    refreshed_msg = await context.client.get_messages(
+                                                        msg.chat_id, ids=msg.id
+                                                    )
+                                                    if refreshed_msg:
+                                                        await refreshed_msg.download_media(local_path)
+                                                        logger.info(f"成功重新下载图片到: {local_path}")
+                                                    else:
+                                                        logger.error("无法重新获取消息")
+                                                        continue
+                                                except Exception as refresh_error:
+                                                    logger.error(f"重新获取消息时出错: {str(refresh_error)}")
+                                                    continue
+                                            else:
+                                                logger.error(f"下载媒体组图片时出错: {str(e)}")
+                                                continue
+                                    
+                                    # 获取文件大小
+                                    if os.path.exists(local_path):
+                                        file_size = os.path.getsize(local_path)
+                                        
+                                        # 添加到媒体列表
+                                        media_info = {
+                                            "url": f"/media/{file_name}",
+                                            "type": "image/jpeg",
+                                            "size": file_size,
+                                            "filename": file_name,
+                                            "original_name": "photo.jpg"  # 照片没有原始文件名
+                                        }
+                                        media_list.append(media_info)
+                                        logger.info(f"添加媒体组图片到RSS: {file_name}")
+                                except Exception as e:
+                                    logger.error(f"处理媒体组图片时出错: {str(e)}")
+                            elif hasattr(msg, 'document') and msg.document:
+                                # 获取消息ID，用于生成默认文件名
+                                message_id = getattr(msg, 'id', 'unknown')
+                                original_name = None
+                                for attr in msg.document.attributes:
+                                    if hasattr(attr, 'file_name'):
+                                        original_name = attr.file_name
+                                        break
+                                
+                                file_name = original_name if original_name else f"document_{message_id}"
+                                file_name = self._sanitize_filename(file_name)
+                                
+                                try:
+                                    local_path = os.path.join(self.rss_media_path, file_name)
+                                    
+                                    # 如果文件已存在且大小正常，跳过下载
+                                    if os.path.exists(local_path) and os.path.getsize(local_path) > 0:
+                                        logger.info(f"媒体文件已存在，跳过下载: {local_path}")
+                                    else:
+                                        try:
+                                            await msg.download_media(local_path)
+                                            logger.info(f"直接下载文档到: {local_path}")
+                                        except Exception as e:
+                                            if "file reference has expired" in str(e):
+                                                logger.warning(f"文件引用已过期，尝试重新获取消息")
+                                                try:
+                                                    # 尝试重新获取消息
+                                                    refreshed_msg = await context.client.get_messages(
+                                                        msg.chat_id, ids=msg.id
+                                                    )
+                                                    if refreshed_msg:
+                                                        await refreshed_msg.download_media(local_path)
+                                                        logger.info(f"成功重新下载文档到: {local_path}")
+                                                    else:
+                                                        logger.error("无法重新获取消息")
+                                                        continue
+                                                except Exception as refresh_error:
+                                                    logger.error(f"重新获取消息时出错: {str(refresh_error)}")
+                                                    continue
+                                            else:
+                                                logger.error(f"下载媒体组文档时出错: {str(e)}")
+                                                continue
+                                    
+                                    # 获取文件大小和MIME类型
+                                    if os.path.exists(local_path):
+                                        file_size = os.path.getsize(local_path)
+                                        mime_type = msg.document.mime_type or mimetypes.guess_type(file_name)[0] or "application/octet-stream"
+                                        
+                                        # 添加到媒体列表
+                                        media_info = {
+                                            "url": f"/media/{file_name}",
+                                            "type": mime_type,
+                                            "size": file_size,
+                                            "filename": file_name,
+                                            "original_name": original_name or file_name
+                                        }
+                                        media_list.append(media_info)
+                                        logger.info(f"添加媒体组文档到RSS: {file_name}, 原始文件名: {original_name or '未知'}")
+                                except Exception as e:
+                                    logger.error(f"处理媒体组文档时出错: {str(e)}")
+                            
+                            # 其他媒体类型处理可以类似添加
+                        
+                        except Exception as e:
+                            logger.error(f"处理媒体组消息时出错: {str(e)}")
             
             # 准备条目数据
-            now = datetime.now().isoformat()
-            
-            # 基本消息信息 - 使用第一条消息的信息
-            message_text = ""
-            if hasattr(base_message, 'text') and base_message.text:
-                message_text = base_message.text
-            elif hasattr(base_message, 'caption') and base_message.caption:
-                message_text = base_message.caption
-            
             # 构建标题
-            title = message_text.split('\n')[0][:20].strip() if message_text else f"媒体组消息 ({len(context.media_group_messages)}张图片)"
+            title = "媒体组消息"
+            if media_list:
+                title = f"媒体组消息 ({len(media_list)}个文件)"
             
+            # 构建条目数据
             entry_data = {
-                "id": str(base_message.id) if hasattr(base_message, 'id') else str(uuid.uuid4()),
-                "rule_id": rule.id,
-                "message_id": str(base_message.id) if hasattr(base_message, 'id') else "unknown",
+                "id": str(context.event.message.id),
                 "title": title,
-                "content": message_text,
-                "published": now,
-                "author": await self._get_sender_name(context.client, base_message),
-                "link": self._get_message_link(base_message),
-                "media": media_list  # 使用构建的媒体列表
+                "content": context.message_text or "",
+                "published": context.event.message.date.isoformat(),
+                "author": await self._get_sender_name(context.client, context.event.message),
+                "link": self._get_message_link(context.event.message),
+                "media": media_list
             }
             
-            # 记录调试信息
+            # 记录媒体组条目数据
             logger.info(f"媒体组条目数据: 标题={title}, 媒体数量={len(media_list)}")
             
-            # 发送到RSS服务
-            if entry_data["media"]:
+            # 如果有有效的媒体文件，添加到RSS订阅源
+            if media_list:
                 await self._send_to_rss_service(rule.id, entry_data)
-                logger.info(f"成功将媒体组消息添加到规则 {rule.id} 的RSS订阅源，共 {len(media_list)} 个媒体文件")
+                logger.info(f"成功将媒体组消息添加到规则 {rule.id} 的RSS订阅源")
             else:
-                logger.warning(f"媒体组消息没有有效的媒体文件，跳过添加到RSS订阅源")
+                logger.warning("媒体组消息没有有效的媒体文件，跳过添加到RSS订阅源")
+        
         except Exception as e:
-            logger.error(f"处理媒体组RSS消息时出错: {str(e)}")
-            # 继续处理流程
+            logger.error(f"处理媒体组消息时出错: {str(e)}")
+            return False
+        
+        return True
