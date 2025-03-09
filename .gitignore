@@ -31,3 +31,4 @@ handlers/bot_handler copy.py
 /rss/media
 /rss/data
 
+/logs
