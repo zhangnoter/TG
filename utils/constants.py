@@ -12,10 +12,21 @@ TEMP_DIR = os.path.join(BASE_DIR, 'temp')
 RSS_HOST = os.getenv('RSS_HOST', '127.0.0.1')
 RSS_PORT = os.getenv('RSS_PORT', '8000')
 
+# RSS基础URL，如果未设置，则使用请求的URL
+RSS_BASE_URL = os.environ.get('RSS_BASE_URL', None)
+
+# RSS媒体文件的基础URL，用于生成媒体链接，如果未设置，则使用请求的URL
+RSS_MEDIA_BASE_URL = os.getenv('RSS_MEDIA_BASE_URL', '')
+
+RSS_ENABLED = os.getenv('RSS_ENABLED', 'false')
+
+
+
 DEFAULT_TIMEZONE = os.getenv('DEFAULT_TIMEZONE', 'Asia/Shanghai')
 PROJECT_NAME = os.getenv('PROJECT_NAME', 'TG Forwarder RSS')
 # RSS相关路径配置
 RSS_MEDIA_PATH = os.getenv('RSS_MEDIA_PATH', './rss/media')
+
 # 转换为绝对路径
 RSS_MEDIA_DIR = os.path.abspath(os.path.join(BASE_DIR, RSS_MEDIA_PATH) 
                               if not os.path.isabs(RSS_MEDIA_PATH) 

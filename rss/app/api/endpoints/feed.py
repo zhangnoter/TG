@@ -22,6 +22,7 @@ import os
 import subprocess
 import platform
 from pydantic import ValidationError
+from utils.constants import RSS_MEDIA_BASE_URL
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -65,7 +66,7 @@ async def root():
     }
 
 @router.get("/rss/feed/{rule_id}")
-async def get_feed(rule_id: int):
+async def get_feed(rule_id: int, request: Request):
     """返回规则对应的RSS Feed"""
     session = None
     try:
@@ -78,36 +79,156 @@ async def get_feed(rule_id: int):
             logger.warning(f"规则 {rule_id} 的RSS未启用或不存在")
             raise HTTPException(status_code=404, detail="RSS feed 未启用或不存在")
         
+        # 获取请求URL的基础部分
+        base_url = str(request.base_url).rstrip('/')
+        logger.info(f"请求基础URL: {base_url}")
+        logger.info(f"请求头: {request.headers}")
+        logger.info(f"请求客户端: {request.client}")
+        
+        # 检查是否有环境变量中配置的基础URL
+        if RSS_MEDIA_BASE_URL:
+            logger.info(f"使用环境变量中配置的媒体基础URL: {RSS_MEDIA_BASE_URL}")
+            base_url = RSS_MEDIA_BASE_URL.rstrip('/')
+        else:
+            # 检查是否有X-Forwarded-Host或Host头
+            forwarded_host = request.headers.get("X-Forwarded-Host")
+            host_header = request.headers.get("Host")
+            if forwarded_host:
+                logger.info(f"检测到X-Forwarded-Host: {forwarded_host}")
+                # 构建基于forwarded_host的URL
+                scheme = request.headers.get("X-Forwarded-Proto", "http")
+                base_url = f"{scheme}://{forwarded_host}"
+                logger.info(f"基于X-Forwarded-Host的媒体基础URL: {base_url}")
+            elif host_header and host_header != f"{settings.HOST}:{settings.PORT}":
+                logger.info(f"检测到自定义Host: {host_header}")
+                # 构建基于Host的URL
+                scheme = request.url.scheme
+                base_url = f"{scheme}://{host_header}"
+                logger.info(f"基于Host的媒体基础URL: {base_url}")
+        
+        logger.info(f"最终使用的媒体基础URL: {base_url}")
+        
         # 获取规则对应的条目
         entries = await get_entries(rule_id)
+        logger.info(f"获取到 {len(entries)} 个条目")
         
         # 如果没有条目，返回测试数据
         if not entries:
             logger.warning(f"规则 {rule_id} 没有条目数据，返回测试数据")
-            fg = FeedService.generate_test_feed(rule_id)
+            try:
+                fg = FeedService.generate_test_feed(rule_id, base_url)
+                
+                # 生成 RSS XML
+                rss_xml = fg.rss_str(pretty=True)
+                
+                # 确保rss_xml是字符串类型
+                if isinstance(rss_xml, bytes):
+                    logger.info("将RSS XML从字节转换为字符串")
+                    rss_xml = rss_xml.decode('utf-8')
+                
+                # 记录XML内容的一部分
+                xml_sample = rss_xml[:500] + "..." if len(rss_xml) > 500 else rss_xml
+                logger.info(f"生成的测试RSS XML (前500字符): {xml_sample}")
+                
+                # 检查XML中是否还有硬编码的localhost或127.0.0.1地址
+                if "127.0.0.1" in rss_xml or "localhost" in rss_xml:
+                    logger.warning(f"RSS XML中仍包含硬编码的本地地址")
+                    
+                    # 替换硬编码的地址
+                    rss_xml = rss_xml.replace(f"http://127.0.0.1:{settings.PORT}", base_url)
+                    rss_xml = rss_xml.replace(f"http://localhost:{settings.PORT}", base_url)
+                    rss_xml = rss_xml.replace(f"http://{settings.HOST}:{settings.PORT}", base_url)
+                    
+                    logger.info(f"已替换硬编码的本地地址为: {base_url}")
+                
+                # 确保返回的是字节类型
+                if isinstance(rss_xml, str):
+                    rss_xml = rss_xml.encode('utf-8')
+                
+                return Response(
+                    content=rss_xml,
+                    media_type="application/xml; charset=utf-8"
+                )
+            except Exception as e:
+                logger.error(f"生成测试Feed时出错: {str(e)}", exc_info=True)
+                raise HTTPException(status_code=500, detail=f"生成测试Feed失败: {str(e)}")
         else:
-            # 根据真实数据生成 Feed
-            fg = await FeedService.generate_feed_from_entries(rule_id, entries)
-        
-        # 生成 RSS XML
-        rss_xml = fg.rss_str(pretty=True)
-        return Response(
-            content=rss_xml,
-            media_type="application/xml; charset=utf-8"
-        )
+            # 根据真实数据生成 Feed，传入基础URL
+            try:
+                fg = await FeedService.generate_feed_from_entries(rule_id, entries, base_url)
+                
+                # 生成 RSS XML
+                rss_xml = fg.rss_str(pretty=True)
+                
+                # 确保rss_xml是字符串类型
+                if isinstance(rss_xml, bytes):
+                    logger.info("将RSS XML从字节转换为字符串")
+                    rss_xml = rss_xml.decode('utf-8')
+                
+                # 记录XML内容的一部分
+                xml_sample = rss_xml[:500] + "..." if len(rss_xml) > 500 else rss_xml
+                logger.info(f"生成的RSS XML (前500字符): {xml_sample}")
+                
+                # 检查XML中是否还有硬编码的localhost或127.0.0.1地址
+                if "127.0.0.1" in rss_xml or "localhost" in rss_xml:
+                    logger.warning(f"RSS XML中仍包含硬编码的本地地址")
+                    
+                    # 替换硬编码的地址
+                    rss_xml = rss_xml.replace(f"http://127.0.0.1:{settings.PORT}", base_url)
+                    rss_xml = rss_xml.replace(f"http://localhost:{settings.PORT}", base_url)
+                    rss_xml = rss_xml.replace(f"http://{settings.HOST}:{settings.PORT}", base_url)
+                    
+                    logger.info(f"已替换硬编码的本地地址为: {base_url}")
+                
+                # 确保返回的是字节类型
+                if isinstance(rss_xml, str):
+                    rss_xml = rss_xml.encode('utf-8')
+                
+                return Response(
+                    content=rss_xml,
+                    media_type="application/xml; charset=utf-8"
+                )
+            except Exception as e:
+                logger.error(f"生成真实条目Feed时出错: {str(e)}", exc_info=True)
+                raise HTTPException(status_code=500, detail=f"生成Feed失败: {str(e)}")
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"生成RSS feed时出错: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        logger.error(f"生成RSS feed时出错: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
     finally:
         # 确保会话被关闭
         if session:
             session.close()
 
 @router.get("/media/{rule_id}/{filename}")
-async def get_media(rule_id: int, filename: str):
+async def get_media(rule_id: int, filename: str, request: Request):
     """返回媒体文件"""
+    # 记录请求信息
+    logger.info(f"媒体请求 - 规则ID: {rule_id}, 文件名: {filename}")
+    logger.info(f"请求URL: {request.url}")
+    logger.info(f"请求头: {request.headers}")
+    
+    # 获取基础URL，用于日志记录
+    base_url = str(request.base_url).rstrip('/')
+    if RSS_MEDIA_BASE_URL:
+        logger.info(f"环境变量中配置的媒体基础URL: {RSS_MEDIA_BASE_URL}")
+        base_url = RSS_MEDIA_BASE_URL.rstrip('/')
+    else:
+        # 检查是否有X-Forwarded-Host或Host头
+        forwarded_host = request.headers.get("X-Forwarded-Host")
+        host_header = request.headers.get("Host")
+        if forwarded_host:
+            logger.info(f"检测到X-Forwarded-Host: {forwarded_host}")
+            scheme = request.headers.get("X-Forwarded-Proto", "http")
+            base_url = f"{scheme}://{forwarded_host}"
+        elif host_header and host_header != f"{settings.HOST}:{settings.PORT}":
+            logger.info(f"检测到自定义Host: {host_header}")
+            scheme = request.url.scheme
+            base_url = f"{scheme}://{host_header}"
+    
+    logger.info(f"最终使用的媒体基础URL: {base_url}")
+    
     # 构建规则特定的媒体文件路径
     media_path = Path(settings.get_rule_media_path(rule_id)) / filename
     
@@ -134,7 +255,7 @@ async def get_media(rule_id: int, filename: str):
         else:
             mime_type = "application/octet-stream"
             
-    logger.info(f"发送媒体文件: {filename}, MIME类型: {mime_type}")
+    logger.info(f"发送媒体文件: {filename}, MIME类型: {mime_type}, 大小: {os.path.getsize(media_path)} 字节")
     
     # 返回文件，并设置正确的Content-Type
     return FileResponse(

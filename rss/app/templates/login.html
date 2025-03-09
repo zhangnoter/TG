@@ -127,7 +127,7 @@
                     {% if error %}
                     <div class="alert alert-danger animate__animated animate__shakeX">{{ error }}</div>
                     {% endif %}
-                    <form method="post" action="{{ url_for('login') }}">
+                    <form method="post" action="/login" id="loginForm" class="slide-up">
                         <div class="mb-4">
                             <label for="username" class="form-label">用户名</label>
                             <input type="text" class="form-control" id="username" name="username" required 

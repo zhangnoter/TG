@@ -2,10 +2,13 @@ services:
   telegram-forwarder:
     image: heavrnl/telegramforwarder:latest
     container_name: telegram-forwarder
+    ports:
+      - 9804:8000
     restart: unless-stopped
     volumes:
       - ./db:/app/db
       - ./.env:/app/.env
+      - ./logs:/app/logs
       - ./sessions:/app/sessions
       - ./temp:/app/temp
       - ./ufb/config:/app/ufb/config

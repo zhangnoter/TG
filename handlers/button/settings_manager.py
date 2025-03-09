@@ -3,7 +3,7 @@ from utils.settings import load_ai_models
 from enums.enums import ForwardMode, MessageMode, PreviewMode, AddMode, HandleMode
 from models.models import get_session
 from telethon import Button
-
+from utils.constants import RSS_ENABLED
 AI_MODELS = load_ai_models()
 
 # 规则配置字段定义
@@ -171,6 +171,15 @@ RULE_SETTINGS = {
             False: '关闭'
         },
         'toggle_action': 'toggle_enable_comment_button',
+        'toggle_func': lambda current: not current
+    },
+    'only_rss': {
+        'display_name': '只转发到RSS',
+        'values': {
+            True: '开启',
+            False: '关闭'
+        },
+        'toggle_action': 'toggle_only_rss',
         'toggle_func': lambda current: not current
     }
 }
@@ -366,13 +375,26 @@ async def create_buttons(rule):
             )
         ])
 
-        # 处理模式
-        buttons.append([
-            Button.inline(
-                f"⚙️ 处理模式: {RULE_SETTINGS['handle_mode']['values'][rule.handle_mode]}",
-                f"toggle_handle_mode:{rule.id}"
-            )
-        ])
+        if RSS_ENABLED == 'false':
+            # 处理模式
+            buttons.append([
+                Button.inline(
+                    f"⚙️ 处理模式: {RULE_SETTINGS['handle_mode']['values'][rule.handle_mode]}",
+                    f"toggle_handle_mode:{rule.id}"
+                )
+            ])
+        else:
+            # 处理模式
+            buttons.append([
+                Button.inline(
+                    f"⚙️ 处理模式: {RULE_SETTINGS['handle_mode']['values'][rule.handle_mode]}",
+                    f"toggle_handle_mode:{rule.id}"
+                ),
+                Button.inline(
+                    f"🔔 只转发到RSS: {RULE_SETTINGS['only_rss']['values'][rule.only_rss]}",
+                    f"toggle_only_rss:{rule.id}"
+                )
+            ])
 
 
         buttons.append([

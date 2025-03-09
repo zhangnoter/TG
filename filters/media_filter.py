@@ -202,6 +202,9 @@ class MediaFilter(BaseFilter):
                     context.should_forward = False
                 context.skipped_media.append((event.message, file_size, file_name))
             else:
+                # 如果只转发到RSS，则跳过下载媒体文件，交给RSS处理下载
+                if rule.only_rss:
+                    return True
                 try:
                     # 下载媒体文件
                     file_path = await event.message.download_media(TEMP_DIR)

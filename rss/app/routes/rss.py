@@ -14,7 +14,7 @@ import re
 from utils.common import get_db_ops
 import os
 import aiohttp
-from utils.constants import RSS_HOST, RSS_PORT
+from utils.constants import RSS_HOST, RSS_PORT, RSS_BASE_URL
 
 # 配置日志
 logger = logging.getLogger(__name__)
@@ -100,7 +100,8 @@ async def rss_dashboard(request: Request, user = Depends(get_current_user)):
                 "request": request,
                 "user": user,
                 "rss_configs": configs_list,
-                "rules": rules_list
+                "rules": rules_list,
+                "rss_base_url": RSS_BASE_URL or ""
             }
         )
     finally:

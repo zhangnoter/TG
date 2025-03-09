@@ -26,6 +26,10 @@ class CommentButtonFilter(BaseFilter):
         Returns:
             bool: 是否继续处理
         """
+        if context.rule.only_rss:
+            logger.info('只转发到RSS，跳过评论区按钮过滤器')
+            return True
+        
         # logger.info(f"CommentButtonFilter处理消息前，context: {context.__dict__}")
         try:
             # 如果规则不存在或未启用评论按钮功能，直接跳过

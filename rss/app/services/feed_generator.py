@@ -125,12 +125,18 @@ class FeedService:
         return content
     
     @staticmethod
-    async def generate_feed_from_entries(rule_id: int, entries: List[Entry]) -> FeedGenerator:
+    async def generate_feed_from_entries(rule_id: int, entries: List[Entry], base_url: str = None) -> FeedGenerator:
         """根据真实条目生成Feed"""
         fg = FeedGenerator()
         # 设置编码
         fg.load_extension('base', atom=True)
         rss_config = None
+        
+        # 如果没有提供base_url，使用配置中的默认值
+        if base_url is None:
+            base_url = f"http://{settings.HOST}:{settings.PORT}"
+        
+        logger.info(f"生成Feed - 规则ID: {rule_id}, 条目数量: {len(entries)}, 基础URL: {base_url}")
         
         session = get_session()
         try:
@@ -160,8 +166,7 @@ class FeedService:
             session.close()
         
         # 设置Feed链接
-        base_url = f"http://{settings.HOST}:{settings.PORT}"
-        fg.link(href=f'{base_url}/rss/{rule_id}')
+        fg.link(href=f'{base_url}/rss/feed/{rule_id}')
         
         # 添加条目
         for entry in entries:
@@ -198,13 +203,20 @@ class FeedService:
                 all_media_urls = []  # 存储所有媒体URL用于后续检查
                 
                 if entry.media:
+                    logger.info(f"处理条目 {entry.id} 的媒体文件，数量: {len(entry.media)}")
                     # 处理每个媒体文件
                     for idx, media in enumerate(entry.media):
+                        # 记录原始媒体URL
+                        original_url = media.url if hasattr(media, 'url') else "未知"
+                        logger.info(f"媒体 {idx+1}/{len(entry.media)} - 原始URL: {original_url}")
+                        
                         # 构建规范化的媒体URL - 恢复为包含规则ID的格式
                         media_filename = os.path.basename(media.url.split('/')[-1])
                         media_url = f"/media/{entry.rule_id}/{media_filename}"
                         full_media_url = f"{base_url}{media_url}"
                         all_media_urls.append(full_media_url)
+                        
+                        logger.info(f"媒体 {idx+1}/{len(entry.media)} - 新URL: {full_media_url}")
                         
                         # 处理图片类型
                         if media.type.startswith('image/'):
@@ -309,6 +321,13 @@ class FeedService:
                 content = re.sub(r'<br>\s*<br>', '<br>', content)
                 content = re.sub(r'<p>\s*</p>', '', content)
                 content = re.sub(r'<p><br></p>', '<p></p>', content)
+                
+                # 检查内容中是否包含硬编码的本地地址
+                if "127.0.0.1" in content or "localhost" in content:
+                    logger.warning(f"内容中包含硬编码的本地地址，将替换为: {base_url}")
+                    content = content.replace(f"http://127.0.0.1:{settings.PORT}", base_url)
+                    content = content.replace(f"http://localhost:{settings.PORT}", base_url)
+                    content = content.replace(f"http://{settings.HOST}:{settings.PORT}", base_url)
                 
                 # 添加媒体附件，并确保内容中包含所有媒体
                 if entry.media:
@@ -428,11 +447,12 @@ class FeedService:
             return f"<p>{text}</p>"
     
     @staticmethod
-    def generate_test_feed(rule_id: int) -> FeedGenerator:
+    def generate_test_feed(rule_id: int, base_url: str = None) -> FeedGenerator:
         """生成测试Feed，当没有真实条目数据时使用
         
         Args:
             rule_id: 规则ID
+            base_url: 请求的基础URL，用于生成链接
             
         Returns:
             FeedGenerator: 配置好的测试Feed生成器
@@ -441,13 +461,20 @@ class FeedService:
         # 设置编码
         fg.load_extension('base', atom=True)
         
+        # 如果没有提供base_url，使用配置中的默认值
+        if base_url is None:
+            base_url = f"http://{settings.HOST}:{settings.PORT}"
+        
+        logger.info(f"生成测试Feed - 规则ID: {rule_id}, 基础URL: {base_url}")
+        
         # 设置Feed基本信息
         fg.title(f'TG Forwarder RSS - Rule {rule_id} (测试数据)')
         fg.description(f'TG Forwarder RSS - 规则 {rule_id} 的测试消息')
         
         # 设置Feed链接
-        base_url = f"http://{settings.HOST}:{settings.PORT}"
-        fg.link(href=f'{base_url}/rss/feed/{rule_id}')
+        feed_url = f'{base_url}/rss/feed/{rule_id}'
+        logger.info(f"设置Feed链接: {feed_url}")
+        fg.link(href=feed_url)
         fg.language('zh-CN')
         
         # 处理时区
@@ -459,32 +486,42 @@ class FeedService:
         
         # 添加测试条目
         for i in range(1, 4):  # 生成3个测试条目
-            fe = fg.add_entry()
-            
-            # 设置测试条目ID和标题
-            entry_id = f"test-{rule_id}-{i}"
-            fe.id(entry_id)
-            fe.title(f"测试条目 {i} - 规则 {rule_id}")
-            
-            # 生成内容，包括测试说明
-            current_time = datetime.now(tz)
-            content = f'''
-            <p>这是一个测试条目，由系统自动生成，因为规则 {rule_id} 当前没有任何消息数据。</p>
-            <p>当有消息被转发时，真实的条目将会在这里显示。</p>
-            <hr>
-            <p>此测试条目生成于: {current_time.strftime('%Y-%m-%d %H:%M:%S %Z')}</p>
-            '''
-            
-            # 设置内容和描述
-            fe.content(content, type='html')
-            fe.description(content)
-            
-            # 设置测试条目的发布时间，依次递减，模拟时间顺序
-            dt = datetime.now(tz) - timedelta(hours=i)
-            fe.published(dt)
-            
-            # 设置测试条目的作者和链接
-            fe.author(name="TG Forwarder System")
-            fe.link(href=f"{base_url}/rss/feed/{rule_id}?entry={entry_id}")
+            try:
+                fe = fg.add_entry()
+                
+                # 设置测试条目ID和标题
+                entry_id = f"test-{rule_id}-{i}"
+                fe.id(entry_id)
+                fe.title(f"测试条目 {i} - 规则 {rule_id}")
+                
+                # 生成内容，包括测试说明
+                current_time = datetime.now(tz)
+                content = f'''
+                <p>这是一个测试条目，由系统自动生成，因为规则 {rule_id} 当前没有任何消息数据。</p>
+                <p>当有消息被转发时，真实的条目将会在这里显示。</p>
+                <hr>
+                <p>此测试条目生成于: {current_time.strftime('%Y-%m-%d %H:%M:%S %Z')}</p>
+                '''
+                
+                # 设置内容和描述
+                fe.content(content, type='html')
+                fe.description(content)
+                
+                # 设置测试条目的发布时间，依次递减，模拟时间顺序
+                dt = datetime.now(tz) - timedelta(hours=i)
+                fe.published(dt)
+                
+                # 设置测试条目的作者和链接
+                fe.author(name="TG Forwarder System")
+                
+                # 使用正确的URL格式
+                entry_url = f"{base_url}/rss/feed/{rule_id}?entry={entry_id}"
+                logger.info(f"添加测试条目 {i} 链接: {entry_url}")
+                fe.link(href=entry_url)
+                
+                logger.info(f"成功添加测试条目 {i}")
+            except Exception as e:
+                logger.error(f"添加测试条目 {i} 时出错: {str(e)}")
         
+        logger.info(f"测试Feed生成完成，包含 3 个测试条目")
         return fg 

@@ -116,7 +116,10 @@ class RSSFilter(BaseFilter):
             except Exception as e:
                 logger.error(f"RSS处理时出错: {str(e)}")
         
-        # RSS过滤器不阻止消息继续被处理
+        if rule.only_rss:
+            logger.info('只转发到RSS，RSS过滤器已完成，结束过滤链')
+            return False
+        
         return True
     
     async def _prepare_entry_data(self, client, message, rule, context=None):

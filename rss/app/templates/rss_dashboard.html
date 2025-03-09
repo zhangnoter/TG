@@ -1610,10 +1610,10 @@
         });
 
         function copyFullRssLink(ruleId) {
-            const currentDomain = window.location.origin;
-            const fullLink = `${currentDomain}/rss/feed/${ruleId}`;
+            // 获取完整的RSS链接
+            const rssLink = getFullRssLink(ruleId);
             
-            navigator.clipboard.writeText(fullLink).then(() => {
+            navigator.clipboard.writeText(rssLink).then(() => {
                 const copySuccess = document.getElementById('copySuccess');
                 copySuccess.classList.add('show');
                 
@@ -1625,13 +1625,19 @@
                 alert('复制失败，请手动复制');
             });
         }
+        
+        // 生成完整的RSS链接（使用服务器配置或当前域名）
+        function getFullRssLink(ruleId) {
+            // 使用服务器端提供的配置（如果存在）或当前域名
+            const baseUrl = '{{ rss_base_url }}' || window.location.origin;
+            return `${baseUrl}/rss/feed/${ruleId}`;
+        }
 
         // 页面加载后更新所有RSS链接显示完整URL
         document.addEventListener('DOMContentLoaded', function() {
-            const currentDomain = window.location.origin;
             document.querySelectorAll('[id^="rss-link-"]').forEach(element => {
                 const ruleId = element.id.replace('rss-link-', '');
-                const fullLink = `${currentDomain}/rss/feed/${ruleId}`;
+                const fullLink = getFullRssLink(ruleId);
                 element.textContent = fullLink;
             });
             
