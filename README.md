@@ -198,7 +198,7 @@ UFB_TOKEN=
 ```yaml
 services:
   telegram-forwarder:
-    image: heavrnl/telegramforwarder:rss
+    image: heavrnl/telegramforwarder:latest
     container_name: telegram-forwarder
     ports:
       - 9804:8000
