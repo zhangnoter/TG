@@ -105,8 +105,13 @@ USER_ID=
 # 默认最大媒体文件大小限制（单位：MB）
 DEFAULT_MAX_MEDIA_SIZE=15
 
-# 是否开启调试日志 (true/false)
-DEBUG=false
+# RSS配置
+# 是否启用RSS功能 (true/false)
+RSS_ENABLED=true
+# RSS基础访问URL，留空则使用默认的访问URL（例如：https://rss.example.com）
+RSS_BASE_URL=
+# RSS媒体文件基础URL，留空则使用默认的访问URL（例如：https://media.example.com）
+RSS_MEDIA_BASE_URL=
 
 # 数据库配置
 DATABASE_URL=sqlite:///./db/forward.db
