@@ -2,7 +2,6 @@ import os
 import logging
 from pathlib import Path
 from dotenv import load_dotenv
-from utils.constants import LOG_MAX_SIZE_MB, LOG_BACKUP_COUNT
 
 def setup_logging():
     """
