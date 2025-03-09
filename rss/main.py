@@ -5,6 +5,18 @@ from rss.app.routes.auth import router as auth_router
 from rss.app.routes.rss import router as rss_router
 from rss.app.api.endpoints import feed
 import uvicorn
+import logging
+import sys
+import os
+from pathlib import Path
+
+# 添加项目根目录到系统路径，以便导入utils中的模块
+root_dir = Path(__file__).resolve().parent.parent
+sys.path.append(str(root_dir))
+from utils.log_config import setup_logging
+
+# 设置日志配置
+setup_logging()
 
 app = FastAPI(title="TG Forwarder RSS")
 

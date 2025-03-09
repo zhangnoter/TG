@@ -12,18 +12,22 @@ import logging
 import base64
 import re
 from utils.common import get_db_ops
+import os
+import aiohttp
+from utils.constants import RSS_HOST, RSS_PORT
+
 # 配置日志
-logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/rss")
 templates = Jinja2Templates(directory="rss/app/templates")
 db_ops = None
 
-def init_db_ops():
+async def init_db_ops():
     global db_ops
     if db_ops is None:
-        db_ops = get_db_ops()
+        db_ops = await get_db_ops()
+    return db_ops
 
 @router.get("/dashboard", response_class=HTMLResponse)
 async def rss_dashboard(request: Request, user = Depends(get_current_user)):
@@ -32,7 +36,8 @@ async def rss_dashboard(request: Request, user = Depends(get_current_user)):
     
     db_session = get_session()
     try:
-        init_db_ops()
+        # 初始化数据库操作对象
+        await init_db_ops()
         
         # 获取所有RSS配置
         rss_configs = db_session.query(RSSConfig).options(
@@ -127,7 +132,7 @@ async def rss_config_save(
     logger.info(f"接收到的AI提取提示词字符数: {len(ai_extract_prompt)}")
     
     # 初始化数据库操作
-    init_db_ops()
+    await init_db_ops()
     
     db_session = get_session()
     try:
@@ -199,10 +204,11 @@ async def toggle_rss(rule_id: int, user = Depends(get_current_user)):
     
     db_session = get_session()
     try:
-        init_db_ops()
+        # 初始化数据库操作对象
+        db_ops_instance = await init_db_ops()
         
         # 获取配置
-        config = await db_ops.get_rss_config(db_session, rule_id)
+        config = await db_ops_instance.get_rss_config(db_session, rule_id)
         if not config:
             return RedirectResponse(
                 url="/rss/dashboard?error=配置不存在", 
@@ -210,7 +216,7 @@ async def toggle_rss(rule_id: int, user = Depends(get_current_user)):
             )
         
         # 切换启用/禁用状态
-        await db_ops.update_rss_config(
+        await db_ops_instance.update_rss_config(
             db_session,
             rule_id,
             enable_rss=not config.enable_rss
@@ -230,10 +236,30 @@ async def delete_rss(rule_id: int, user = Depends(get_current_user)):
     
     db_session = get_session()
     try:
-        init_db_ops()
+        # 初始化数据库操作对象
+        db_ops_instance = await init_db_ops()
         
         # 删除配置
-        await db_ops.delete_rss_config(db_session, rule_id)
+        config_deleted = await db_ops_instance.delete_rss_config(db_session, rule_id)
+        
+        if config_deleted:
+            # 删除关联的媒体和数据文件
+            try:
+                logger.info(f"开始删除规则 {rule_id} 的媒体和数据文件")
+                # 构建删除API的URL
+                rss_url = f"http://{RSS_HOST}:{RSS_PORT}/api/rule/{rule_id}"
+                
+                # 调用删除API
+                async with aiohttp.ClientSession() as client_session:
+                    async with client_session.delete(rss_url) as response:
+                        if response.status == 200:
+                            logger.info(f"成功删除规则 {rule_id} 的媒体和数据文件")
+                        else:
+                            response_text = await response.text()
+                            logger.warning(f"删除规则 {rule_id} 的媒体和数据文件失败, 状态码: {response.status}, 响应: {response_text}")
+            except Exception as e:
+                logger.error(f"调用删除媒体文件API时出错: {str(e)}")
+                # 不影响主流程，继续执行
         
         return RedirectResponse(
             url="/rss/dashboard?success=RSS配置已删除", 
@@ -250,10 +276,11 @@ async def get_patterns(config_id: int, user = Depends(get_current_user)):
     
     db_session = get_session()
     try:
-        init_db_ops()
+        # 初始化数据库操作对象
+        db_ops_instance = await init_db_ops()
         
         # 获取所有正则表达式数据
-        config = await db_ops.get_rss_config_with_patterns(db_session, config_id)
+        config = await db_ops_instance.get_rss_config_with_patterns(db_session, config_id)
         if not config:
             return JSONResponse({"success": False, "message": "配置不存在"}, status_code=status.HTTP_404_NOT_FOUND)
         
@@ -290,10 +317,11 @@ async def save_pattern(
     
     db_session = get_session()
     try:
-        init_db_ops()
+        # 初始化数据库操作对象
+        db_ops_instance = await init_db_ops()
         
         # 检查RSS配置是否存在
-        config = await db_ops.get_rss_config(db_session, rss_config_id)
+        config = await db_ops_instance.get_rss_config(db_session, rss_config_id)
         if not config:
             logger.error(f"RSS配置不存在：config_id={rss_config_id}")
             return JSONResponse({"success": False, "message": "RSS配置不存在"})
@@ -304,7 +332,7 @@ async def save_pattern(
         logger.info("创建新模式")
         # 创建新模式
         try:
-            pattern_obj = await db_ops.create_rss_pattern(
+            pattern_obj = await db_ops_instance.create_rss_pattern(
                 db_session,
                 config.id,
                 pattern=pattern,
@@ -330,7 +358,8 @@ async def delete_pattern(pattern_id: int, user = Depends(get_current_user)):
     
     db_session = get_session()
     try:
-        init_db_ops()
+        # 初始化数据库操作对象
+        await init_db_ops()
         
         # 查询模式
         pattern = db_session.query(RSSPattern).filter(RSSPattern.id == pattern_id).first()
@@ -357,7 +386,8 @@ async def delete_all_patterns(config_id: int, user = Depends(get_current_user)):
     
     db_session = get_session()
     try:
-        init_db_ops()
+        # 初始化数据库操作对象
+        await init_db_ops()
         
         # 查询并删除指定配置的所有模式
         patterns = db_session.query(RSSPattern).filter(RSSPattern.rss_config_id == config_id).all()

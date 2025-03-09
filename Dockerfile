@@ -3,6 +3,9 @@ FROM python:3.11-slim
 # 设置工作目录
 WORKDIR /app
 
+# 设置Docker日志配置
+ENV DOCKER_LOG_MAX_SIZE=2m
+ENV DOCKER_LOG_MAX_FILE=2
 
 # 安装系统依赖
 RUN apt-get update && apt-get install -y \

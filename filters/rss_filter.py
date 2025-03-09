@@ -9,7 +9,7 @@ from datetime import datetime
 import shutil
 from filters.base_filter import BaseFilter
 import uuid
-from utils.constants import TEMP_DIR, RSS_MEDIA_DIR, get_rule_media_dir
+from utils.constants import TEMP_DIR, RSS_MEDIA_DIR, get_rule_media_dir,RSS_HOST,RSS_PORT
 from models.models import get_session
 from utils.common import get_db_ops
 
@@ -22,9 +22,8 @@ class RSSFilter(BaseFilter):
     
     def __init__(self):
         super().__init__()
-        self.rss_enabled = os.getenv('RSS_ENABLED', '').lower() == 'true'
-        self.rss_host = os.getenv('RSS_HOST', '127.0.0.1')
-        self.rss_port = int(os.getenv('RSS_PORT', '8000'))
+        self.rss_host = RSS_HOST
+        self.rss_port = RSS_PORT
         self.rss_base_url = f"http://{self.rss_host}:{self.rss_port}"
         
         # 使用统一的路径常量
@@ -50,62 +49,72 @@ class RSSFilter(BaseFilter):
         db_ops = await get_db_ops()
         session = get_session()
         rss_config = await db_ops.get_rss_config(session, context.rule.id)
+        logger.info(f"规则ID: {context.rule.id}")
+        logger.info(f"RSS配置: {rss_config}")
 
+        # 检查RSS配置是否存在
+        if rss_config is None:
+            logger.error(f"找不到规则ID为 {context.rule.id} 的RSS配置，跳过RSS处理")
+            session.close()
+            return False
+        
+        # 检查是否启用RSS
+        if not rss_config.enable_rss:
+            logger.info(f"规则ID为 {context.rule.id} 的RSS未启用，跳过RSS处理")
+            session.close()
+            return False
 
         # 执行RSS规则前，先确保媒体文件已经下载
         # 媒体组消息需要特殊处理
         if context.is_media_group:
             rule = context.rule
-            if rss_config.enable_rss:
-                await self._process_media_group(context, rule)
+            await self._process_media_group(context, rule)
         else:
             # 获取消息和规则
             message = context.event.message
             client = context.client
             rule = context.rule
             
-            # 检查规则是否启用RSS
-            if rss_config.enable_rss:
-                try:
-                    # 准备条目数据
-                    entry_data = await self._prepare_entry_data(client, message, rule, context)
-                    
-                    # 如果准备数据失败，记录错误并尝试生成简单的数据
-                    if entry_data is None:
-                        logger.warning("生成RSS条目数据失败，尝试创建简单数据")
-                        # 尝试从消息中提取最基本的信息
-                        message_text = getattr(message, 'text', '') or getattr(message, 'caption', '') or '文件消息'
-                        entry_data = {
-                            "id": str(message.id),
-                            "title": message_text[:50] + ('...' if len(message_text) > 50 else ''),
-                            "content": message_text,
-                            "published": datetime.now().isoformat(),
-                            "author": "",
-                            "link": "",
-                            "media": []
-                        }
-                        
-                        # 如果消息有媒体，尝试处理
-                        if hasattr(message, 'media') and message.media:
-                            media_info = await self._process_media(client, message, context)
-                            if media_info:
-                                if isinstance(media_info, list):
-                                    entry_data["media"].extend(media_info)
-                                else:
-                                    entry_data["media"].append(media_info)
-                    
-                    # 发送到RSS服务
-                    if entry_data:
-                        success = await self._send_to_rss_service(rule.id, entry_data)
-                        if success:
-                            logger.info(f"成功将消息添加到规则 {rule.id} 的RSS订阅源")
-                        else:
-                            logger.error(f"无法将消息添加到规则 {rule.id} 的RSS订阅源")
-                    else:
-                        logger.error("无法生成有效的RSS条目数据")
+            try:
+                # 准备条目数据
+                entry_data = await self._prepare_entry_data(client, message, rule, context)
                 
-                except Exception as e:
-                    logger.error(f"RSS处理时出错: {str(e)}")
+                # 如果准备数据失败，记录错误并尝试生成简单的数据
+                if entry_data is None:
+                    logger.warning("生成RSS条目数据失败，尝试创建简单数据")
+                    # 尝试从消息中提取最基本的信息
+                    message_text = getattr(message, 'text', '') or getattr(message, 'caption', '') or '文件消息'
+                    entry_data = {
+                        "id": str(message.id),
+                        "title": message_text[:50] + ('...' if len(message_text) > 50 else ''),
+                        "content": message_text,
+                        "published": datetime.now().isoformat(),
+                        "author": "",
+                        "link": "",
+                        "media": []
+                    }
+                    
+                    # 如果消息有媒体，尝试处理
+                    if hasattr(message, 'media') and message.media:
+                        media_info = await self._process_media(client, message, context)
+                        if media_info:
+                            if isinstance(media_info, list):
+                                entry_data["media"].extend(media_info)
+                            else:
+                                entry_data["media"].append(media_info)
+                
+                # 发送到RSS服务
+                if entry_data:
+                    success = await self._send_to_rss_service(rule.id, entry_data)
+                    if success:
+                        logger.info(f"成功将消息添加到规则 {rule.id} 的RSS订阅源")
+                    else:
+                        logger.error(f"无法将消息添加到规则 {rule.id} 的RSS订阅源")
+                else:
+                    logger.error("无法生成有效的RSS条目数据")
+            
+            except Exception as e:
+                logger.error(f"RSS处理时出错: {str(e)}")
         
         # RSS过滤器不阻止消息继续被处理
         return True
@@ -162,57 +171,10 @@ class RSSFilter(BaseFilter):
                 "published": message.date.isoformat(),
                 "author": author,
                 "link": link,
-                "media": media_list
+                "media": media_list,
+                "original_link": context.original_link,
+                "sender_info": context.sender_info,
             }
-            
-            # 添加原始上下文
-            if context:
-                try:
-                    # 简化版的上下文对象，只保留可序列化的基本属性
-                    serializable_context = {
-                        'is_media_group': getattr(context, 'is_media_group', False),
-                        'media_group_id': getattr(context, 'media_group_id', None),
-                        'original_message_text': getattr(context, 'original_message_text', ''),
-                        'message_text': getattr(context, 'message_text', ''),
-                        'check_message_text': getattr(context, 'check_message_text', ''),
-                        'sender_info': getattr(context, 'sender_info', ''),
-                        'time_info': getattr(context, 'time_info', ''),
-                        'original_link': getattr(context, 'original_link', ''),
-                        'comment_link': getattr(context, 'comment_link', None),
-                        'should_forward': getattr(context, 'should_forward', True),
-                        'errors': getattr(context, 'errors', [])
-                    }
-                    
-                    # 添加媒体信息，但确保它是可序列化的
-                    if hasattr(context, 'media_files') and context.media_files:
-                        media_info = []
-                        for media in context.media_files:
-                            if isinstance(media, dict):
-                                media_info.append(media)
-                            elif hasattr(media, '__dict__'):
-                                media_info.append(vars(media))
-                            else:
-                                media_info.append(str(media))
-                        serializable_context['media_files'] = media_info
-                    
-                    # 同样处理跳过的媒体
-                    if hasattr(context, 'skipped_media') and context.skipped_media:
-                        skipped_info = []
-                        for media in context.skipped_media:
-                            if isinstance(media, dict):
-                                skipped_info.append(media)
-                            elif hasattr(media, '__dict__'):
-                                skipped_info.append(vars(media))
-                            else:
-                                skipped_info.append(str(media))
-                        serializable_context['skipped_media'] = skipped_info
-                    
-                    logger.debug(f"添加可序列化的上下文数据到Entry")
-                    entry_data['context'] = serializable_context
-                except Exception as e:
-                    logger.error(f"处理上下文数据时出错: {str(e)}")
-                    # 如果序列化失败，不添加上下文
-                    entry_data['context'] = None
             
             return entry_data
             

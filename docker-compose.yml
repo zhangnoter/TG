@@ -6,9 +6,17 @@ services:
     volumes:
       - ./db:/app/db
       - ./.env:/app/.env
+      - ./logs:/app/logs
       - ./sessions:/app/sessions
       - ./temp:/app/temp
       - ./ufb/config:/app/ufb/config
       - ./config:/app/config
+      - ./rss/data:/app/rss/data
+      - ./rss/media:/app/rss/media
     stdin_open: true
     tty: true
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "${DOCKER_LOG_MAX_SIZE:-2m}"
+        max-file: "${DOCKER_LOG_MAX_FILE:-2}"

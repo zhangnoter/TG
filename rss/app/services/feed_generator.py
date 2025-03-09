@@ -11,6 +11,7 @@ import re
 import json
 from models.models import get_session, RSSConfig
 from utils.constants import DEFAULT_TIMEZONE
+import pytz  
 
 logger = logging.getLogger(__name__)
 
@@ -348,7 +349,12 @@ class FeedService:
                     fe.published(published_dt)
                 except ValueError:
                     # 如果时间格式无效，使用当前时间
-                    fe.published(datetime.now(DEFAULT_TIMEZONE))
+                    try:
+                        tz = pytz.timezone(DEFAULT_TIMEZONE)
+                        fe.published(datetime.now(tz))
+                    except Exception as tz_error:
+                        logger.warning(f"时区设置错误: {str(tz_error)}，使用UTC时区")
+                        fe.published(datetime.now(pytz.UTC))
                 
                 # 设置作者和链接
                 if entry.author:
@@ -444,6 +450,13 @@ class FeedService:
         fg.link(href=f'{base_url}/rss/feed/{rule_id}')
         fg.language('zh-CN')
         
+        # 处理时区
+        try:
+            tz = pytz.timezone(DEFAULT_TIMEZONE)
+        except Exception as tz_error:
+            logger.warning(f"时区设置错误: {str(tz_error)}，使用UTC时区")
+            tz = pytz.UTC
+        
         # 添加测试条目
         for i in range(1, 4):  # 生成3个测试条目
             fe = fg.add_entry()
@@ -454,7 +467,7 @@ class FeedService:
             fe.title(f"测试条目 {i} - 规则 {rule_id}")
             
             # 生成内容，包括测试说明
-            current_time = datetime.now(DEFAULT_TIMEZONE)
+            current_time = datetime.now(tz)
             content = f'''
             <p>这是一个测试条目，由系统自动生成，因为规则 {rule_id} 当前没有任何消息数据。</p>
             <p>当有消息被转发时，真实的条目将会在这里显示。</p>
@@ -467,7 +480,7 @@ class FeedService:
             fe.description(content)
             
             # 设置测试条目的发布时间，依次递减，模拟时间顺序
-            dt = datetime.now(DEFAULT_TIMEZONE) - timedelta(hours=i)
+            dt = datetime.now(tz) - timedelta(hours=i)
             fe.published(dt)
             
             # 设置测试条目的作者和链接

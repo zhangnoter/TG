@@ -243,7 +243,8 @@ async def add_entry(rule_id: int, entry_data: Dict[str, Any] = Body(...)):
             author=entry_data.get("author", ""),
             link=entry_data.get("link", ""),
             media=entry_data.get("media", []),
-            context=entry_data.get("context")
+            original_link=entry_data.get("original_link"),
+            sender_info=entry_data.get("sender_info")
         )
 
         # 使用AI提取内容
@@ -386,15 +387,36 @@ async def add_entry(rule_id: int, entry_data: Dict[str, Any] = Body(...)):
                 
             except Exception as e:
                 logger.error(f"使用正则表达式提取标题和内容时出错: {str(e)}")
-        
-        if entry.context.original_link:
-            if entry.author:
-                entry.content.append(f"\n\n> <a href='{entry.context.original_link}'>来源: {entry.author}</a>")
-            else:
-                entry.content.append(f"\n\n> <a href='{entry.context.original_link}'>来源</a>")
-        if entry.context.sender_info:
-            entry.title = f"{entry.context.sender_info}:{entry.title}"
 
+
+        if entry.sender_info:
+            # 清楚空格和换行
+            entry.sender_info = entry.sender_info.strip()
+            entry.content = entry.sender_info +":" +"\n\n" + entry.content
+
+        # 添加原始链接
+        if entry.original_link:
+            # 清理链接中的前缀、换行符和多余空格
+            clean_link = entry.original_link.replace("原始消息:", "").strip()
+            # 删除链接中的所有换行符
+            clean_link = clean_link.replace("\n", "").replace("\r", "")
+            # 处理链接中的多余空格
+            clean_link = re.sub(r'\s+', ' ', clean_link).strip()
+            
+            # 确保链接是URL格式
+            if clean_link.startswith("http"):
+                if entry.author:
+                    # 使用Markdown格式的链接
+                    entry.content += f'\n\n[来源: {entry.author}]({clean_link})'
+                else:
+                    # 使用Markdown格式的链接
+                    entry.content += f'\n\n[来源]({clean_link})'
+                logger.info(f"已添加清理后的链接(Markdown格式): {clean_link}")
+            else:
+                logger.warning(f"链接格式不正确，跳过添加: {clean_link}")
+        
+        # 处理后的消息
+        logger.info(f"处理后的消息: {entry.content}")
         # 添加条目
         success = await create_entry(entry)
         if success:

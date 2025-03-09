@@ -72,8 +72,18 @@ async def create_entry(entry: Entry) -> bool:
         # 转换Entry对象为字典并添加到列表
         entries.append(entry.dict())
         
+        # 获取规则的RSS配置，获取最大条目数量
+        try:
+            from models.models import get_session, RSSConfig
+            session = get_session()
+            rss_config = session.query(RSSConfig).filter(RSSConfig.rule_id == entry.rule_id).first()
+            max_items = rss_config.max_items if rss_config and hasattr(rss_config, 'max_items') else 50
+            session.close()
+        except Exception as e:
+            logger.warning(f"获取RSS配置失败，使用默认最大条目数量(50): {str(e)}")
+            max_items = 50
+        
         # 限制条目数量，保留最新的N条
-        max_items = settings.MAX_ITEMS_PER_RULE
         if len(entries) > max_items:
             # 按发布时间排序（新的在前）
             entries.sort(key=lambda x: x.get('published', ''), reverse=True)

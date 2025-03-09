@@ -13,27 +13,10 @@ from filters.process import process_forward_rule
 # 加载环境变量
 load_dotenv()
 
-# 获取调试模式设置
-DEBUG = os.getenv('DEBUG', 'false').lower() == 'true'
-
-# 配置日志
-if DEBUG:
-    logging.basicConfig(
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        level=logging.INFO
-    )
-else:
-    # 禁用所有日志输出
-    logging.basicConfig(
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        level=logging.CRITICAL  # 只显示严重错误
-    )
-    # 禁用特定模块的日志
-    logging.getLogger('telethon').setLevel(logging.CRITICAL)
-    logging.getLogger('message_listener').setLevel(logging.CRITICAL)
-    logging.getLogger('handlers.bot_handler').setLevel(logging.CRITICAL)
-    logging.getLogger('handlers.user_handler').setLevel(logging.CRITICAL)
+# 配置日志级别
 logger = logging.getLogger(__name__)
+# 默认使用INFO级别（调试模式）
+logger.setLevel(logging.INFO)
 
 # 添加一个缓存来存储已处理的媒体组
 PROCESSED_GROUPS = set()
