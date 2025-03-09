@@ -9,14 +9,16 @@ import logging
 import sys
 import os
 from pathlib import Path
-
-# 添加项目根目录到系统路径，以便导入utils中的模块
-root_dir = Path(__file__).resolve().parent.parent
-sys.path.append(str(root_dir))
 from utils.log_config import setup_logging
 
-# 设置日志配置
-setup_logging()
+
+
+root_dir = Path(__file__).resolve().parent.parent
+sys.path.append(str(root_dir))
+
+
+# 获取日志记录器
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="TG Forwarder RSS")
 
@@ -34,4 +36,6 @@ def run_server(host: str = "0.0.0.0", port: int = 8000):
 
 # 添加直接运行支持
 if __name__ == "__main__":
+    # 只有在直接运行时才设置日志（而不是被导入时）
+    setup_logging()
     run_server() 

@@ -44,10 +44,6 @@ MEDIA_SIZE_COLS = int(os.getenv('MEDIA_SIZE_COLS', 6))
 MEDIA_EXTENSIONS_ROWS = int(os.getenv('MEDIA_EXTENSIONS_ROWS', 6))
 MEDIA_EXTENSIONS_COLS = int(os.getenv('MEDIA_EXTENSIONS_COLS', 6))
 
-# 日志配置
-LOG_MAX_SIZE_MB = int(os.getenv('LOG_MAX_SIZE_MB', 15))
-LOG_BACKUP_COUNT = int(os.getenv('LOG_BACKUP_COUNT', 2))
-
 # 菜单标题
 AI_SETTINGS_TEXT = """
 当前AI提示词：
