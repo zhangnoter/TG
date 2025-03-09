@@ -32,3 +32,5 @@ handlers/bot_handler copy.py
 /rss/data
 
 /logs
+/logs
+logs/telegram_forwarder.log
