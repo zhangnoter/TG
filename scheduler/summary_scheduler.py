@@ -8,13 +8,13 @@ from dotenv import load_dotenv
 from telethon import TelegramClient
 from ai import get_ai_provider
 import traceback
-
+from utils.constants import DEFAULT_TIMEZONE
 logger = logging.getLogger(__name__)
 
 class SummaryScheduler:
     def __init__(self, user_client: TelegramClient, bot_client: TelegramClient):
         self.tasks = {}  # 存储所有定时任务 {rule_id: task}
-        self.timezone = pytz.timezone(os.getenv('DEFAULT_TIMEZONE', 'Asia/Shanghai'))
+        self.timezone = pytz.timezone(DEFAULT_TIMEZONE)
         self.user_client = user_client
         self.bot_client = bot_client
         # 添加信号量来限制并发请求

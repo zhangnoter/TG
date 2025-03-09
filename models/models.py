@@ -158,7 +158,6 @@ class RSSConfig(Base):
     is_ai_extract = Column(Boolean, default=False)
     # ai提取标题和内容的prompt
     ai_extract_prompt = Column(String, nullable=True)
-    # 是否开启自动markdown转html
     is_auto_markdown_to_html = Column(Boolean, default=False)
     # 是否启用自定义提取标题和内容的正则表达式
     enable_custom_title_pattern = Column(Boolean, default=False)

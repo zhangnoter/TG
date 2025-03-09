@@ -1914,12 +1914,11 @@ async def handle_delete_rule_command(event, command, parts):
                         logger.info(f'删除未使用的源频道: {source_chat.name} (ID: {source_chat.telegram_chat_id})')
                         session.delete(source_chat)
 
-                # 尝试删除RSS服务中的相关数据
+                # 尝试从RSS服务删除规则数据
                 try:
-                    
                     rss_url = f"http://{RSS_HOST}:{RSS_PORT}/api/rule/{rule_id}"
-                    async with aiohttp.ClientSession() as session:
-                        async with session.delete(rss_url) as response:
+                    async with aiohttp.ClientSession() as client_session:
+                        async with client_session.delete(rss_url) as response:
                             if response.status == 200:
                                 logger.info(f"成功删除RSS规则数据: {rule_id}")
                             else:

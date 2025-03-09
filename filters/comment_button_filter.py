@@ -8,7 +8,7 @@ from filters.base_filter import BaseFilter
 from telethon.tl.functions.channels import GetFullChannelRequest
 from utils.common import get_main_module
 from difflib import SequenceMatcher
-
+import traceback
 logger = logging.getLogger(__name__)
 
 class CommentButtonFilter(BaseFilter):
@@ -255,7 +255,6 @@ class CommentButtonFilter(BaseFilter):
                     
             except Exception as e:
                 logger.error(f"添加评论区按钮时出错: {str(e)}")
-                import traceback
                 logger.error(traceback.format_exc())
                 
             return True 

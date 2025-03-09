@@ -1,10 +1,9 @@
 import os
 from dotenv import load_dotenv
-import pytz
 from pathlib import Path
 import logging
 import sys
-
+from utils.constants import RSS_HOST, RSS_PORT,DEFAULT_TIMEZONE,PROJECT_NAME
 # 添加项目根目录到系统路径
 sys.path.append(str(Path(__file__).resolve().parent.parent.parent.parent))
 
@@ -15,11 +14,10 @@ from utils.constants import RSS_MEDIA_DIR, RSS_MEDIA_PATH, RSS_DATA_DIR, get_rul
 load_dotenv()
 
 class Settings:
-    PROJECT_NAME: str = "TG Forwarder RSS"
-    DEFAULT_TIMEZONE = pytz.timezone(os.getenv('DEFAULT_TIMEZONE', 'Asia/Shanghai'))
-    HOST: str = os.getenv("RSS_HOST", "127.0.0.1")
-    PORT: int = int(os.getenv("RSS_PORT", "8000"))
-    
+    PROJECT_NAME: str = PROJECT_NAME
+    HOST: str = RSS_HOST
+    PORT: int = RSS_PORT
+    TIMEZONE: str = DEFAULT_TIMEZONE
     # 数据存储路径
     BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
     DATA_PATH = RSS_DATA_DIR
@@ -28,8 +26,6 @@ class Settings:
     RSS_MEDIA_PATH = RSS_MEDIA_PATH
     MEDIA_PATH = RSS_MEDIA_DIR
     
-    # 每个规则最大保存条目数
-    MAX_ITEMS_PER_RULE: int = int(os.getenv("DEFAULT_RSS_MAX_ITEMS", "20"))
     
     # 获取规则特定路径的方法
     @classmethod

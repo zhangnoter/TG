@@ -168,7 +168,7 @@ class RSSFilter(BaseFilter):
             # 添加原始上下文
             if context:
                 try:
-                    # 创建一个简化版的上下文对象，只保留可序列化的基本属性
+                    # 简化版的上下文对象，只保留可序列化的基本属性
                     serializable_context = {
                         'is_media_group': getattr(context, 'is_media_group', False),
                         'media_group_id': getattr(context, 'media_group_id', None),

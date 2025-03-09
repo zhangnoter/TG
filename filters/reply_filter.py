@@ -3,7 +3,7 @@ import asyncio
 from telethon import Button
 from filters.base_filter import BaseFilter
 from utils.common import get_main_module
-
+import traceback
 logger = logging.getLogger(__name__)
 
 class ReplyFilter(BaseFilter):
@@ -67,6 +67,6 @@ class ReplyFilter(BaseFilter):
             
         except Exception as e:
             logger.error(f"ReplyFilter处理消息时出错: {str(e)}")
-            import traceback
+
             logger.error(traceback.format_exc())
             return True 

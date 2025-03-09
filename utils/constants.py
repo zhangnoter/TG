@@ -12,6 +12,8 @@ TEMP_DIR = os.path.join(BASE_DIR, 'temp')
 RSS_HOST = os.getenv('RSS_HOST', '127.0.0.1')
 RSS_PORT = os.getenv('RSS_PORT', '8000')
 
+DEFAULT_TIMEZONE = os.getenv('DEFAULT_TIMEZONE', 'Asia/Shanghai')
+PROJECT_NAME = os.getenv('PROJECT_NAME', 'TG Forwarder RSS')
 # RSS相关路径配置
 RSS_MEDIA_PATH = os.getenv('RSS_MEDIA_PATH', './rss/media')
 # 转换为绝对路径
@@ -57,6 +59,8 @@ AI_SETTINGS_TEXT = """
 MEDIA_SETTINGS_TEXT = """
 媒体设置：
 """
+
+
 
 # 为每个规则生成特定的路径
 def get_rule_media_dir(rule_id):

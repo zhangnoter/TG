@@ -5,16 +5,12 @@ from ..models.entry import Entry
 from typing import List
 import logging
 import os
-import base64
-import mimetypes
 from pathlib import Path
-import markdown  # 添加markdown包导入
+import markdown
 import re
 import json
-from models.models import get_session, RSSConfig  # 添加 get_session 和 RSSConfig 导入
-from fastapi import HTTPException
-from ..crud.entry import delete_entry
-
+from models.models import get_session, RSSConfig
+from utils.constants import DEFAULT_TIMEZONE
 
 logger = logging.getLogger(__name__)
 
@@ -134,7 +130,7 @@ class FeedService:
         # 设置编码
         fg.load_extension('base', atom=True)
         rss_config = None
-        # 使用直接导入的方式获取数据库配置
+        
         session = get_session()
         try:
             rss_config = session.query(RSSConfig).filter(RSSConfig.rule_id == rule_id).first()
@@ -171,15 +167,32 @@ class FeedService:
             try:
                 fe = fg.add_entry()
                 fe.id(entry.id or entry.message_id)
-                
-                # 提取标题和内容
-                extracted_title, extracted_content = FeedService.extract_telegram_title_and_content(entry.content or "")
-                fe.title(extracted_title)
-                
-                
-                # 将提取的内容转换为HTML，保留原始换行结构
-                content = FeedService.convert_markdown_to_html(extracted_content)
-                
+
+                # 初始化content变量
+                content = None
+
+                if rss_config.is_ai_extract:
+                    fe.title(entry.title)
+                    content = entry.content
+                else:
+                    if rss_config.enable_custom_title_pattern:
+                        fe.title(entry.title)
+                    if rss_config.enable_custom_content_pattern:
+                        content = entry.content
+                    # 自动提取标题和内容
+                    if rss_config.is_auto_title or rss_config.is_auto_content:
+                        extracted_title, extracted_content = FeedService.extract_telegram_title_and_content(entry.content or "")
+                        if rss_config.is_auto_title:
+                            fe.title(extracted_title)
+                        if rss_config.is_auto_content:
+                            content = FeedService.convert_markdown_to_html(extracted_content)
+                        else:
+                            # 如果不自动提取内容，使用原始内容
+                            content = FeedService.convert_markdown_to_html(entry.content or "")
+                    else:
+                        # 如果不是自动提取，直接使用原始内容
+                        content = FeedService.convert_markdown_to_html(entry.content or "")
+
                 # 添加图片 - 针对各种RSS阅读器的优化处理
                 all_media_urls = []  # 存储所有媒体URL用于后续检查
                 
@@ -219,7 +232,7 @@ class FeedService:
                             <div style="margin:15px 0;border:1px solid #eee;padding:10px;border-radius:5px;background-color:#f9f9f9;">
                                 <video controls width="100%" preload="none" poster="" style="width:100%;max-width:600px;display:block;margin:0 auto;">
                                     <source src="{full_media_url}" type="{media.type}">
-                                    您的浏览器不支持HTML5视频播放
+                                    您的阅读器不支持HTML5视频播放/预览
                                 </video>
                                 <p style="text-align:center;margin-top:8px;font-size:14px;">
                                     <a href="{full_media_url}" target="_blank">下载视频: {display_name}</a>
@@ -242,7 +255,7 @@ class FeedService:
                             <div style="margin:15px 0;border:1px solid #eee;padding:10px;border-radius:5px;background-color:#f9f9f9;">
                                 <audio controls style="width:100%;max-width:600px;display:block;margin:0 auto;">
                                     <source src="{full_media_url}" type="{media.type}">
-                                    您的浏览器不支持HTML5音频播放
+                                    您的阅读器不支持HTML5音频播放/预览
                                 </audio>
                                 <p style="text-align:center;margin-top:8px;font-size:14px;">
                                     <a href="{full_media_url}" target="_blank">下载音频: {display_name}</a>
@@ -335,7 +348,7 @@ class FeedService:
                     fe.published(published_dt)
                 except ValueError:
                     # 如果时间格式无效，使用当前时间
-                    fe.published(datetime.now(settings.DEFAULT_TIMEZONE))
+                    fe.published(datetime.now(DEFAULT_TIMEZONE))
                 
                 # 设置作者和链接
                 if entry.author:
@@ -441,7 +454,7 @@ class FeedService:
             fe.title(f"测试条目 {i} - 规则 {rule_id}")
             
             # 生成内容，包括测试说明
-            current_time = datetime.now(settings.DEFAULT_TIMEZONE)
+            current_time = datetime.now(DEFAULT_TIMEZONE)
             content = f'''
             <p>这是一个测试条目，由系统自动生成，因为规则 {rule_id} 当前没有任何消息数据。</p>
             <p>当有消息被转发时，真实的条目将会在这里显示。</p>
@@ -454,7 +467,7 @@ class FeedService:
             fe.description(content)
             
             # 设置测试条目的发布时间，依次递减，模拟时间顺序
-            dt = datetime.now(settings.DEFAULT_TIMEZONE) - timedelta(hours=i)
+            dt = datetime.now(DEFAULT_TIMEZONE) - timedelta(hours=i)
             fe.published(dt)
             
             # 设置测试条目的作者和链接

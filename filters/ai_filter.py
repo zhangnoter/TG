@@ -7,6 +7,7 @@ from ai import get_ai_provider
 import os
 from datetime import datetime, timedelta
 import asyncio
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +97,7 @@ async def _ai_handle(message: str, rule) -> str:
         prompt = rule.ai_prompt
         if prompt:
             # 处理聊天记录提示词
-            import re
+            
             # 匹配源聊天和目标聊天的context格式
             source_context_match = re.search(r'\{source_message_context:(\d+)\}', prompt)
             target_context_match = re.search(r'\{target_message_context:(\d+)\}', prompt)

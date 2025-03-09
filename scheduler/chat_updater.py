@@ -7,13 +7,13 @@ from dotenv import load_dotenv
 from telethon import TelegramClient
 from models.models import get_session, Chat
 import traceback
-
+from utils.constants import DEFAULT_TIMEZONE
 logger = logging.getLogger(__name__)
 
 class ChatUpdater:
     def __init__(self, user_client: TelegramClient):
         self.user_client = user_client
-        self.timezone = pytz.timezone(os.getenv('DEFAULT_TIMEZONE', 'Asia/Shanghai'))
+        self.timezone = pytz.timezone(DEFAULT_TIMEZONE)
         self.task = None
         # 从环境变量获取更新时间，默认凌晨3点
         self.update_time = os.getenv('CHAT_UPDATE_TIME', "03:00")

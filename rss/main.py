@@ -8,9 +8,6 @@ import uvicorn
 
 app = FastAPI(title="TG Forwarder RSS")
 
-# 挂载静态文件
-app.mount("/static", StaticFiles(directory="rss/app/static"), name="static")
-
 # 注册路由
 app.include_router(auth_router)
 app.include_router(rss_router)

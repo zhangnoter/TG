@@ -1,6 +1,6 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends, Body, Request
+from fastapi import APIRouter, HTTPException, Depends, Body, Request
 from fastapi.responses import Response, FileResponse
-from typing import List, Optional, Dict, Any
+from typing import Dict, Any
 import logging
 import os
 import json
@@ -8,11 +8,20 @@ from pathlib import Path
 from ...services.feed_generator import FeedService
 from ...models.entry import Entry
 from ...core.config import settings
-from ...crud.entry import get_entries, create_entry, update_entry, delete_entry
-from ...core.exceptions import ValidationError
+from ...crud.entry import get_entries, create_entry, delete_entry
 import mimetypes
 from models.models import get_session, RSSConfig
 from datetime import datetime
+from ai import get_ai_provider
+from models.models import get_session, ForwardRule
+import re
+from models.models import RSSPattern
+import shutil
+import time
+import os
+import subprocess
+import platform
+from pydantic import ValidationError
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -236,7 +245,156 @@ async def add_entry(rule_id: int, entry_data: Dict[str, Any] = Body(...)):
             media=entry_data.get("media", []),
             context=entry_data.get("context")
         )
+
+        # 使用AI提取内容
+        if rss_config.is_ai_extract:
+            try:
+                rule = session.query(ForwardRule).filter(ForwardRule.id == rule_id).first()
+                provider = await get_ai_provider(rule.ai_model)
+                json_text = await provider.process_message(
+                    message=entry.content or "",
+                    prompt=rss_config.ai_extract_prompt,
+                    model=rule.ai_model
+                )
+                logger.info(f"AI提取内容: {json_text}")
+                
+                # 去除代码块标记，如果有的话
+                if "```" in json_text:
+                    # 移除所有代码块标记，包括语言标识和结束标记
+                    json_text = re.sub(r'```(\w+)?\n', '', json_text)  # 开始标记（带可选的语言标识）
+                    json_text = re.sub(r'\n```', '', json_text)  # 结束标记
+                    json_text = json_text.strip()
+                    logger.info(f"去除代码块标记后的内容: {json_text}")
+                
+                # 解析JSON数据
+                try:
+                    json_data = json.loads(json_text)
+                    logger.info(f"解析后的JSON数据: {json_data}")
+                    
+                    # 提取标题和内容
+                    title = json_data.get("title", "")
+                    content = json_data.get("content", "")
+                    entry.title = title
+                    entry.content = content
+                except json.JSONDecodeError as e:
+                    logger.error(f"JSON解析错误: {str(e)}, 原始文本: {json_text}")
+                    # 尝试其他清理方式
+                    try:
+                        # 匹配大括号之间的JSON内容
+                        json_match = re.search(r'\{.*\}', json_text, re.DOTALL)
+                        if json_match:
+                            clean_json = json_match.group(0)
+                            logger.info(f"尝试提取JSON: {clean_json}")
+                            json_data = json.loads(clean_json)
+                            
+                            # 提取标题和内容
+                            title = json_data.get("title", "")
+                            content = json_data.get("content", "")
+                            entry.title = title
+                            entry.content = content
+                            logger.info(f"成功从文本中提取JSON数据")
+                        else:
+                            logger.error("无法从AI响应中提取有效JSON")
+                    except Exception as inner_e:
+                        logger.error(f"尝试二次解析JSON时出错: {str(inner_e)}")
+                except Exception as e:
+                    logger.error(f"处理JSON数据时出错: {str(e)}")
+            except Exception as e:
+                logger.error(f"AI提取内容时出错: {str(e)}")
+            finally:
+                if session:
+                    session.close()
         
+        logger.info(f"启用自定义标题模式: {rss_config.enable_custom_title_pattern}, 启用自定义内容模式: {rss_config.enable_custom_content_pattern}")
+        if rss_config.enable_custom_title_pattern or rss_config.enable_custom_content_pattern:
+            try:
+                # 获取原始内容
+                original_content = entry.content or ""
+                original_title = entry.title
+                
+                # 如果启用了标题正则表达式提取
+                if rss_config.enable_custom_title_pattern:
+                    # 直接使用会话查询标题模式并按优先级排序
+                    title_patterns = session.query(RSSPattern).filter_by(
+                        rss_config_id=rss_config.id, 
+                        pattern_type='title'
+                    ).order_by(RSSPattern.priority).all()
+                    
+                    logger.info(f"找到 {len(title_patterns)} 个标题模式")
+                    
+                    # 设置初始处理文本
+                    processing_content = original_content
+                    logger.info(f"标题提取初始文本: {processing_content[:100]}..." if len(processing_content) > 100 else processing_content)
+                    
+                    # 依次应用每个模式，每次处理后的结果作为下一个模式的输入
+                    for pattern in title_patterns:
+                        logger.info(f"开始尝试标题模式: {pattern.pattern}")
+                        try:
+                            logger.info(f"对内容应用正则表达式: {pattern.pattern}")
+                            match = re.search(pattern.pattern, processing_content)
+                            if match:
+                                logger.info(f"找到匹配: {match.groups()}")
+                                if match.groups():
+                                    entry.title = match.group(1)
+                                    logger.info(f"使用标题模式 '{pattern.pattern}' 提取到标题: {entry.title}")
+                                else:
+                                    logger.warning(f"模式 '{pattern.pattern}' 匹配成功但没有捕获组")
+                            else:
+                                logger.info(f"模式 '{pattern.pattern}' 未找到匹配")
+                        except Exception as e:
+                            logger.error(f"应用标题正则表达式 '{pattern.pattern}' 时出错: {str(e)}")
+                            logger.exception("详细错误信息:")
+                
+                # 如果启用了内容正则表达式提取
+                if rss_config.enable_custom_content_pattern:
+                    # 直接使用会话查询内容模式并按优先级排序
+                    content_patterns = session.query(RSSPattern).filter_by(
+                        rss_config_id=rss_config.id, 
+                        pattern_type='content'
+                    ).order_by(RSSPattern.priority).all()
+                    
+                    logger.info(f"找到 {len(content_patterns)} 个内容模式")
+                    
+                    # 设置初始处理文本
+                    processing_content = original_content
+                    logger.info(f"内容提取初始文本: {processing_content[:100]}..." if len(processing_content) > 100 else processing_content)
+                    
+                    # 依次应用每个模式，每次处理后的结果作为下一个模式的输入
+                    for i, pattern in enumerate(content_patterns):
+                        try:
+                            logger.info(f"[步骤 {i+1}/{len(content_patterns)}] 对内容应用正则表达式: {pattern.pattern}")
+                            logger.info(f"处理前的内容长度: {len(processing_content)}, 预览: {processing_content[:150]}..." if len(processing_content) > 150 else processing_content)
+                            
+                            match = re.search(pattern.pattern, processing_content)
+                            if match and match.groups():
+                                extracted_content = match.group(1)
+                                processing_content = extracted_content  # 更新处理内容为提取结果
+                                entry.content = extracted_content
+                                
+                                logger.info(f"使用内容模式 '{pattern.pattern}' 提取到内容，长度: {len(extracted_content)}")
+                                logger.info(f"处理后的内容长度: {len(processing_content)}, 预览: {processing_content[:150]}..." if len(processing_content) > 150 else processing_content)
+                            else:
+                                logger.info(f"模式 '{pattern.pattern}' 未找到匹配或没有捕获组，内容保持不变")
+                        except Exception as e:
+                            logger.error(f"应用内容正则表达式 '{pattern.pattern}' 时出错: {str(e)}")
+                
+                
+                # 如果执行到这里但没有提取到标题，则恢复原标题
+                if not entry.title and original_title:
+                    entry.title = original_title
+                    logger.info(f"恢复原标题: {entry.title}")
+                
+            except Exception as e:
+                logger.error(f"使用正则表达式提取标题和内容时出错: {str(e)}")
+        
+        if entry.context.original_link:
+            if entry.author:
+                entry.content.append(f"\n\n> <a href='{entry.context.original_link}'>来源: {entry.author}</a>")
+            else:
+                entry.content.append(f"\n\n> <a href='{entry.context.original_link}'>来源</a>")
+        if entry.context.sender_info:
+            entry.title = f"{entry.context.sender_info}:{entry.title}"
+
         # 添加条目
         success = await create_entry(entry)
         if success:
@@ -280,11 +438,7 @@ async def list_entries(rule_id: int, limit: int = 20, offset: int = 0):
 async def delete_rule_data(rule_id: int):
     """删除规则相关的所有数据和媒体文件 (仅限本地访问)"""
     try:
-        import shutil
-        import time
-        import os
-        import subprocess
-        import platform
+        
         
         # 获取规则的数据目录和媒体目录
         data_path = Path(settings.get_rule_data_path(rule_id))
