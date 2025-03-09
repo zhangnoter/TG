@@ -285,7 +285,7 @@ docker-compose up -d
 
 #### 1. TG 频道的部分消息由于文字嵌入链接，点击会让你确认再跳转，例如 NodeSeek 的官方通知频道  
 
-**频道的原始消息格式**  
+频道的原始消息格式 
 ```markdown
 [**贴子标题**](https://www.nodeseek.com/post-xxxx-1)
 ```  
@@ -295,7 +295,7 @@ docker-compose up -d
 /replace \[(?:\[([^\]]+)\])?([^\]]+)\]\(([^)]+)\) [\1]\2\n(\3)
 /replace \[\]\s*
 ```  
-**最终所有转发的消息都会变成以下格式**，这样直接点击链接就无需确认跳转：  
+最终所有转发的消息都会变成以下格式，这样直接点击链接就无需确认跳转：  
 ```plaintext
 贴子标题
 (https://www.nodeseek.com/post-xxxx-1)
