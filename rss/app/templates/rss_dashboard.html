@@ -1123,9 +1123,9 @@
             document.getElementById('rule_description').value = '';
             document.getElementById('language').value = 'zh-CN';
             document.getElementById('max_items').value = 50;
-            document.getElementById('is_auto_title').checked = true;
-            document.getElementById('is_auto_content').checked = true;
-            document.getElementById('is_auto_markdown_to_html').checked = true;
+            document.getElementById('is_auto_title').checked = false;
+            document.getElementById('is_auto_content').checked = false;
+            document.getElementById('is_auto_markdown_to_html').checked = false;
             document.getElementById('is_ai_extract').checked = false;
             document.getElementById('ai_extract_prompt').value = '请按照以下要求从消息文本中提取标题和正文内容：\n1. 若文本中已有明确标题，则直接提取；否则根据正文生成合适标题；\n2. 若原文为 Markdown 格式，请先转换为 HTML 格式后再提取；\n3. 最终输出必须为标准 JSON 格式，如下：\n{ "title": "提取或生成的标题", "content": "提取后的正文内容（HTML 格式），要去掉标题" }\n请仅返回上述 JSON 格式，不得包含其他任何内容或代码块。以下是消息内容：';
             document.getElementById('enable_custom_title_pattern').checked = false;

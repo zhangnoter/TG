@@ -13,10 +13,8 @@ from filters.process import process_forward_rule
 # 加载环境变量
 load_dotenv()
 
-# 配置日志级别
+# 获取logger
 logger = logging.getLogger(__name__)
-# 默认使用INFO级别（调试模式）
-logger.setLevel(logging.INFO)
 
 # 添加一个缓存来存储已处理的媒体组
 PROCESSED_GROUPS = set()

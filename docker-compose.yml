@@ -13,10 +13,13 @@ services:
       - ./config:/app/config
       - ./rss/data:/app/rss/data
       - ./rss/media:/app/rss/media
+    logging:
+      driver: "local"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        compress: "true"
+        path: "/app/logs/docker-logs"
     stdin_open: true
     tty: true
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "${DOCKER_LOG_MAX_SIZE:-2m}"
-        max-file: "${DOCKER_LOG_MAX_FILE:-2}"
+

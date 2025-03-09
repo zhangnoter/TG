@@ -9,7 +9,6 @@ import websockets
 from typing import Optional, Dict, Any, Callable
 import logging
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 async def get_main_module():
