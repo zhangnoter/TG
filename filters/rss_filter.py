@@ -86,7 +86,7 @@ class RSSFilter(BaseFilter):
                     message_text = getattr(message, 'text', '') or getattr(message, 'caption', '') or '文件消息'
                     entry_data = {
                         "id": str(message.id),
-                        "title": message_text[:50] + ('...' if len(message_text) > 50 else ''),
+                        "title": message_text[:20] + ('...' if len(message_text) > 20 else ''),
                         "content": message_text,
                         "published": datetime.now().isoformat(),
                         "author": "",
@@ -194,7 +194,7 @@ class RSSFilter(BaseFilter):
         elif hasattr(message, 'caption') and message.caption:
             text = message.caption
             
-        title = text.split('\n')[0][:20].strip() if text else ""
+        title = text.split('\n')[0][:20].strip() + "..." if text and len(text.split('\n')[0]) >= 20 else text.split('\n')[0].strip() if text else ""
         
         # 如果标题为空，使用默认标题
         if not title:

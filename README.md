@@ -35,6 +35,14 @@
     - [AI处理能力](#ai-处理)
     - [定时总结功能](#定时总结)
   - [📰 RSS订阅](#rss订阅)
+    - [启用RSS功能](#启用rss功能)
+    - [访问RSS仪表盘](#访问rss仪表盘) 
+    - [RSS配置管理](#rss配置管理)
+    - [新建/编辑配置界面说明](#新建编辑配置界面说明)
+    - [特殊说明](#特殊说明)
+    - [特殊设置项](#特殊设置项)
+    - [Nginx配置](#nginx配置)
+    - [注意事项](#注意事项)
   
 - [🎯 特殊功能](#-特殊功能)
   - [🔗 链接转发功能](#-链接转发功能)
@@ -180,21 +188,33 @@ UFB_TOKEN=
 
 ```
 
+#### docker-compose.yml 文件
 新建 `docker-compose.yml` 文件，内容如下：
 
 ```yaml
 services:
   telegram-forwarder:
-    image: heavrnl/telegramforwarder:latest
+    image: heavrnl/telegramforwarder:rss
     container_name: telegram-forwarder
+    ports:
+      - 9804:8000
     restart: unless-stopped
     volumes:
       - ./db:/app/db
       - ./.env:/app/.env
+      - ./logs:/app/logs
       - ./sessions:/app/sessions
       - ./temp:/app/temp
       - ./ufb/config:/app/ufb/config
       - ./config:/app/config
+      - ./rss/data:/app/rss/data
+      - ./rss/media:/app/rss/media
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        compress: "true"
     stdin_open: true
     tty: true
 ```
@@ -422,10 +442,10 @@ AI处理提示词中可以使用以下格式：
    ```bash
    docker-compose restart
    ```
-
+> 注意：旧版本用户需要用新的docker-compose.yml文件重新部署：[docker-compose.yml](./docker-compose.yml)
 ### 访问RSS仪表盘
 
-1. 浏览器访问 `http://你的服务器地址:8000/`
+1. 浏览器访问 `http://你的服务器地址:9804/`
 
 ### RSS配置管理
 
@@ -446,41 +466,41 @@ AI处理提示词中可以使用以下格式：
 |订阅源描述| 设置订阅源描述 |
 |语言| 占位，暂无特殊功能 |
 |最大条目数| 设置RSS订阅源的最大条目数，默认50，对于媒体比较多的聊天源，请根据硬盘实际硬盘大小设置 |
-|使用 AI 提取标题和内容| 启用后，将使用AI服务自动分析消息，提取标题和内容和整理格式，ai模型请在bot中设置，不受bot中“是否开启 AI 处理”选项影响，此选项开启后和下面所有配置互斥 |
+|使用 AI 提取标题和内容| 启用后，将使用AI服务自动分析消息，提取标题和内容和整理格式，AI模型请在bot中设置，不受bot中“是否开启 AI 处理”选项影响，此选项开启后和下面所有配置互斥 |
 |AI 提取提示词| 设置AI提取标题和内容的提示词，如需自定义，请务必让AI返回以下json格式内容：`{ "title": "标题", "content": "正文内容" }` |
 |自动提取标题| 启用后，由预设好的正则表达式自动提取标题 |
 |自动提取内容| 启用后，由预设好的正则表达式自动提取内容 |
 |自动将 Markdown 转换为 HTML| 启用后，将使用相关库自动将Telegram中的Markdown格式转换为标准HTML，如需自行处理，请在bot中使用 `/replace` 自行替换 |
 |启用自定义标题提取正则表达式| 启用后，将使用自定义正则表达式提取标题 |
 |启用自定义内容提取正则表达式| 启用后，将使用自定义正则表达式提取内容 |
-|优先级| 设置当前正则表达式的优先级，数字越低优先级越高，越先执行，消息会按照优先级从高到低遍历所有正则表达式提取目标文本 |
+|优先级| 设置正则表达式的执行顺序，数字越小优先级越高。系统会按优先级从高到低依次执行正则表达式，**前一个正则表达式提取的结果会作为下一个的输入**，直到完成所有提取 |
 |正则表达式测试| 可用于测试当前正则表达式是否匹配目标文本 |
 
+### 特殊说明
+- 若只开启自动提取标题，而不开启自动提取内容，则内容会是包含提取了标题的完整的Telegram消息内容
+- 若内容处理选项和正则表达式配置都为空，标题会自动匹配消息的前20个字符，内容则为原始消息
 
 
-### 高级内容处理
+### 特殊设置项
+若在.env中开启`RSS_ENABLED=true`，则会在bot的设置中会新增一个`只转发到RSS`的选项，启用后，消息经过各种处理后会在RSS过滤器处理后中断，不会执行转发/编辑
 
-RSS功能提供多种内容处理方式：
-
-1. **AI内容处理**：使用配置的AI服务自动分析消息，提取最佳标题和内容
-2. **自动内容提取**：基于消息格式自动识别标题和内容
-3. **正则表达式提取**：使用自定义正则表达式精确提取标题和内容
-4. **Markdown转HTML**：自动将Telegram中的Markdown格式转换为标准HTML
-
-### 自定义RSS访问地址
-
-如需使用自定义域名（如 `https://tgrss.example.com`）访问RSS：
-
-1. 配置反向代理，将域名请求转发到RSS服务
-2. 在 `.env` 文件中设置 `RSS_BASE_URL=https://tgrss.example.com`
-
-这样生成的RSS链接将使用设置的基础URL，便于RSS阅读器订阅。
+### Nginx配置
+```
+ location / {
+        proxy_pass http://127.0.0.1:9804;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+    }
+```
 
 ### 注意事项
 
-- RSS服务将创建独立的数据库和媒体文件存储区域
-- 媒体文件会在本地保存一份副本，以确保RSS阅读器能正常访问
-- 默认情况下，RSS访问不需要身份验证，如有安全需求，可通过反向代理添加访问控制
+- 没有找回密码功能，请妥善保管你的账号密码
 
 ## 🎯 特殊功能
 

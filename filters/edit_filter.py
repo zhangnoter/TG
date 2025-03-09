@@ -26,9 +26,7 @@ class EditFilter(BaseFilter):
         """
         rule = context.rule
         event = context.event
-        if rule.only_rss:
-            logger.info('只转发到RSS，跳过编辑过滤器')
-            return True
+
         
 
         logger.debug(f"开始处理编辑过滤器，消息ID: {event.message.id}, 聊天ID: {event.chat_id}")

@@ -368,6 +368,8 @@ async def add_entry(rule_id: int, entry_data: Dict[str, Any] = Body(...)):
             sender_info=entry_data.get("sender_info")
         )
 
+        
+
         # 使用AI提取内容
         if rss_config.is_ai_extract:
             try:
@@ -538,6 +540,10 @@ async def add_entry(rule_id: int, entry_data: Dict[str, Any] = Body(...)):
         
         # 处理后的消息
         logger.info(f"处理后的消息: {entry.content}")
+
+       
+
+        
         # 添加条目
         success = await create_entry(entry)
         if success:

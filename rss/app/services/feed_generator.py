@@ -174,8 +174,10 @@ class FeedService:
                 fe = fg.add_entry()
                 fe.id(entry.id or entry.message_id)
 
+
                 # 初始化content变量
                 content = None
+                fe.title(entry.title)
 
                 if rss_config.is_ai_extract:
                     fe.title(entry.title)

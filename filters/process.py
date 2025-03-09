@@ -56,13 +56,13 @@ async def process_forward_rule(client, event, chat_id, rule):
     
     # 添加评论区按钮过滤器
     filter_chain.add_filter(CommentButtonFilter())
-    
-    # 添加编辑过滤器（编辑原始消息）
-    filter_chain.add_filter(EditFilter())
 
     # 添加RSS过滤器
     filter_chain.add_filter(RSSFilter())
     
+    # 添加编辑过滤器（编辑原始消息）
+    filter_chain.add_filter(EditFilter())
+
     # 添加发送过滤器（发送消息）
     filter_chain.add_filter(SenderFilter())
     
