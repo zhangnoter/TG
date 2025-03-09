@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from utils.common import *
 from utils.media import *
 from datetime import datetime, timedelta
+from version import WELCOME_TEXT
 
 logger = logging.getLogger(__name__)
 
@@ -188,21 +189,11 @@ async def send_welcome_message(client):
     """发送欢迎消息"""
     main = await get_main_module()
     user_id = await get_user_id()
-    welcome_text = (
-        "<b>🎉 欢迎使用 TelegramForwarder !</b>\n\n"
-        
-        "如果您觉得这个项目对您有帮助，欢迎通过以下方式支持我:\n\n"
-        "<blockquote>⭐ <b>给项目点个小小的 Star:</b> <a href='https://github.com/Heavrnl/TelegramForwarder'>TelegramForwarder</a>\n"
-        "☕ <b>请我喝杯咖啡:</b> <a href='https://ko-fi.com/0heavrnl'>Ko-fi</a></blockquote>\n\n"
-        "当前版本: v" + VERSION + "\n"
-        "更新日志: /changelog\n\n"
-        "感谢您的支持!"
-    )
 
     # 发送新消息
     await client.send_message(
         user_id,
-        welcome_text,
+        WELCOME_TEXT,
         parse_mode='html',
         link_preview=True
     )
