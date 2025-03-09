@@ -559,6 +559,11 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link" href="#" data-bs-toggle="modal" data-bs-target="#changePasswordModal">
+                            <i class="bi bi-key"></i> 修改密码
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link" href="/logout">退出登录</a>
                     </li>
                 </ul>
@@ -999,6 +1004,40 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
                     <a href="#" id="deleteConfirm" class="btn btn-danger">删除</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 修改密码模态框 -->
+    <div class="modal fade" id="changePasswordModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">修改密码</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="changePasswordForm" method="post" action="/rss/change_password">
+                        <div class="mb-3">
+                            <label for="current_password" class="form-label">当前密码</label>
+                            <input type="password" class="form-control" id="current_password" name="current_password" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="new_password" class="form-label">新密码</label>
+                            <input type="password" class="form-control" id="new_password" name="new_password" required>
+                            <div class="form-text">密码长度至少为8个字符</div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="confirm_password" class="form-label">确认新密码</label>
+                            <input type="password" class="form-control" id="confirm_password" name="confirm_password" required>
+                        </div>
+                        <div id="password_error" class="alert alert-danger" style="display: none;"></div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" onclick="changePassword()">保存</button>
                 </div>
             </div>
         </div>
@@ -1661,6 +1700,82 @@
             } else {
                 alert('请先选择一个规则');
             }
+        }
+
+        // 修改密码
+        function changePassword() {
+            const currentPassword = document.getElementById('current_password').value;
+            const newPassword = document.getElementById('new_password').value;
+            const confirmPassword = document.getElementById('confirm_password').value;
+            const errorElement = document.getElementById('password_error');
+            
+            // 清除之前的错误信息
+            errorElement.style.display = 'none';
+            
+            // 基本验证
+            if (!currentPassword) {
+                errorElement.textContent = '请输入当前密码';
+                errorElement.style.display = 'block';
+                return;
+            }
+            
+            if (!newPassword) {
+                errorElement.textContent = '请输入新密码';
+                errorElement.style.display = 'block';
+                return;
+            }
+            
+            if (newPassword.length < 8) {
+                errorElement.textContent = '新密码长度必须至少为8个字符';
+                errorElement.style.display = 'block';
+                return;
+            }
+            
+            if (newPassword !== confirmPassword) {
+                errorElement.textContent = '新密码和确认密码不一致';
+                errorElement.style.display = 'block';
+                return;
+            }
+            
+            // 提交表单数据
+            const formData = new FormData();
+            formData.append('current_password', currentPassword);
+            formData.append('new_password', newPassword);
+            formData.append('confirm_password', confirmPassword);
+            
+            fetch('/rss/change_password', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // 显示成功消息并关闭模态框
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('changePasswordModal'));
+                    modal.hide();
+                    
+                    // 清空表单
+                    document.getElementById('changePasswordForm').reset();
+                    
+                    // 显示全局成功消息（重用复制成功的提示框）
+                    const successElement = document.getElementById('copySuccess');
+                    successElement.textContent = '密码修改成功';
+                    successElement.classList.add('show');
+                    
+                    setTimeout(() => {
+                        successElement.classList.remove('show');
+                    }, 2000);
+                } else {
+                    // 显示错误消息
+                    errorElement.textContent = data.message || '修改密码失败';
+                    errorElement.style.display = 'block';
+                }
+            })
+            .catch(error => {
+                console.error('修改密码失败:', error);
+                errorElement.textContent = '修改密码请求失败，请重试';
+                errorElement.style.display = 'block';
+            });
         }
     </script>
 </body>

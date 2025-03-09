@@ -127,7 +127,7 @@ async def rss_config_save(
     enable_custom_content_pattern: bool = Form(False)
 ):
     if not user:
-        return JSONResponse(content={"success": False, "message": "未授权"})
+        return JSONResponse(content={"success": False, "message": "未登录"})
     
     # 记录接收到的AI提取提示词内容，帮助调试
     logger.info(f"接收到的AI提取提示词字符数: {len(ai_extract_prompt)}")
@@ -273,7 +273,7 @@ async def delete_rss(rule_id: int, user = Depends(get_current_user)):
 async def get_patterns(config_id: int, user = Depends(get_current_user)):
     """获取指定RSS配置的所有模式"""
     if not user:
-        return JSONResponse({"success": False, "message": "未授权"}, status_code=status.HTTP_401_UNAUTHORIZED)
+        return JSONResponse({"success": False, "message": "未登录"}, status_code=status.HTTP_401_UNAUTHORIZED)
     
     db_session = get_session()
     try:
@@ -313,8 +313,8 @@ async def save_pattern(
     logger.info(f"开始保存模式，参数：config_id={rss_config_id}, pattern={pattern}, type={pattern_type}, priority={priority}")
     
     if not user:
-        logger.warning("未授权的访问尝试")
-        return JSONResponse({"success": False, "message": "未授权"}, status_code=status.HTTP_401_UNAUTHORIZED)
+        logger.warning("未登录的访问尝试")
+        return JSONResponse({"success": False, "message": "未登录"}, status_code=status.HTTP_401_UNAUTHORIZED)
     
     db_session = get_session()
     try:
@@ -355,7 +355,7 @@ async def save_pattern(
 async def delete_pattern(pattern_id: int, user = Depends(get_current_user)):
     """删除模式"""
     if not user:
-        return JSONResponse({"success": False, "message": "未授权"}, status_code=status.HTTP_401_UNAUTHORIZED)
+        return JSONResponse({"success": False, "message": "未登录"}, status_code=status.HTTP_401_UNAUTHORIZED)
     
     db_session = get_session()
     try:
@@ -383,7 +383,7 @@ async def delete_pattern(pattern_id: int, user = Depends(get_current_user)):
 async def delete_all_patterns(config_id: int, user = Depends(get_current_user)):
     """删除配置的所有模式，通常在更新前调用以便重建模式列表"""
     if not user:
-        return JSONResponse({"success": False, "message": "未授权"}, status_code=status.HTTP_401_UNAUTHORIZED)
+        return JSONResponse({"success": False, "message": "未登录"}, status_code=status.HTTP_401_UNAUTHORIZED)
     
     db_session = get_session()
     try:
@@ -414,7 +414,7 @@ async def test_regex(user = Depends(get_current_user),
                     pattern_type: str = Form(...)):
     """测试正则表达式匹配结果"""
     if not user:
-        return JSONResponse({"success": False, "message": "未授权"}, status_code=status.HTTP_401_UNAUTHORIZED)
+        return JSONResponse({"success": False, "message": "未登录"}, status_code=status.HTTP_401_UNAUTHORIZED)
     
     try:
         

@@ -481,20 +481,15 @@ class FeedService:
                 if rss_config.rule_title:
                     fg.title(rss_config.rule_title)
                 else:
-                    fg.title(f'TG Forwarder RSS - Rule {rule_id} (测试数据)')
+                    fg.title(f'')
     
                 if rss_config.rule_description:
                     fg.description(rss_config.rule_description)
                 else:
-                    fg.description(f'TG Forwarder RSS - 规则 {rule_id} 的测试消息')
+                    fg.description(f' ')
                     
                 # 设置语言
                 fg.language(rss_config.language or 'zh-CN')
-            else:
-                # 默认标题和描述
-                fg.title(f'TG Forwarder RSS - Rule {rule_id} (测试数据)')
-                fg.description(f'TG Forwarder RSS - 规则 {rule_id} 的测试消息')
-                fg.language('zh-CN')
         finally:
             # 确保会话被关闭
             session.close()
@@ -511,42 +506,42 @@ class FeedService:
             logger.warning(f"时区设置错误: {str(tz_error)}，使用UTC时区")
             tz = pytz.UTC
         
-        # 只添加一条测试条目
-        try:
-            fe = fg.add_entry()
+        # # 只添加一条测试条目
+        # try:
+        #     fe = fg.add_entry()
             
-            # 设置测试条目ID和标题
-            entry_id = f"test-{rule_id}-1"
-            fe.id(entry_id)
-            fe.title(f"测试条目 - 规则 {rule_id}")
+        #     # 设置测试条目ID和标题
+        #     entry_id = f"test-{rule_id}-1"
+        #     fe.id(entry_id)
+        #     fe.title(f"测试条目 - 规则 {rule_id}")
             
-            # 生成内容，包括测试说明
-            current_time = datetime.now(tz)
-            content = f'''
-            <p>这是一个测试条目，由系统自动生成，因为规则 {rule_id} 当前没有任何消息数据。</p>
-            <p>当有消息被转发时，真实的条目将会在这里显示。</p>
-            <hr>
-            <p>此测试条目生成于: {current_time.strftime('%Y-%m-%d %H:%M:%S %Z')}</p>
-            '''
+        #     # 生成内容，包括测试说明
+        #     current_time = datetime.now(tz)
+        #     content = f'''
+        #     <p>这是一个测试条目，由系统自动生成，因为规则 {rule_id} 当前没有任何消息数据。</p>
+        #     <p>当有消息被转发时，真实的条目将会在这里显示。</p>
+        #     <hr>
+        #     <p>此测试条目生成于: {current_time.strftime('%Y-%m-%d %H:%M:%S %Z')}</p>
+        #     '''
             
-            # 设置内容和描述
-            fe.content(content, type='html')
-            fe.description(content)
+        #     # 设置内容和描述
+        #     fe.content(content, type='html')
+        #     fe.description(content)
             
-            # 设置测试条目的发布时间
-            fe.published(datetime.now(tz))
+        #     # 设置测试条目的发布时间
+        #     fe.published(datetime.now(tz))
             
-            # 设置测试条目的作者和链接
-            fe.author(name="TG Forwarder System")
+        #     # 设置测试条目的作者和链接
+        #     fe.author(name="TG Forwarder System")
             
-            # 使用正确的URL格式
-            entry_url = f"{base_url}/rss/feed/{rule_id}?entry={entry_id}"
-            logger.info(f"添加测试条目链接: {entry_url}")
-            fe.link(href=entry_url)
+        #     # 使用正确的URL格式
+        #     entry_url = f"{base_url}/rss/feed/{rule_id}?entry={entry_id}"
+        #     logger.info(f"添加测试条目链接: {entry_url}")
+        #     fe.link(href=entry_url)
             
-            logger.info(f"成功添加测试条目")
-        except Exception as e:
-            logger.error(f"添加测试条目时出错: {str(e)}")
+        #     logger.info(f"成功添加测试条目")
+        # except Exception as e:
+        #     logger.error(f"添加测试条目时出错: {str(e)}")
         
-        logger.info(f"测试Feed生成完成，包含1个测试条目")
+        # logger.info(f"测试Feed生成完成，包含1个测试条目")
         return fg

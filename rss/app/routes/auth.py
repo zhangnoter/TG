@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from models.models import get_session, User, RSSConfig
 from models.db_operations import DBOperations
@@ -172,4 +172,54 @@ async def index(request: Request, user = Depends(get_current_user)):
         return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
     
     # 直接重定向到 RSS 仪表盘
-    return RedirectResponse(url="/rss/dashboard", status_code=status.HTTP_302_FOUND) 
+    return RedirectResponse(url="/rss/dashboard", status_code=status.HTTP_302_FOUND)
+
+@router.post("/rss/change_password")
+async def change_password(
+    request: Request,
+    user = Depends(get_current_user),
+):
+    """修改用户密码"""
+    if not user:
+        return JSONResponse(
+            {"success": False, "message": "未登录或会话已过期"}, 
+            status_code=status.HTTP_401_UNAUTHORIZED
+        )
+    
+    try:
+        form_data = await request.form()
+        current_password = form_data.get("current_password")
+        new_password = form_data.get("new_password")
+        confirm_password = form_data.get("confirm_password")
+        
+        # 验证表单数据
+        if not current_password:
+            return JSONResponse({"success": False, "message": "请输入当前密码"})
+        
+        if not new_password:
+            return JSONResponse({"success": False, "message": "请输入新密码"})
+        
+        if len(new_password) < 8:
+            return JSONResponse({"success": False, "message": "新密码长度必须至少为8个字符"})
+        
+        if new_password != confirm_password:
+            return JSONResponse({"success": False, "message": "新密码和确认密码不一致"})
+        
+        # 验证当前密码
+        db_session = get_session()
+        try:
+            init_db_ops()
+            is_valid = await db_ops.verify_user(db_session, user.username, current_password)
+            if not is_valid:
+                return JSONResponse({"success": False, "message": "当前密码不正确"})
+            
+            # 更新密码
+            success = await db_ops.update_user_password(db_session, user.username, new_password)
+            if not success:
+                return JSONResponse({"success": False, "message": "修改密码失败，请重试"})
+            
+            return JSONResponse({"success": True, "message": "密码修改成功"})
+        finally:
+            db_session.close()
+    except Exception as e:
+        return JSONResponse({"success": False, "message": f"修改密码出错: {str(e)}"}) 
