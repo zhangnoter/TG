@@ -37,9 +37,9 @@
   - [📰 RSS订阅](#-RSS订阅)
     - [启用RSS功能](#启用rss功能)
     - [访问RSS仪表盘](#访问rss仪表盘) 
+    - [Nginx配置](#nginx配置)
     - [RSS配置说明](#rss配置管理)
     - [特殊设置项](#特殊设置项)
-    - [Nginx配置](#nginx配置)
     - [注意事项](#注意事项)
   
 - [🎯 特殊功能](#-特殊功能)
@@ -468,6 +468,20 @@ AI处理提示词中可以使用以下格式：
 
 浏览器访问 `http://你的服务器地址:9804/`
 
+### Nginx配置
+```
+ location / {
+        proxy_pass http://127.0.0.1:9804;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+    }
+```
+
 ### RSS配置管理
 
 相关界面
@@ -505,19 +519,6 @@ AI处理提示词中可以使用以下格式：
 ### 特殊设置项
 若在.env中开启`RSS_ENABLED=true`，则会在bot的设置中会新增一个`只转发到RSS`的选项，启用后，消息经过各种处理后会在RSS过滤器处理后中断，不会执行转发/编辑
 
-### Nginx配置
-```
- location / {
-        proxy_pass http://127.0.0.1:9804;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Forwarded-Host $host;
-    }
-```
 
 ### 注意事项
 
