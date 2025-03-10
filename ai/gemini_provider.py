@@ -87,9 +87,7 @@ class GeminiProvider(BaseAIProvider):
             if self.provider:
                 return await self.provider.process_message(message, prompt, **kwargs)
                 
-            # 原来的Gemini API处理代码
-            chat = self.model.start_chat()
-            
+            # 使用Gemini API的流式处理
             logger.info(f"实际使用的Gemini模型: {self.model_name}")
 
             # 组合提示词和消息
@@ -98,8 +96,19 @@ class GeminiProvider(BaseAIProvider):
             else:
                 full_message = message
             
-            response = chat.send_message(full_message)
-            return response.text
+            # 使用流式输出
+            response_stream = self.model.generate_content(
+                contents=[full_message],  # contents参数是一个列表
+                stream=True
+            )
+            
+            # 收集完整响应
+            full_response = ""
+            for chunk in response_stream:
+                if hasattr(chunk, 'text'):
+                    full_response += chunk.text
+            
+            return full_response
             
         except Exception as e:
             logger.error(f"Gemini处理消息时出错: {str(e)}")

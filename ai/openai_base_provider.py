@@ -55,13 +55,39 @@ class OpenAIBaseProvider(BaseAIProvider):
 
             logger.info(f"实际使用的OpenAI模型: {self.model}")
             
+            # 所有模型统一使用流式调用
             completion = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
-                stream=False
+                stream=True
             )
             
-            return completion.choices[0].message.content
+            # 收集所有内容
+            collected_content = ""
+            collected_reasoning = ""
+            
+            for chunk in completion:
+                if not chunk.choices:
+                    continue
+                    
+                delta = chunk.choices[0].delta
+                
+                # 处理思考内容（如果存在）
+                if hasattr(delta, 'reasoning_content') and delta.reasoning_content is not None:
+                    collected_reasoning += delta.reasoning_content
+                
+                # 处理回答内容
+                if hasattr(delta, 'content') and delta.content is not None:
+                    collected_content += delta.content
+            
+            # 如果没有内容但有思考过程，可能是思考模型只返回了思考过程
+            if not collected_content and collected_reasoning:
+                logger.warning("模型只返回了思考过程，没有最终回答")
+                # 可以选择返回思考过程或返回错误信息
+                # 这里选择返回提示，也可以修改为返回思考内容
+                return "模型未能生成有效回答"
+            
+            return collected_content
             
         except Exception as e:
             logger.error(f"{self.env_prefix} API 调用失败: {str(e)}")

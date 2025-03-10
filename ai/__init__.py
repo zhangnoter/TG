@@ -6,27 +6,42 @@ from .qwen_provider import QwenProvider
 from .grok_provider import GrokProvider
 from .claude_provider import ClaudeProvider
 import os
+import logging
+from utils.settings import load_ai_models
+
+# 获取日志记录器
+logger = logging.getLogger(__name__)
 
 async def get_ai_provider(model=None):
     """获取AI提供者实例"""
     if not model:
         model = os.getenv('DEFAULT_AI_MODEL', 'gemini-2.0-flash')
-
+    
+    # 加载提供商配置（使用dict格式）
+    providers_config = load_ai_models(type="dict")
+    
     # 根据模型名称选择对应的提供者
     provider = None
-    if any(model.startswith(prefix) for prefix in ('gpt-', 'o1', 'o3', 'chatgpt')):
-        provider = OpenAIProvider()
-    elif model.startswith('gemini-'):
-        provider = GeminiProvider()
-    elif model.startswith('deepseek-'):
-        provider = DeepSeekProvider()
-    elif model.startswith('qwen-'):
-        provider = QwenProvider()
-    elif model.startswith('grok-'):
-        provider = GrokProvider()
-    elif model.startswith('claude-'):
-        provider = ClaudeProvider()
-    else:
+    
+    # 遍历配置中的每个提供商
+    for provider_name, models_list in providers_config.items():
+        # 检查完全匹配
+        if model in models_list:
+            if provider_name == "openai":
+                provider = OpenAIProvider()
+            elif provider_name == "gemini":
+                provider = GeminiProvider()
+            elif provider_name == "deepseek":
+                provider = DeepSeekProvider()
+            elif provider_name == "qwen":
+                provider = QwenProvider()
+            elif provider_name == "grok":
+                provider = GrokProvider()
+            elif provider_name == "claude":
+                provider = ClaudeProvider()
+            break
+    
+    if not provider:
         raise ValueError(f"不支持的模型: {model}")
 
     return provider

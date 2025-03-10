@@ -1,44 +1,62 @@
 import os
+import json
 import logging
 
 logger = logging.getLogger(__name__)
 
-# AI模型列表
-AI_MODELS_CONTENT = """gpt-4o
-chatgpt-4o-latest
-gpt-4o-mini
-gpt-4-turbo
-gpt-4-turbo-preview
-gpt-4
-gpt-3.5-turbo
-gpt-3.5-turbo-instruct
-o1
-o1-mini
-o1-preview
-o3-mini
-gemini-2.0-flash
-gemini-2.0-flash-lite-preview-02-05
-gemini-2.0-pro-exp-02-05
-gemini-1.5-flash
-gemini-1.5-flash-8b
-gemini-1.5-pro
-grok-2-latest
-deepseek-chat
-claude-3-7-sonnet-latest
-claude-3-5-sonnet-latest
-claude-3-5-haiku-latest
-claude-3-opus-latest
-claude-3-sonnet-20240229
-claude-3-haiku-20240307
-qwen-omni-turbo
-qwen-omni-turbo-latest
-qwen-max
-qwen-max-latest
-qwen-plus
-qwen-plus-latest
-qwen-turbo
-qwen-turbo-latest
-qwen-long"""
+# 默认AI模型配置(JSON格式)
+AI_MODELS_CONFIG = {
+    "openai": [
+        "gpt-4o",
+        "chatgpt-4o-latest",
+        "gpt-4o-mini",
+        "gpt-4-turbo",
+        "gpt-4-turbo-preview",
+        "gpt-4",
+        "gpt-3.5-turbo",
+        "gpt-3.5-turbo-instruct",
+        "o1",
+        "o1-mini",
+        "o1-preview",
+        "o3-mini"
+    ],
+    "gemini": [
+        "gemini-2.0-flash",
+        "gemini-2.0-flash-lite-preview-02-05",
+        "gemini-2.0-pro-exp-02-05",
+        "gemini-1.5-flash",
+        "gemini-1.5-flash-8b",
+        "gemini-1.5-pro"
+    ],
+    "grok": [
+        "grok-2-latest"
+    ],
+    "deepseek": [
+        "deepseek-chat"
+    ],
+    "claude": [
+        "claude-3-7-sonnet-latest",
+        "claude-3-5-sonnet-latest",
+        "claude-3-5-haiku-latest",
+        "claude-3-opus-latest",
+        "claude-3-sonnet-20240229",
+        "claude-3-haiku-20240307"
+    ],
+    "qwen": [
+        "qwq-plus",
+        "qwq-plus-latest",
+        "qwq-32b",
+        "qwen-omni-turbo",
+        "qwen-omni-turbo-latest",
+        "qwen-max",
+        "qwen-max-latest",
+        "qwen-plus",
+        "qwen-plus-latest",
+        "qwen-turbo",
+        "qwen-turbo-latest",
+        "qwen-long"
+    ]
+}
 
 # 汇总时间列表
 SUMMARY_TIMES_CONTENT = """00:00
@@ -223,7 +241,6 @@ def create_default_configs():
 
     # 定义默认配置内容
     default_configs = {
-        'ai_models.txt': AI_MODELS_CONTENT,
         'summary_times.txt': SUMMARY_TIMES_CONTENT,
         'delay_times.txt': DELAY_TIMES_CONTENT,
         'max_media_size.txt': MAX_MEDIA_SIZE_CONTENT,
@@ -236,4 +253,14 @@ def create_default_configs():
         if not os.path.exists(file_path):
             with open(file_path, 'w', encoding='utf-8') as f:
                 f.write(content.strip())
-            logger.info(f"Created {filename}") 
+            logger.info(f"Created {filename}")
+    
+    # 创建JSON格式的AI模型配置文件
+    json_config_path = os.path.join(config_dir, 'ai_models.json')
+    if not os.path.exists(json_config_path):
+        try:
+            with open(json_config_path, 'w', encoding='utf-8') as f:
+                json.dump(AI_MODELS_CONFIG, f, ensure_ascii=False, indent=4)
+            logger.info("Created ai_models.json")
+        except Exception as e:
+            logger.error(f"创建 ai_models.json 失败: {e}") 

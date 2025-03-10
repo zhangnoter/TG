@@ -46,13 +46,18 @@ class ClaudeProvider(BaseAIProvider):
                 messages.append({"role": "system", "content": prompt})
             messages.append({"role": "user", "content": message})
             
-            response = self.client.messages.create(
+            # 使用流式输出 - 按照官方文档正确实现
+            with self.client.messages.stream(
                 model=self.model,
                 max_tokens=4096,
                 messages=messages
-            )
-            
-            return response.content[0].text
+            ) as stream:
+                # 使用专用的text_stream迭代器直接获取文本
+                full_response = ""
+                for text in stream.text_stream:
+                    full_response += text
+        
+            return full_response
             
         except Exception as e:
             logger.error(f"Claude API 调用失败: {str(e)}")
