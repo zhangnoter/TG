@@ -311,6 +311,10 @@ async def register_bot_commands(bot):
             command='delete_rule',
             description='删除转发规则'
         ),
+        BotCommand(
+            command='delete_rss_user',
+            description='删除RSS用户'
+        ),
 
 
         # BotCommand(

@@ -2,7 +2,7 @@ from sqlalchemy.exc import IntegrityError
 from telethon import Button
 from models.models import MediaTypes, MediaExtensions
 from enums.enums import AddMode
-from models.models import get_session, Keyword, ReplaceRule
+from models.models import get_session, Keyword, ReplaceRule, User
 from utils.common import *
 from utils.media import *
 from handlers.list_handlers import *
@@ -15,6 +15,7 @@ import logging
 import os
 import aiohttp
 from utils.constants import RSS_HOST, RSS_PORT
+import models.models as models
 
 logger = logging.getLogger(__name__)
 
@@ -711,6 +712,9 @@ async def handle_help_command(event, command):
         "/import_keyword(/ik) <同时发送文件> - 导入普通关键字\n"
         "/import_regex_keyword(/irk) <同时发送文件> - 导入正则关键字\n"
         "/import_replace(/ir) <同时发送文件> - 导入替换规则\n\n"
+
+        "**RSS相关**\n"
+        "/delete_rss_user(/dru) [用户名] - 删除RSS用户\n"
 
         "**UFB相关**\n"
         "/ufb_bind(/ub) <域名> - 绑定UFB域名\n"
@@ -1956,4 +1960,57 @@ async def handle_delete_rule_command(event, command, parts):
         session.close()
 
 
-
+async def handle_delete_rss_user_command(event, command, parts):
+    """处理 delete_rss_user 命令"""
+    db_ops = await get_db_ops()
+    session = get_session()
+    
+    try:
+        # 检查是否指定了用户名
+        specified_username = None
+        if len(parts) > 1:
+            specified_username = parts[1].strip()
+        
+        # 查询所有用户
+        users = session.query(models.User).all()
+        
+        if not users:
+            await event.reply("RSS系统中没有用户账户")
+            return
+        
+        # 占位，不排除以后有多用户功能，如果指定了用户名，尝试删除该用户
+        if specified_username:
+            user = session.query(models.User).filter(models.User.username == specified_username).first()
+            if user:
+                session.delete(user)
+                session.commit()
+                await event.reply(f"已删除RSS用户: {specified_username}")
+                return
+            else:
+                await event.reply(f"未找到用户名为 '{specified_username}' 的RSS用户")
+                return
+        
+        # 如果没有指定用户名
+        # 默认只有一个用户，直接删除
+        if len(users) == 1:
+            user = users[0]
+            username = user.username
+            session.delete(user)
+            session.commit()
+            await event.reply(f"已删除RSS用户: {username}")
+            return
+        
+        # 占位，不排除以后有多用户功能，如果有多个用户，则列出所有用户并提示指定用户名
+        usernames = [user.username for user in users]
+        user_list = "\n".join([f"{i+1}. {username}" for i, username in enumerate(usernames)])
+        
+        await event.reply(f"RSS系统中有多个用户，请使用 `/delete_rss_user <用户名>` 指定要删除的用户:\n\n{user_list}")
+        
+    except Exception as e:
+        session.rollback()
+        error_message = f"删除RSS用户时出错: {str(e)}"
+        logger.error(error_message)
+        logger.error(traceback.format_exc())
+        await event.reply(error_message)
+    finally:
+        session.close()

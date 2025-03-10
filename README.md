@@ -579,6 +579,9 @@ AI处理提示词中可以使用以下格式：
 /import_regex_keyword(/irk) <同时发送文件> - 导入正则关键字
 /import_replace(/ir) <同时发送文件> - 导入替换规则
 
+RSS相关
+/delete_rss_user(/dru) [用户名] - 删除RSS用户
+
 UFB相关
 /ufb_bind(/ub) <域名> - 绑定UFB域名
 /ufb_unbind(/uu) - 解绑UFB域名

@@ -166,6 +166,8 @@ async def handle_command(client, event):
         'lr': lambda: handle_list_rule_command(event, command, parts),
         'delete_rule': lambda: handle_delete_rule_command(event, command, parts),
         'dr': lambda: handle_delete_rule_command(event, command, parts),
+        'delete_rss_user': lambda: handle_delete_rss_user_command(event, command, parts),
+        'dru': lambda: handle_delete_rss_user_command(event, command, parts),
     }
 
     # 执行对应的命令处理器
