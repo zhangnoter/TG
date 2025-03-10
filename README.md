@@ -407,7 +407,7 @@ CLAUDE_API_KEY=your_key
 
 #### 自定义模型
 
-没找到想要的模型名字？在 `config/ai_models.txt` 中添加即可。
+没找到想要的模型名字？在 `config/ai_models.json` 中添加即可。
 
 #### AI 处理
 
