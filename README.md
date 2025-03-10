@@ -334,25 +334,7 @@ docker-compose up -d
 ### ⚡ 过滤流程
 首先要清楚消息过滤顺序，括号里对应设置里的选项：
 
-```mermaid
-flowchart TD
-    A["延迟处理过滤器(延迟处理)"] --> B["关键字过滤器(对应过滤模式/过滤关键字时是否附带发送者名称和ID)"]
-    B --> C["替换过滤器(替换模式)"]
-    C --> D["AI处理过滤器(使用AI处理消息)"]
-    D --> E["信息过滤器(添加原始链接/发送者/时间)"]
-    E --> K["评论区按钮过滤器(添加评论区直达按钮)"]
-    K --> F["媒体过滤器(处理媒体内容, 具体查看媒体设置)"]
-    F --> G["RSS过滤器(处理RSS相关功能)"]
-    G --> J{"处理模式判断(根据规则配置判断后续处理方式)"}
-    J -->|编辑模式| H["编辑过滤器(编辑消息)"]
-    J -->|转发模式| I["发送过滤器(发送消息，对应预览模式/消息格式/转发方式)"]
-    H --> I
-
-    classDef filter fill:#f5f5f5,stroke:#333,stroke-width:1px;
-    class A,B,C,D,E,F,G,H,I,K filter;
-    classDef decision fill:#f5f5f5,stroke:#333,stroke-width:1px;
-    class J decision;
-```
+![img](./images/flow_chart.png)
 
 ### ⚙️ 设置说明
 | 主设置界面 | AI设置界面 | 媒体设置界面 |
