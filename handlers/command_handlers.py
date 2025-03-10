@@ -16,6 +16,8 @@ import os
 import aiohttp
 from utils.constants import RSS_HOST, RSS_PORT
 import models.models as models
+from utils.auto_delete import respond_and_delete,reply_and_delete,async_delete_user_message
+from utils.common import get_bot_client
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +37,8 @@ async def handle_bind_command(event, client, parts):
         else:
             raise ValueError("参数不足")
     except ValueError:
-        await event.reply('用法: /bind <目标聊天链接或名称>\n例如:\n/bind https://t.me/channel_name\n/bind "频道 名称"')
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,'用法: /bind <目标聊天链接或名称>\n例如:\n/bind https://t.me/channel_name\n/bind "频道 名称"')
         return
 
     # 检查是否是链接
@@ -60,20 +63,24 @@ async def handle_bind_command(event, client, parts):
                         target_chat = dialog.entity
                         break
                 else:
-                    await event.reply('未找到匹配的群组/频道，请确保名称正确且账号已加入该群组/频道')
+                    await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+                    await reply_and_delete(event,'未找到匹配的群组/频道，请确保名称正确且账号已加入该群组/频道')
                     return
 
             # 检查是否在绑定自己
             if str(target_chat.id) == str(source_chat.id):
-                await event.reply('⚠️ 不能将频道/群组绑定到自己')
+                await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+                await reply_and_delete(event,'⚠️ 不能将频道/群组绑定到自己')
                 return
 
         except ValueError:
-            await event.reply('无法获取目标聊天信息，请确保链接/名称正确且账号已加入该群组/频道')
+            await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+            await reply_and_delete(event,'无法获取目标聊天信息，请确保链接/名称正确且账号已加入该群组/频道')
             return
         except Exception as e:
             logger.error(f'获取目标聊天信息时出错: {str(e)}')
-            await event.reply('获取目标聊天信息时出错，请检查日志')
+            await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+            await reply_and_delete(event,'获取目标聊天信息时出错，请检查日志')
             return
 
         # 保存到数据库
@@ -117,7 +124,8 @@ async def handle_bind_command(event, client, parts):
             session.add(rule)
             session.commit()
 
-            await event.reply(
+            await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+            await reply_and_delete(event,
                 f'已设置转发规则:\n'
                 f'源聊天: {source_chat_db.name} ({source_chat_db.telegram_chat_id})\n'
                 f'目标聊天: {target_chat_db.name} ({target_chat_db.telegram_chat_id})\n'
@@ -127,7 +135,8 @@ async def handle_bind_command(event, client, parts):
 
         except IntegrityError:
             session.rollback()
-            await event.reply(
+            await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+            await reply_and_delete(event,
                 f'已存在相同的转发规则:\n'
                 f'源聊天: {source_chat_db.name}\n'
                 f'目标聊天: {target_chat_db.name}\n'
@@ -139,7 +148,8 @@ async def handle_bind_command(event, client, parts):
 
     except Exception as e:
         logger.error(f'设置转发规则时出错: {str(e)}')
-        await event.reply('设置转发规则时出错，请检查日志')
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,'设置转发规则时出错，请检查日志')
         return
 
 async def handle_settings_command(event):
@@ -163,7 +173,8 @@ async def handle_settings_command(event):
 
         if not current_chat_db:
             logger.info(f'在数据库中找不到聊天ID: {current_chat_id}')
-            await event.reply('当前聊天没有任何转发规则')
+            await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+            await reply_and_delete(event,'当前聊天没有任何转发规则')
             return
 
         # 添加日志
@@ -180,7 +191,8 @@ async def handle_settings_command(event):
             logger.info(f'规则ID: {rule.id}, 源聊天: {rule.source_chat.name}, 目标聊天: {rule.target_chat.name}')
 
         if not rules:
-            await event.reply('当前聊天没有任何转发规则')
+            await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+            await reply_and_delete(event,'当前聊天没有任何转发规则')
             return
 
         # 创建规则选择按钮
@@ -190,12 +202,18 @@ async def handle_settings_command(event):
             button_text = f'{source_chat.name}'
             callback_data = f"rule_settings:{rule.id}"
             buttons.append([Button.inline(button_text, callback_data)])
+        
+        # 删除用户消息
+        client = await get_bot_client()
+        await async_delete_user_message(client, event.message.chat_id, event.message.id, 0)
 
-        await event.reply('请选择要管理的转发规则:', buttons=buttons)
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,'请选择要管理的转发规则:', buttons=buttons)
 
     except Exception as e:
         logger.info(f'获取转发规则时出错: {str(e)}')
-        await event.reply('获取转发规则时出错，请检查日志')
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,'获取转发规则时出错，请检查日志')
     finally:
         session.close()
 
@@ -212,7 +230,8 @@ async def handle_switch_command(event):
         ).first()
 
         if not current_chat_db:
-            await event.reply('当前聊天没有任何转发规则')
+            await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+            await reply_and_delete(event,'当前聊天没有任何转发规则')
             return
 
         rules = session.query(ForwardRule).filter(
@@ -220,7 +239,8 @@ async def handle_switch_command(event):
         ).all()
 
         if not rules:
-            await event.reply('当前聊天没有任何转发规则')
+            await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+            await reply_and_delete(event,'当前聊天没有任何转发规则')
             return
 
         # 创建规则选择按钮
@@ -232,8 +252,8 @@ async def handle_switch_command(event):
             button_text = f'{"✓ " if current else ""}来自: {source_chat.name}'
             callback_data = f"switch:{source_chat.telegram_chat_id}"
             buttons.append([Button.inline(button_text, callback_data)])
-
-        await event.reply('请选择要管理的转发规则:', buttons=buttons)
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,'请选择要管理的转发规则:', buttons=buttons)
     finally:
         session.close()
 
@@ -241,9 +261,10 @@ async def handle_add_command(event, command, parts):
     """处理 add 和 add_regex 命令"""
     message_text = event.message.text
     logger.info(f"收到原始消息: {message_text}")
-    
+
     if len(message_text.split(None, 1)) < 2:
-        await event.reply(f'用法: /{command} <关键字1> [关键字2] ...\n例如:\n/{command} keyword1 "key word 2" \'key word 3\'')
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,f'用法: /{command} <关键字1> [关键字2] ...\n例如:\n/{command} keyword1 "key word 2" \'key word 3\'')
         return
 
     # 分离命令和参数部分
@@ -251,7 +272,7 @@ async def handle_add_command(event, command, parts):
     logger.info(f"分离出的参数部分: {args_text}")
 
     keywords = []
-    if command in ['add', 'a']: 
+    if command in ['add', 'a']:
         try:
             # 使用 shlex 来正确处理带引号的参数
             logger.info("开始使用 shlex 解析参数")
@@ -260,7 +281,8 @@ async def handle_add_command(event, command, parts):
         except ValueError as e:
             logger.error(f"shlex 解析出错: {str(e)}")
             # 处理未闭合的引号等错误
-            await event.reply('参数格式错误：请确保引号正确配对')
+            await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+            await reply_and_delete(event,'参数格式错误：请确保引号正确配对')
             return
     else:
         # add_regex 命令保持原样
@@ -269,7 +291,8 @@ async def handle_add_command(event, command, parts):
 
     if not keywords:
         logger.warning("没有提供任何关键字")
-        await event.reply('请提供至少一个关键字')
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,'请提供至少一个关键字')
         return
 
     session = get_session()
@@ -307,12 +330,14 @@ async def handle_add_command(event, command, parts):
         result_text += f'当前关键字添加模式: {mode_text}'
 
         logger.info(f"发送回复消息: {result_text}")
-        await event.reply(result_text)
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,result_text)
 
     except Exception as e:
         session.rollback()
         logger.error(f'添加关键字时出错: {str(e)}\n{traceback.format_exc()}')
-        await event.reply('添加关键字时出错，请检查日志')
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,'添加关键字时出错，请检查日志')
     finally:
         session.close()
 
@@ -320,21 +345,22 @@ async def handle_replace_command(event, parts):
     """处理 replace 命令"""
     message_text = event.message.text
     if len(message_text.split(None, 1)) < 2:
-        await event.reply('用法: /replace <匹配规则> [替换内容]\n例如:\n/replace 广告  # 删除匹配内容\n/replace 广告 [已替换]\n/replace "广告 文本" [已替换]\n/replace \'广告 文本\' [已替换]')
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,'用法: /replace <匹配规则> [替换内容]\n例如:\n/replace 广告  # 删除匹配内容\n/replace 广告 [已替换]\n/replace "广告 文本" [已替换]\n/replace \'广告 文本\' [已替换]')
         return
 
     # 分离命令和参数部分
     _, args_text = message_text.split(None, 1)
-    
+
     # 解析带引号的参数
     pattern = None
     content = ''
-    
+
     # 检查第一个参数是否带引号
     if args_text.startswith('"') or args_text.startswith("'"):
         quote_char = args_text[0]
         end_quote_pos = args_text.find(quote_char, 1)
-        
+
         if end_quote_pos > 0:
             # 提取引号内的内容作为匹配规则
             pattern = args_text[1:end_quote_pos]
@@ -352,7 +378,8 @@ async def handle_replace_command(event, parts):
             content = args_parts[1]
 
     if not pattern:
-        await event.reply('请提供有效的匹配规则')
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,'请提供有效的匹配规则')
         return
 
     session = get_session()
@@ -393,12 +420,14 @@ async def handle_replace_command(event, parts):
             result_text += f'跳过重复规则: {duplicate_count} 个\n'
         result_text += f'当前规则: 来自 {source_chat.name}'
 
-        await event.reply(result_text)
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,result_text)
 
     except Exception as e:
         session.rollback()
         logger.error(f'添加替换规则时出错: {str(e)}')
-        await event.reply('添加替换规则时出错，请检查日志')
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,'添加替换规则时出错，请检查日志')
     finally:
         session.close()
 
@@ -457,38 +486,43 @@ async def handle_remove_command(event, command, parts):
     """处理 remove_keyword 和 remove_replace 命令"""
     message_text = event.message.text
     logger.info(f"收到原始消息: {message_text}")
-    
+
     # 如果是替换规则，保持原来的 ID 删除方式
     if command == 'remove_replace':
         if len(parts) < 2:
-            await event.reply(f'用法: /{command} <ID1> [ID2] [ID3] ...\n例如: /{command} 1 2 3')
+            await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+            await reply_and_delete(event,f'用法: /{command} <ID1> [ID2] [ID3] ...\n例如: /{command} 1 2 3')
             return
-            
+
         try:
             ids_to_remove = [int(x) for x in parts[1:]]
         except ValueError:
-            await event.reply('ID必须是数字')
+            await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+            await reply_and_delete(event,'ID必须是数字')
             return
     elif command in ['remove_keyword_by_id', 'rkbi']:  # 添加按ID删除关键字的处理
         if len(parts) < 2:
-            await event.reply(f'用法: /{command} <ID1> [ID2] [ID3] ...\n例如: /{command} 1 2 3')
+            await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+            await reply_and_delete(event,f'用法: /{command} <ID1> [ID2] [ID3] ...\n例如: /{command} 1 2 3')
             return
-            
+
         try:
             ids_to_remove = [int(x) for x in parts[1:]]
             logger.info(f"准备按ID删除关键字: {ids_to_remove}")
         except ValueError:
-            await event.reply('ID必须是数字')
+            await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+            await reply_and_delete(event,'ID必须是数字')
             return
     else:  # remove_keyword
         if len(message_text.split(None, 1)) < 2:
-            await event.reply(f'用法: /{command} <关键字1> [关键字2] ...\n例如:\n/{command} keyword1 "key word 2" \'key word 3\'')
+            await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+            await reply_and_delete(event,f'用法: /{command} <关键字1> [关键字2] ...\n例如:\n/{command} keyword1 "key word 2" \'key word 3\'')
             return
-            
+
         # 分离命令和参数部分
         _, args_text = message_text.split(None, 1)
         logger.info(f"分离出的参数部分: {args_text}")
-        
+
         try:
             # 使用 shlex 来正确处理带引号的参数
             logger.info("开始使用 shlex 解析参数")
@@ -496,11 +530,13 @@ async def handle_remove_command(event, command, parts):
             logger.info(f"shlex 解析结果: {keywords_to_remove}")
         except ValueError as e:
             logger.error(f"shlex 解析出错: {str(e)}")
-            await event.reply('参数格式错误：请确保引号正确配对')
+            await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+            await reply_and_delete(event,'参数格式错误：请确保引号正确配对')
             return
-        
+
         if not keywords_to_remove:
-            await event.reply('请提供至少一个关键字')
+            await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+            await reply_and_delete(event,'请提供至少一个关键字')
             return
 
     # 在 try 块外定义 item_type
@@ -520,11 +556,12 @@ async def handle_remove_command(event, command, parts):
         if command == 'remove_keyword':
             # 获取当前模式下的关键字
             items = await db_ops.get_keywords(session, rule.id, rule_mode)
-            
+
             if not items:
-                await event.reply(f'当前规则在{mode_name}模式下没有任何关键字')
+                await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+                await reply_and_delete(event,f'当前规则在{mode_name}模式下没有任何关键字')
                 return
-                
+
             # 删除匹配的关键字
             removed_count = 0
             for keyword in keywords_to_remove:
@@ -535,32 +572,36 @@ async def handle_remove_command(event, command, parts):
                         session.delete(item)
                         removed_count += 1
                         break
-            
+
             session.commit()
             logger.info(f"成功删除 {removed_count} 个关键字")
-            
+
             # 重新获取更新后的列表
             remaining_items = await db_ops.get_keywords(session, rule.id, rule_mode)
-            
+
             # 显示删除结果
             if removed_count > 0:
-                await event.reply(f"已从{mode_name}中删除 {removed_count} 个关键字")
+                await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+                await reply_and_delete(event,f"已从{mode_name}中删除 {removed_count} 个关键字")
             else:
-                await event.reply(f"在{mode_name}中未找到匹配的关键字")
+                await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+                await reply_and_delete(event,f"在{mode_name}中未找到匹配的关键字")
 
         elif command in ['remove_keyword_by_id', 'rkbi']:
             # 获取当前模式下的关键字
             items = await db_ops.get_keywords(session, rule.id, rule_mode)
-            
+
             if not items:
-                await event.reply(f'当前规则在{mode_name}模式下没有任何关键字')
+                await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+                await reply_and_delete(event,f'当前规则在{mode_name}模式下没有任何关键字')
                 return
 
             # 检查ID是否有效
             max_id = len(items)
             invalid_ids = [id for id in ids_to_remove if id < 1 or id > max_id]
             if invalid_ids:
-                await event.reply(f'无效的ID: {", ".join(map(str, invalid_ids))}')
+                await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+                await reply_and_delete(event,f'无效的ID: {", ".join(map(str, invalid_ids))}')
                 return
 
             # 删除指定ID的关键字
@@ -580,36 +621,42 @@ async def handle_remove_command(event, command, parts):
             # 构建回复消息
             if removed_count > 0:
                 keywords_text = '\n'.join(f'- {k}' for k in removed_keywords)
-                await event.reply(
+                await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+                await reply_and_delete(event,
                     f"已从{mode_name}中删除 {removed_count} 个关键字:\n"
                     f"{keywords_text}"
                 )
             else:
-                await event.reply(f"在{mode_name}中未找到匹配的关键字")
+                await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+                await reply_and_delete(event,f"在{mode_name}中未找到匹配的关键字")
 
         else:  # remove_replace
             # 处理替换规则的删除（保持原有逻辑）
             items = await db_ops.get_replace_rules(session, rule.id)
             if not items:
-                await event.reply(f'当前规则没有任何{item_type}')
+                await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+                await reply_and_delete(event,f'当前规则没有任何{item_type}')
                 return
 
             max_id = len(items)
             invalid_ids = [id for id in ids_to_remove if id < 1 or id > max_id]
             if invalid_ids:
-                await event.reply(f'无效的ID: {", ".join(map(str, invalid_ids))}')
+                await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+                await reply_and_delete(event,f'无效的ID: {", ".join(map(str, invalid_ids))}')
                 return
 
             await db_ops.delete_replace_rules(session, rule.id, ids_to_remove)
             session.commit()
-            
+
             remaining_items = await db_ops.get_replace_rules(session, rule.id)
-            await event.reply(f'已删除 {len(ids_to_remove)} 个替换规则')
+            await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+            await reply_and_delete(event,f'已删除 {len(ids_to_remove)} 个替换规则')
 
     except Exception as e:
         session.rollback()
         logger.error(f'删除{item_type}时出错: {str(e)}\n{traceback.format_exc()}')
-        await event.reply(f'删除{item_type}时出错，请检查日志')
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,f'删除{item_type}时出错，请检查日志')
     finally:
         session.close()
 
@@ -631,7 +678,8 @@ async def handle_clear_all_command(event):
 
         session.commit()
 
-        await event.reply(
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,
             '已清空所有数据:\n'
             f'- {chat_count} 个聊天\n'
             f'- {rule_count} 条转发规则\n'
@@ -642,19 +690,21 @@ async def handle_clear_all_command(event):
     except Exception as e:
         session.rollback()
         logger.error(f'清空数据时出错: {str(e)}')
-        await event.reply('清空数据时出错，请检查日志')
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,'清空数据时出错，请检查日志')
     finally:
         session.close()
 
 
 async def handle_changelog_command(event):
     """处理 changelog 命令"""
-    await event.reply(UPDATE_INFO, parse_mode='html')
+    await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+    await reply_and_delete(event,UPDATE_INFO, parse_mode='html')
 
 
 async def handle_start_command(event):
     """处理 start 命令"""
-    
+
     welcome_text = f"""
     👋 欢迎使用 Telegram 消息转发机器人！
     
@@ -663,7 +713,8 @@ async def handle_start_command(event):
     📖 查看完整命令列表请使用 /help
 
     """
-    await event.reply(welcome_text)
+    await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+    await reply_and_delete(event,welcome_text)
 
 async def handle_help_command(event, command):
     """处理帮助命令"""
@@ -728,7 +779,10 @@ async def handle_help_command(event, command):
         "• 导入命令需要同时发送文件"
     )
 
-    await event.reply(help_text, parse_mode='markdown')
+    await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+
+    await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+    await reply_and_delete(event,help_text, parse_mode='markdown')
 
 async def handle_export_keyword_command(event, command):
     """处理 export_keyword 命令"""
@@ -765,7 +819,8 @@ async def handle_export_keyword_command(event, command):
 
         # 如果两个文件都是空的
         if not normal_keywords and not regex_keywords:
-            await event.reply("当前规则没有任何关键字")
+            await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+            await reply_and_delete(event, "当前规则没有任何关键字")
             return
 
         try:
@@ -782,7 +837,7 @@ async def handle_export_keyword_command(event, command):
             )
 
             # 然后单独发送说明文字
-            await event.respond(f"规则: {source_chat.name}")
+            await respond_and_delete(event,(f"规则: {source_chat.name}"))
 
         finally:
             # 删除临时文件
@@ -793,7 +848,8 @@ async def handle_export_keyword_command(event, command):
 
     except Exception as e:
         logger.error(f'导出关键字时出错: {str(e)}')
-        await event.reply('导出关键字时出错，请检查日志')
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,'导出关键字时出错，请检查日志')
     finally:
         session.close()
 
@@ -802,7 +858,8 @@ async def handle_import_command(event, command):
     try:
         # 检查是否有附件
         if not event.message.file:
-            await event.reply(f'请将文件和 /{command} 命令一起发送')
+            await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+            await reply_and_delete(event,f'请将文件和 /{command} 命令一起发送')
             return
 
         # 获取当前规则
@@ -856,7 +913,8 @@ async def handle_import_command(event, command):
 
                     session.commit()
                     logger.info(f'导入完成,成功导入 {success_count} 条替换规则')
-                    await event.reply(f'成功导入 {success_count} 条替换规则\n规则: 来自 {source_chat.name}')
+                    await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+                    await reply_and_delete(event,f'成功导入 {success_count} 条替换规则\n规则: 来自 {source_chat.name}')
 
 
                 else:
@@ -908,7 +966,8 @@ async def handle_import_command(event, command):
                     if duplicate_count > 0:
                         result_text += f'\n跳过重复: {duplicate_count} 个'
                     result_text += f'\n规则: 来自 {source_chat.name}'
-                    await event.reply(result_text)
+                    await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+                    await reply_and_delete(event,result_text)
             finally:
                 # 删除临时文件
                 if os.path.exists(file_path):
@@ -919,7 +978,8 @@ async def handle_import_command(event, command):
 
     except Exception as e:
         logger.error(f'导入过程出错: {str(e)}')
-        await event.reply('导入过程出错，请检查日志')
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,'导入过程出错，请检查日志')
 
 async def handle_ufb_item_change_command(event, command):
     """处理 ufb_item_change 命令"""
@@ -945,12 +1005,14 @@ async def handle_ufb_item_change_command(event, command):
         ]
 
         # 发送带按钮的消息
-        await event.reply("请选择要切换的UFB同步配置类型:", buttons=buttons)
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event, "请选择要切换的UFB同步配置类型:", buttons=buttons)
 
     except Exception as e:
         session.rollback()
         logger.error(f'切换UFB配置类型时出错: {str(e)}')
-        await event.reply('切换UFB配置类型时出错，请检查日志')
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,'切换UFB配置类型时出错，请检查日志')
     finally:
         session.close()
 
@@ -967,7 +1029,8 @@ async def handle_ufb_bind_command(event, command):
         # 从消息中获取域名和类型
         parts = event.message.text.split()
         if len(parts) < 2 or len(parts) > 3:
-            await event.reply('用法: /ufb_bind <域名> [类型]\n类型可选: main, content, main_username, content_username\n例如: /ufb_bind example.com main')
+            await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+            await reply_and_delete(event,'用法: /ufb_bind <域名> [类型]\n类型可选: main, content, main_username, content_username\n例如: /ufb_bind example.com main')
             return
 
         domain = parts[1].strip().lower()
@@ -976,7 +1039,8 @@ async def handle_ufb_bind_command(event, command):
         if len(parts) == 3:
             item = parts[2].strip().lower()
             if item not in ['main', 'content', 'main_username', 'content_username']:
-                await event.reply('类型必须是以下之一: main, content, main_username, content_username')
+                await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+                await reply_and_delete(event,'类型必须是以下之一: main, content, main_username, content_username')
                 return
 
         # 更新规则的 ufb_domain 和 ufb_item
@@ -984,12 +1048,14 @@ async def handle_ufb_bind_command(event, command):
         rule.ufb_item = item
         session.commit()
 
-        await event.reply(f'已绑定 UFB 域名: {domain}\n类型: {item}\n规则: 来自 {source_chat.name}')
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,f'已绑定 UFB 域名: {domain}\n类型: {item}\n规则: 来自 {source_chat.name}')
 
     except Exception as e:
         session.rollback()
         logger.error(f'绑定 UFB 域名时出错: {str(e)}')
-        await event.reply('绑定 UFB 域名时出错，请检查日志')
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,'绑定 UFB 域名时出错，请检查日志')
     finally:
         session.close()
 
@@ -1008,12 +1074,14 @@ async def handle_ufb_unbind_command(event, command):
         rule.ufb_domain = None
         session.commit()
 
-        await event.reply(f'已解绑 UFB 域名: {old_domain or "无"}\n规则: 来自 {source_chat.name}')
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,f'已解绑 UFB 域名: {old_domain or "无"}\n规则: 来自 {source_chat.name}')
 
     except Exception as e:
         session.rollback()
         logger.error(f'解绑 UFB 域名时出错: {str(e)}')
-        await event.reply('解绑 UFB 域名时出错，请检查日志')
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,'解绑 UFB 域名时出错，请检查日志')
     finally:
         session.close()
 
@@ -1031,7 +1099,8 @@ async def handle_clear_all_keywords_command(event, command):
         keyword_count = len(rule.keywords)
 
         if keyword_count == 0:
-            await event.reply("当前规则没有任何关键字")
+            await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+            await reply_and_delete(event, "当前规则没有任何关键字")
             return
 
         # 删除所有关键字
@@ -1041,7 +1110,8 @@ async def handle_clear_all_keywords_command(event, command):
         session.commit()
 
         # 发送成功消息
-        await event.reply(
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,
             f"✅ 已清除规则 `{rule.id}` 的所有关键字\n"
             f"源聊天: {source_chat.name}\n"
             f"共删除: {keyword_count} 个关键字",
@@ -1051,7 +1121,8 @@ async def handle_clear_all_keywords_command(event, command):
     except Exception as e:
         session.rollback()
         logger.error(f'清除关键字时出错: {str(e)}')
-        await event.reply('清除关键字时出错，请检查日志')
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,'清除关键字时出错，请检查日志')
     finally:
         session.close()
 
@@ -1070,7 +1141,8 @@ async def handle_clear_all_keywords_regex_command(event, command):
         keyword_count = len(regex_keywords)
 
         if keyword_count == 0:
-            await event.reply("当前规则没有任何正则关键字")
+            await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+            await reply_and_delete(event, "当前规则没有任何正则关键字")
             return
 
         # 删除所有正则关键字
@@ -1080,7 +1152,8 @@ async def handle_clear_all_keywords_regex_command(event, command):
         session.commit()
 
         # 发送成功消息
-        await event.reply(
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,
             f"✅ 已清除规则 `{rule.id}` 的所有正则关键字\n"
             f"源聊天: {source_chat.name}\n"
             f"共删除: {keyword_count} 个正则关键字",
@@ -1090,7 +1163,8 @@ async def handle_clear_all_keywords_regex_command(event, command):
     except Exception as e:
         session.rollback()
         logger.error(f'清除正则关键字时出错: {str(e)}')
-        await event.reply('清除正则关键字时出错，请检查日志')
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,'清除正则关键字时出错，请检查日志')
     finally:
         session.close()
 
@@ -1108,7 +1182,8 @@ async def handle_clear_all_replace_command(event, command):
         replace_count = len(rule.replace_rules)
 
         if replace_count == 0:
-            await event.reply("当前规则没有任何替换规则")
+            await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+            await reply_and_delete(event, "当前规则没有任何替换规则")
             return
 
         # 删除所有替换规则
@@ -1121,7 +1196,8 @@ async def handle_clear_all_replace_command(event, command):
         session.commit()
 
         # 发送成功消息
-        await event.reply(
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,
             f"✅ 已清除规则 `{rule.id}` 的所有替换规则\n"
             f"源聊天: {source_chat.name}\n"
             f"共删除: {replace_count} 个替换规则\n"
@@ -1132,7 +1208,8 @@ async def handle_clear_all_replace_command(event, command):
     except Exception as e:
         session.rollback()
         logger.error(f'清除替换规则时出错: {str(e)}')
-        await event.reply('清除替换规则时出错，请检查日志')
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,'清除替换规则时出错，请检查日志')
     finally:
         session.close()
 
@@ -1140,13 +1217,15 @@ async def handle_copy_keywords_command(event, command):
     """处理复制关键字命令"""
     parts = event.message.text.split()
     if len(parts) != 2:
-        await event.reply('用法: /copy_keywords <规则ID>')
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,'用法: /copy_keywords <规则ID>')
         return
 
     try:
         source_rule_id = int(parts[1])
     except ValueError:
-        await event.reply('规则ID必须是数字')
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,'规则ID必须是数字')
         return
 
     session = get_session()
@@ -1160,7 +1239,8 @@ async def handle_copy_keywords_command(event, command):
         # 获取源规则
         source_rule = session.query(ForwardRule).get(source_rule_id)
         if not source_rule:
-            await event.reply(f'找不到规则ID: {source_rule_id}')
+            await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+            await reply_and_delete(event,f'找不到规则ID: {source_rule_id}')
             return
 
         # 复制关键字
@@ -1187,7 +1267,8 @@ async def handle_copy_keywords_command(event, command):
         session.commit()
 
         # 发送结果消息
-        await event.reply(
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,
             f"✅ 已从规则 `{source_rule_id}` 复制关键字到规则 `{target_rule.id}`\n"
             f"成功复制: {success_count} 个\n"
             f"跳过重复: {skip_count} 个",
@@ -1197,7 +1278,8 @@ async def handle_copy_keywords_command(event, command):
     except Exception as e:
         session.rollback()
         logger.error(f'复制关键字时出错: {str(e)}')
-        await event.reply('复制关键字时出错，请检查日志')
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,'复制关键字时出错，请检查日志')
     finally:
         session.close()
 
@@ -1205,13 +1287,15 @@ async def handle_copy_keywords_regex_command(event, command):
     """处理复制正则关键字命令"""
     parts = event.message.text.split()
     if len(parts) != 2:
-        await event.reply('用法: /copy_keywords_regex <规则ID>')
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,'用法: /copy_keywords_regex <规则ID>')
         return
 
     try:
         source_rule_id = int(parts[1])
     except ValueError:
-        await event.reply('规则ID必须是数字')
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,'规则ID必须是数字')
         return
 
     session = get_session()
@@ -1225,7 +1309,8 @@ async def handle_copy_keywords_regex_command(event, command):
         # 获取源规则
         source_rule = session.query(ForwardRule).get(source_rule_id)
         if not source_rule:
-            await event.reply(f'找不到规则ID: {source_rule_id}')
+            await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+            await reply_and_delete(event,f'找不到规则ID: {source_rule_id}')
             return
 
         # 复制正则关键字
@@ -1252,7 +1337,8 @@ async def handle_copy_keywords_regex_command(event, command):
         session.commit()
 
         # 发送结果消息
-        await event.reply(
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,
             f"✅ 已从规则 `{source_rule_id}` 复制正则关键字到规则 `{target_rule.id}`\n"
             f"成功复制: {success_count} 个\n"
             f"跳过重复: {skip_count} 个",
@@ -1262,7 +1348,8 @@ async def handle_copy_keywords_regex_command(event, command):
     except Exception as e:
         session.rollback()
         logger.error(f'复制正则关键字时出错: {str(e)}')
-        await event.reply('复制正则关键字时出错，请检查日志')
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,'复制正则关键字时出错，请检查日志')
     finally:
         session.close()
 
@@ -1270,13 +1357,15 @@ async def handle_copy_replace_command(event, command):
     """处理复制替换规则命令"""
     parts = event.message.text.split()
     if len(parts) != 2:
-        await event.reply('用法: /copy_replace <规则ID>')
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,'用法: /copy_replace <规则ID>')
         return
 
     try:
         source_rule_id = int(parts[1])
     except ValueError:
-        await event.reply('规则ID必须是数字')
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,'规则ID必须是数字')
         return
 
     session = get_session()
@@ -1290,7 +1379,8 @@ async def handle_copy_replace_command(event, command):
         # 获取源规则
         source_rule = session.query(ForwardRule).get(source_rule_id)
         if not source_rule:
-            await event.reply(f'找不到规则ID: {source_rule_id}')
+            await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+            await reply_and_delete(event,f'找不到规则ID: {source_rule_id}')
             return
 
         # 复制替换规则
@@ -1315,7 +1405,8 @@ async def handle_copy_replace_command(event, command):
         session.commit()
 
         # 发送结果消息
-        await event.reply(
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,
             f"✅ 已从规则 `{source_rule_id}` 复制替换规则到规则 `{target_rule.id}`\n"
             f"成功复制: {success_count} 个\n"
             f"跳过重复: {skip_count} 个\n",
@@ -1325,7 +1416,8 @@ async def handle_copy_replace_command(event, command):
     except Exception as e:
         session.rollback()
         logger.error(f'复制替换规则时出错: {str(e)}')
-        await event.reply('复制替换规则时出错，请检查日志')
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,'复制替换规则时出错，请检查日志')
     finally:
         session.close()
 
@@ -1333,13 +1425,15 @@ async def handle_copy_rule_command(event, command):
     """处理复制规则命令 - 复制一个规则的所有设置到当前规则"""
     parts = event.message.text.split()
     if len(parts) != 2:
-        await event.reply('用法: /copy_rule <规则ID>')
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,'用法: /copy_rule <规则ID>')
         return
 
     try:
         source_rule_id = int(parts[1])
     except ValueError:
-        await event.reply('规则ID必须是数字')
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,'规则ID必须是数字')
         return
 
     session = get_session()
@@ -1353,13 +1447,15 @@ async def handle_copy_rule_command(event, command):
         # 获取源规则
         source_rule = session.query(ForwardRule).get(source_rule_id)
         if not source_rule:
-            await event.reply(f'找不到规则ID: {source_rule_id}')
+            await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+            await reply_and_delete(event,f'找不到规则ID: {source_rule_id}')
             return
-            
+
         if source_rule.id == target_rule.id:
-            await event.reply('不能复制规则到自身')
+            await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+            await reply_and_delete(event,'不能复制规则到自身')
             return
-            
+
         # 记录复制的各个部分成功数量
         keywords_normal_success = 0
         keywords_normal_skip = 0
@@ -1367,10 +1463,10 @@ async def handle_copy_rule_command(event, command):
         keywords_regex_skip = 0
         replace_rules_success = 0
         replace_rules_skip = 0
-        media_extensions_success = 0 
-        media_extensions_skip = 0 
+        media_extensions_success = 0
+        media_extensions_skip = 0
 
-        
+
         # 复制普通关键字
         for keyword in source_rule.keywords:
             if not keyword.is_regex:
@@ -1388,7 +1484,7 @@ async def handle_copy_rule_command(event, command):
                     keywords_normal_success += 1
                 else:
                     keywords_normal_skip += 1
-        
+
         # 复制正则关键字
         for keyword in source_rule.keywords:
             if keyword.is_regex:
@@ -1406,7 +1502,7 @@ async def handle_copy_rule_command(event, command):
                     keywords_regex_success += 1
                 else:
                     keywords_regex_skip += 1
-        
+
         # 复制替换规则
         for replace_rule in source_rule.replace_rules:
             # 检查是否已存在
@@ -1422,7 +1518,7 @@ async def handle_copy_rule_command(event, command):
                 replace_rules_success += 1
             else:
                 replace_rules_skip += 1
-        
+
         # 复制媒体扩展名设置
         if hasattr(source_rule, 'media_extensions') and source_rule.media_extensions:
             for extension in source_rule.media_extensions:
@@ -1437,22 +1533,22 @@ async def handle_copy_rule_command(event, command):
                     media_extensions_success += 1
                 else:
                     media_extensions_skip += 1
-        
+
         # 复制媒体类型设置
         if hasattr(source_rule, 'media_types') and source_rule.media_types:
             target_media_types = session.query(MediaTypes).filter_by(rule_id=target_rule.id).first()
-            
+
             if not target_media_types:
                 # 如果目标规则没有媒体类型设置，创建新的
                 target_media_types = MediaTypes(rule_id=target_rule.id)
-                
+
                 # 使用inspect自动复制所有字段（除了id和rule_id）
                 media_inspector = inspect(MediaTypes)
                 for column in media_inspector.columns:
                     column_name = column.key
                     if column_name not in ['id', 'rule_id']:
                         setattr(target_media_types, column_name, getattr(source_rule.media_types, column_name))
-                
+
                 session.add(target_media_types)
             else:
                 # 如果已有设置，更新现有设置
@@ -1462,24 +1558,25 @@ async def handle_copy_rule_command(event, command):
                     column_name = column.key
                     if column_name not in ['id', 'rule_id']:
                         setattr(target_media_types, column_name, getattr(source_rule.media_types, column_name))
-                
+
         # 复制规则设置
         # 获取ForwardRule模型的所有字段
         inspector = inspect(ForwardRule)
         for column in inspector.columns:
             column_name = column.key
-            if column_name not in ['id', 'source_chat_id', 'target_chat_id', 'source_chat', 'target_chat', 
+            if column_name not in ['id', 'source_chat_id', 'target_chat_id', 'source_chat', 'target_chat',
                                       'keywords', 'replace_rules', 'media_types']:
                 # 获取源规则的值并设置到目标规则
                 value = getattr(source_rule, column_name)
                 setattr(target_rule, column_name, value)
-            
+
         session.commit()
 
-        
+
 
         # 发送结果消息
-        await event.reply(
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,
             f"✅ 已从规则 `{source_rule_id}` 复制到规则 `{target_rule.id}`\n\n"
             f"普通关键字: 成功复制 {keywords_normal_success} 个, 跳过重复 {keywords_normal_skip} 个\n"
             f"正则关键字: 成功复制 {keywords_regex_success} 个, 跳过重复 {keywords_regex_skip} 个\n"
@@ -1492,7 +1589,8 @@ async def handle_copy_rule_command(event, command):
     except Exception as e:
         session.rollback()
         logger.error(f'复制规则时出错: {str(e)}')
-        await event.reply('复制规则时出错，请检查日志')
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,'复制规则时出错，请检查日志')
     finally:
         session.close()
 
@@ -1513,7 +1611,8 @@ async def handle_export_replace_command(event, client):
 
         # 如果没有替换规则
         if not replace_rules:
-            await event.reply("当前规则没有任何替换规则")
+            await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+            await reply_and_delete(event, "当前规则没有任何替换规则")
             return
 
         # 创建并写入文件
@@ -1533,7 +1632,7 @@ async def handle_export_replace_command(event, client):
             )
 
             # 然后单独发送说明文字
-            await event.respond(f"规则: {source_chat.name}")
+            await respond_and_delete(event,(f"规则: {source_chat.name}"))
 
         finally:
             # 删除临时文件
@@ -1542,7 +1641,8 @@ async def handle_export_replace_command(event, client):
 
     except Exception as e:
         logger.error(f'导出替换规则时出错: {str(e)}')
-        await event.reply('导出替换规则时出错，请检查日志')
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,'导出替换规则时出错，请检查日志')
     finally:
         session.close()
 
@@ -1551,9 +1651,10 @@ async def handle_remove_all_keyword_command(event, command, parts):
     """处理 remove_all_keyword 命令"""
     message_text = event.message.text
     logger.info(f"收到原始消息: {message_text}")
-    
+
     if len(message_text.split(None, 1)) < 2:
-        await event.reply(f'用法: /{command} <关键字1> [关键字2] ...\n例如:\n/{command} keyword1 "key word 2" \'key word 3\'')
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,f'用法: /{command} <关键字1> [关键字2] ...\n例如:\n/{command} keyword1 "key word 2" \'key word 3\'')
         return
 
     # 分离命令和参数部分
@@ -1568,12 +1669,14 @@ async def handle_remove_all_keyword_command(event, command, parts):
     except ValueError as e:
         logger.error(f"shlex 解析出错: {str(e)}")
         # 处理未闭合的引号等错误
-        await event.reply('参数格式错误：请确保引号正确配对')
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,'参数格式错误：请确保引号正确配对')
         return
 
     if not keywords_to_remove:
         logger.warning("没有提供任何关键字")
-        await event.reply('请提供至少一个关键字')
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,'请提供至少一个关键字')
         return
 
     session = get_session()
@@ -1600,13 +1703,13 @@ async def handle_remove_all_keyword_command(event, command, parts):
             # 获取当前规则的关键字
             rule_mode = "blacklist" if rule.add_mode == AddMode.BLACKLIST else "whitelist"
             keywords = await db_ops.get_keywords(session, rule.id, rule_mode)
-            
+
             if not keywords:
                 continue
 
             rule_removed = 0
             rule_removed_keywords = []
-            
+
             # 删除匹配的关键字
             for keyword in keywords:
                 if keyword.keyword in keywords_to_remove:
@@ -1633,18 +1736,21 @@ async def handle_remove_all_keyword_command(event, command, parts):
                     result_text += "\n".join(f"- {k}" for k in keywords)
                     result_text += "\n\n"
             result_text += f"总计删除: {total_removed} 个关键字"
-            
+
             logger.info(f"发送回复消息: {result_text}")
-            await event.reply(result_text)
+            await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+            await reply_and_delete(event,result_text)
         else:
             msg = f"在{mode_name}中未找到匹配的关键字"
             logger.info(msg)
-            await event.reply(msg)
+            await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+            await reply_and_delete(event,msg)
 
     except Exception as e:
         session.rollback()
         logger.error(f'批量删除关键字时出错: {str(e)}\n{traceback.format_exc()}')
-        await event.reply('删除关键字时出错，请检查日志')
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,'删除关键字时出错，请检查日志')
     finally:
         session.close()
 
@@ -1652,9 +1758,10 @@ async def handle_add_all_command(event, command, parts):
     """处理 add_all 和 add_regex_all 命令"""
     message_text = event.message.text
     logger.info(f"收到原始消息: {message_text}")
-    
+
     if len(message_text.split(None, 1)) < 2:
-        await event.reply(f'用法: /{command} <关键字1> [关键字2] ...\n例如:\n/{command} keyword1 "key word 2" \'key word 3\'')
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,f'用法: /{command} <关键字1> [关键字2] ...\n例如:\n/{command} keyword1 "key word 2" \'key word 3\'')
         return
 
     # 分离命令和参数部分
@@ -1671,7 +1778,8 @@ async def handle_add_all_command(event, command, parts):
         except ValueError as e:
             logger.error(f"shlex 解析出错: {str(e)}")
             # 处理未闭合的引号等错误
-            await event.reply('参数格式错误：请确保引号正确配对')
+            await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+            await reply_and_delete(event,'参数格式错误：请确保引号正确配对')
             return
     else:
         # add_regex_all 命令保持原样
@@ -1680,7 +1788,8 @@ async def handle_add_all_command(event, command, parts):
 
     if not keywords:
         logger.warning("没有提供任何关键字")
-        await event.reply('请提供至少一个关键字')
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,'请提供至少一个关键字')
         return
 
     session = get_session()
@@ -1688,11 +1797,11 @@ async def handle_add_all_command(event, command, parts):
         rules = await get_all_rules(session, event)
         if not rules:
             return
-        
+
         rule_info = await get_current_rule(session, event)
         if not rule_info:
             return
-        
+
         current_rule, source_chat = rule_info
 
         db_ops = await get_db_ops()
@@ -1722,19 +1831,22 @@ async def handle_add_all_command(event, command, parts):
         result_text += f'关键字列表:\n{keywords_text}'
 
         logger.info(f"发送回复消息: {result_text}")
-        await event.reply(result_text)
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,result_text)
 
     except Exception as e:
         session.rollback()
         logger.error(f'批量添加关键字时出错: {str(e)}\n{traceback.format_exc()}')
-        await event.reply('添加关键字时出错，请检查日志')
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,'添加关键字时出错，请检查日志')
     finally:
         session.close()
 
 async def handle_replace_all_command(event, parts):
     """处理 replace_all 命令"""
     if len(parts) < 2:
-        await event.reply('用法: /replace_all <匹配规则> [替换内容]\n例如:\n/replace_all 广告  # 删除匹配内容\n/replace_all 广告 [已替换]')
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,'用法: /replace_all <匹配规则> [替换内容]\n例如:\n/replace_all 广告  # 删除匹配内容\n/replace_all 广告 [已替换]')
         return
 
     pattern = parts[1]
@@ -1781,12 +1893,14 @@ async def handle_replace_all_command(event, parts):
         if total_duplicate > 0:
             result_text += f'跳过重复规则: {total_duplicate} 个'
 
-        await event.reply(result_text)
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,result_text)
 
     except Exception as e:
         session.rollback()
         logger.error(f'批量添加替换规则时出错: {str(e)}')
-        await event.reply('添加替换规则时出错，请检查日志')
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,'添加替换规则时出错，请检查日志')
     finally:
         session.close()
 
@@ -1800,7 +1914,8 @@ async def handle_list_rule_command(event, command, parts):
             if page < 1:
                 page = 1
         except ValueError:
-            await event.reply('页码必须是数字')
+            await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+            await reply_and_delete(event,'页码必须是数字')
             return
 
         # 设置每页显示的数量
@@ -1809,9 +1924,10 @@ async def handle_list_rule_command(event, command, parts):
 
         # 获取总规则数
         total_rules = session.query(ForwardRule).count()
-        
+
         if total_rules == 0:
-            await event.reply('当前没有任何转发规则')
+            await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+            await reply_and_delete(event,'当前没有任何转发规则')
             return
 
         # 计算总页数
@@ -1824,15 +1940,15 @@ async def handle_list_rule_command(event, command, parts):
 
         # 获取当前页的规则
         rules = session.query(ForwardRule).order_by(ForwardRule.id).offset(offset).limit(per_page).all()
-            
+
         # 构建规则列表消息
         message_parts = [f'📋 转发规则列表 (第{page}/{total_pages}页)：\n']
-        
+
         for rule in rules:
             # 获取源聊天和目标聊天的名称
             source_chat = rule.source_chat
             target_chat = rule.target_chat
-            
+
             # 构建规则描述
             rule_desc = (
                 f'<b>ID: {rule.id}</b>\n'
@@ -1862,27 +1978,31 @@ async def handle_list_rule_command(event, command, parts):
             nav_row.append(Button.inline('➡️', 'noop'))  # 禁用状态的按钮
 
         buttons.append(nav_row)
-        
+
         # 发送消息
-        await event.reply('\n'.join(message_parts), buttons=buttons, parse_mode='html')
-        
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,'\n'.join(message_parts), buttons=buttons, parse_mode='html')
+
     except Exception as e:
         logger.error(f'列出规则时出错: {str(e)}')
         logger.exception(e)
-        await event.reply('获取规则列表时发生错误，请检查日志')
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,'获取规则列表时发生错误，请检查日志')
     finally:
         session.close()
 
 async def handle_delete_rule_command(event, command, parts):
     """处理 delete_rule 命令"""
     if len(parts) < 2:
-        await event.reply(f'用法: /{command} <ID1> [ID2] [ID3] ...\n例如: /{command} 1 2 3')
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,f'用法: /{command} <ID1> [ID2] [ID3] ...\n例如: /{command} 1 2 3')
         return
-        
+
     try:
         ids_to_remove = [int(x) for x in parts[1:]]
     except ValueError:
-        await event.reply('ID必须是数字')
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,'ID必须是数字')
         return
 
     session = get_session()
@@ -1949,13 +2069,15 @@ async def handle_delete_rule_command(event, command, parts):
         if failed_ids:
             response_parts.append(f'❌ 删除失败的规则: {", ".join(map(str, failed_ids))}')
 
-        await event.reply('\n'.join(response_parts) or '没有规则被删除')
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,'\n'.join(response_parts) or '没有规则被删除')
 
     except Exception as e:
         session.rollback()
         logger.error(f'删除规则时出错: {str(e)}')
         logger.exception(e)
-        await event.reply('删除规则时发生错误，请检查日志')
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,'删除规则时发生错误，请检查日志')
     finally:
         session.close()
 
@@ -1964,32 +2086,35 @@ async def handle_delete_rss_user_command(event, command, parts):
     """处理 delete_rss_user 命令"""
     db_ops = await get_db_ops()
     session = get_session()
-    
+
     try:
         # 检查是否指定了用户名
         specified_username = None
         if len(parts) > 1:
             specified_username = parts[1].strip()
-        
+
         # 查询所有用户
         users = session.query(models.User).all()
-        
+
         if not users:
-            await event.reply("RSS系统中没有用户账户")
+            await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+            await reply_and_delete(event, "RSS系统中没有用户账户")
             return
-        
+
         # 占位，不排除以后有多用户功能，如果指定了用户名，尝试删除该用户
         if specified_username:
             user = session.query(models.User).filter(models.User.username == specified_username).first()
             if user:
                 session.delete(user)
                 session.commit()
-                await event.reply(f"已删除RSS用户: {specified_username}")
+                await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+                await reply_and_delete(event,f"已删除RSS用户: {specified_username}")
                 return
             else:
-                await event.reply(f"未找到用户名为 '{specified_username}' 的RSS用户")
+                await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+                await reply_and_delete(event,f"未找到用户名为 '{specified_username}' 的RSS用户")
                 return
-        
+
         # 如果没有指定用户名
         # 默认只有一个用户，直接删除
         if len(users) == 1:
@@ -1997,20 +2122,23 @@ async def handle_delete_rss_user_command(event, command, parts):
             username = user.username
             session.delete(user)
             session.commit()
-            await event.reply(f"已删除RSS用户: {username}")
+            await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+            await reply_and_delete(event,f"已删除RSS用户: {username}")
             return
-        
+
         # 占位，不排除以后有多用户功能，如果有多个用户，则列出所有用户并提示指定用户名
         usernames = [user.username for user in users]
         user_list = "\n".join([f"{i+1}. {username}" for i, username in enumerate(usernames)])
-        
-        await event.reply(f"RSS系统中有多个用户，请使用 `/delete_rss_user <用户名>` 指定要删除的用户:\n\n{user_list}")
-        
+
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,f"RSS系统中有多个用户，请使用 `/delete_rss_user <用户名>` 指定要删除的用户:\n\n{user_list}")
+
     except Exception as e:
         session.rollback()
         error_message = f"删除RSS用户时出错: {str(e)}"
         logger.error(error_message)
         logger.error(traceback.format_exc())
-        await event.reply(error_message)
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,error_message)
     finally:
         session.close()

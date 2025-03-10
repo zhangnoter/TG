@@ -33,7 +33,10 @@ async def create_ai_settings_buttons(rule):
         buttons.append([Button.inline(button_text, callback_data)])
 
     # 添加返回按钮
-    buttons.append([Button.inline('👈 返回规则设置', f"rule_settings:{rule.id}")])
+    buttons.append([
+        Button.inline('👈 返回', f"rule_settings:{rule.id}"),
+        Button.inline('关闭', "close_settings")
+    ])
 
     return buttons
 
@@ -66,7 +69,10 @@ async def create_media_settings_buttons(rule):
         buttons.append([Button.inline(button_text, callback_data)])
     
     # 添加返回按钮
-    buttons.append([Button.inline('👈 返回规则设置', f"rule_settings:{rule.id}")])
+    buttons.append([
+        Button.inline('👈 返回', f"rule_settings:{rule.id}"),
+        Button.inline('关闭', "close_settings")
+    ])
 
     return buttons
 
@@ -193,7 +199,10 @@ async def create_summary_time_buttons(rule_id, page=0):
         ))
 
     buttons.append(nav_buttons)
-    buttons.append([Button.inline("👈 返回", f"ai_settings:{rule_id}")])
+    buttons.append([
+            Button.inline('👈 返回', f"ai_settings:{rule_id}"),
+            Button.inline('关闭', "close_settings")
+        ])
 
     return buttons
 
@@ -251,7 +260,11 @@ async def create_media_size_buttons(rule_id, page=0):
         ))
 
     buttons.append(nav_buttons)
-    buttons.append([Button.inline("👈 返回", f"rule_settings:{rule_id}")])
+
+    buttons.append([
+            Button.inline('👈 返回', f"rule_settings:{rule_id}"),
+            Button.inline('关闭', "close_settings")
+        ])
 
     return buttons
 
@@ -309,7 +322,11 @@ async def create_delay_time_buttons(rule_id, page=0):
         ))
 
     buttons.append(nav_buttons)
-    buttons.append([Button.inline("👈 返回", f"rule_settings:{rule_id}")])
+
+    buttons.append([
+            Button.inline('👈 返回', f"rule_settings:{rule_id}"),
+            Button.inline('关闭', "close_settings")
+        ])
 
     return buttons
 
@@ -342,7 +359,10 @@ async def create_media_types_buttons(rule_id, media_types):
         callback_data = f"toggle_media_type:{rule_id}:{field}"
         buttons.append([Button.inline(button_text, callback_data)])
     
-    buttons.append([Button.inline("👈 返回媒体设置", f"media_settings:{rule_id}")])
+    buttons.append([
+            Button.inline('👈 返回', f"media_settings:{rule_id}"),
+            Button.inline('关闭', "close_settings")
+        ])
     
     return buttons
 
@@ -422,8 +442,11 @@ async def create_media_extensions_buttons(rule_id, page=0):
         if page_buttons:
             buttons.append(page_buttons)
         
-        # 添加返回按钮
-        buttons.append([Button.inline("👈 返回媒体设置", f"media_settings:{rule_id}")])
+
+        buttons.append([
+            Button.inline('👈 返回', f"media_settings:{rule_id}"),
+            Button.inline('关闭', "close_settings")
+        ])
     finally:
         session.close()
     

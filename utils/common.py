@@ -27,6 +27,16 @@ async def get_main_module():
         spec.loader.exec_module(main)
         return main
 
+async def get_user_client():
+    """获取用户客户端"""
+    main = await get_main_module()
+    return main.user_client
+
+async def get_bot_client():
+    """获取机器人客户端"""
+    main = await get_main_module()
+    return main.bot_client
+
 async def get_db_ops():
     """获取 main.py 中的 db_ops 实例"""
     main = await get_main_module()
@@ -56,7 +66,7 @@ async def get_current_rule(session, event):
 
         if not current_chat_db or not current_chat_db.current_add_id:
             logger.info('未找到当前聊天或未选择源聊天')
-            await event.reply('请先使用 /switch 选择一个源聊天')
+            await reply_and_delete(event,'请先使用 /switch 选择一个源聊天')
             return None
 
         logger.info(f'当前选中的源聊天ID: {current_chat_db.current_add_id}')
@@ -79,7 +89,7 @@ async def get_current_rule(session, event):
 
         if not rule:
             logger.info('未找到对应的转发规则')
-            await event.reply('转发规则不存在')
+            await reply_and_delete(event,'转发规则不存在')
             return None
 
         logger.info(f'找到转发规则 ID: {rule.id}')
@@ -87,7 +97,7 @@ async def get_current_rule(session, event):
     except Exception as e:
         logger.error(f'获取当前规则时出错: {str(e)}')
         logger.exception(e)
-        await event.reply('获取当前规则时出错，请检查日志')
+        await reply_and_delete(event,'获取当前规则时出错，请检查日志')
         return None
 
 
@@ -104,7 +114,7 @@ async def get_all_rules(session, event):
 
         if not current_chat_db:
             logger.info('未找到当前聊天')
-            await event.reply('当前聊天没有任何转发规则')
+            await reply_and_delete(event,'当前聊天没有任何转发规则')
             return None
 
         logger.info(f'找到当前聊天数据库记录 ID: {current_chat_db.id}')
@@ -116,7 +126,7 @@ async def get_all_rules(session, event):
 
         if not rules:
             logger.info('未找到任何转发规则')
-            await event.reply('当前聊天没有任何转发规则')
+            await reply_and_delete(event,'当前聊天没有任何转发规则')
             return None
 
         logger.info(f'找到 {len(rules)} 条转发规则')
@@ -124,7 +134,7 @@ async def get_all_rules(session, event):
     except Exception as e:
         logger.error(f'获取所有规则时出错: {str(e)}')
         logger.exception(e)
-        await event.reply('获取规则时出错，请检查日志')
+        await reply_and_delete(event,'获取规则时出错，请检查日志')
         return None
 
 

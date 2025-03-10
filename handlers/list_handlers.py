@@ -1,4 +1,5 @@
 from handlers.button.button_helpers import *
+from utils.auto_delete import reply_and_delete
 
 async def show_list(event, command, items, formatter, title, page=1):
     """显示分页列表"""
@@ -12,7 +13,7 @@ async def show_list(event, command, items, formatter, title, page=1):
         try:
             return await event.edit(f'没有找到任何{title}')
         except:
-            return await event.reply(f'没有找到任何{title}')
+            return await reply_and_delete(event,f'没有找到任何{title}')
 
     # 获取当前页的项目
     start = (page - 1) * PAGE_SIZE
@@ -49,5 +50,5 @@ async def show_list(event, command, items, formatter, title, page=1):
     try:
         return await event.edit(text, buttons=buttons, parse_mode='markdown')
     except:
-        return await event.reply(text, buttons=buttons, parse_mode='markdown')
+        return await reply_and_delete(event,text, buttons=buttons, parse_mode='markdown')
 

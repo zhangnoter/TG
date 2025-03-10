@@ -181,6 +181,11 @@ RULE_SETTINGS = {
         },
         'toggle_action': 'toggle_only_rss',
         'toggle_func': lambda current: not current
+    },
+    'close_settings': {
+        'display_name': '关闭',
+        'toggle_action': 'close_settings',
+        'toggle_func': None
     }
 }
 
@@ -500,8 +505,13 @@ async def create_buttons(rule):
             Button.inline(
                 "👈 返回",
                 "settings"
+            ),
+            Button.inline(
+                "关闭",
+                "close_settings"
             )
         ])
+
 
     finally:
         session.close()

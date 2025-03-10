@@ -54,7 +54,7 @@ async def callback_set_summary_prompt(event, rule_id, session, message, data):
     
     logger.info(f"准备设置状态 - user_id: {user_id}, chat_id: {chat_id}, state: {state}")
     try:
-        state_manager.set_state(user_id, chat_id, state)
+        state_manager.set_state(user_id, chat_id, state, message)
         # 启动超时取消任务
         asyncio.create_task(cancel_state_after_timeout(user_id, chat_id))
         logger.info("状态设置成功")
@@ -110,7 +110,7 @@ async def callback_set_ai_prompt(event, rule_id, session, message, data):
 
     logger.info(f"准备设置状态 - user_id: {user_id}, chat_id: {chat_id}, state: {state}")
     try:
-        state_manager.set_state(user_id, chat_id, state)
+        state_manager.set_state(user_id, chat_id, state, message)
         # 启动超时取消任务
         asyncio.create_task(cancel_state_after_timeout(user_id, chat_id))
         logger.info("状态设置成功")

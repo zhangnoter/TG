@@ -29,7 +29,7 @@ async def handle_message_link(client, event):
                 chat_id = entity.id
             except Exception as e:
                 logger.error(f'获取频道信息失败: {str(e)}')
-                await event.reply('⚠️ 无法访问该频道，请确保已关注该频道。')
+                await reply_and_delete(event,'⚠️ 无法访问该频道，请确保已关注该频道。')
                 return
 
         # 获取用户客户端
@@ -39,7 +39,7 @@ async def handle_message_link(client, event):
         # 获取原始消息
         message = await user_client.get_messages(chat_id, ids=message_id)
         if not message:
-            await event.reply('⚠️ 无法获取该消息，可能是消息已被删除或无权限访问。')
+            await reply_and_delete(event,'⚠️ 无法获取该消息，可能是消息已被删除或无权限访问。')
             return
 
         # 检查是否是媒体组消息
@@ -51,7 +51,7 @@ async def handle_message_link(client, event):
 
     except Exception as e:
         logger.error(f'处理消息链接时出错: {str(e)}')
-        await event.reply('⚠️ 处理消息时出错，请确保链接正确且有权限访问该消息。')
+        await reply_and_delete(event,'⚠️ 处理消息时出错，请确保链接正确且有权限访问该消息。')
 
 async def handle_media_group(client, user_client, chat_id, message, event):
     """处理媒体组消息"""

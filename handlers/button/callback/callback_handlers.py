@@ -8,6 +8,7 @@ from handlers.button.callback.media_callback import *
 import logging
 import aiohttp
 from utils.constants import RSS_HOST, RSS_PORT
+from utils.auto_delete import respond_and_delete,reply_and_delete
 
 logger = logging.getLogger(__name__)
 
@@ -147,7 +148,7 @@ async def callback_delete(event, rule_id, session, message, data):
                 # 删除机器人的消息
         await message.delete()
         # 发送新的通知消息
-        await event.respond('✅ 已删除规则')
+        await respond_and_delete(event,('✅ 已删除规则'))
         await event.answer('已删除规则')
 
     except Exception as e:
@@ -221,43 +222,7 @@ async def callback_page(event, rule_id, session, message, data):
         logger.error(f'处理翻页时出错: {str(e)}')
         await event.answer('处理翻页时出错，请检查日志')
 
-async def callback_help(event, rule_id, session, message, data):
-    """处理帮助的回调"""
-    help_texts = {
-        'bind': """
-🔗 绑定新规则
 
-使用方法：
-/bind <目标聊天链接或名称>
-
-例如：
-/bind https://t.me/channel_name
-/bind "频道 名称"
-
-注意事项：
-1. 可以使用完整链接或群组/频道名称
-2. 如果名称中包含空格，需要用双引号包起来
-3. 使用名称时，会匹配第一个包含该名称的群组/频道
-4. 机器人必须是目标聊天的管理员
-5. 每个聊天可以设置多个转发规则
-""",
-        'settings': """
-⚙️ 管理设置
-
-使用方法：
-/settings - 显示所有转发规则的设置
-""",
-        'help': """
-❓ 完整帮助
-
-请使用 /help 命令查看所有可用命令的详细说明。
-"""
-    }
-
-    help_text = help_texts.get(rule_id, help_texts['help'])
-    # 添加返回按钮
-    buttons = [[Button.inline('👈 返回', 'start')]]
-    await event.edit(help_text, buttons=buttons)
 
 async def callback_rule_settings(event, rule_id, session, message, data):
     """处理规则设置的回调"""
@@ -342,6 +307,14 @@ async def callback_select_delay_time(event, rule_id, session, message, data):
     return
 
 
+async def callback_close_settings(event, rule_id, session, message, data):
+    """处理关闭设置按钮的回调，删除当前消息"""
+    try:
+        logger.info("执行关闭设置操作，准备删除消息")
+        await message.delete()
+    except Exception as e:
+        logger.error(f"删除消息时出错: {str(e)}")
+        await event.answer("关闭设置失败，请检查日志")
 
 async def callback_noop(event, rule_id, session, message, data):
     # 用于页码按钮，不做任何操作
@@ -488,6 +461,7 @@ async def handle_callback(event):
             await event.answer('处理请求时出错，请检查日志')
 
 
+
 # 回调处理器字典
 CALLBACK_HANDLERS = {
     'toggle_current': callback_toggle_current,
@@ -495,13 +469,13 @@ CALLBACK_HANDLERS = {
     'settings': callback_settings,
     'delete': callback_delete,
     'page': callback_page,
-    'help': callback_help,
     'rule_settings': callback_rule_settings,
     'set_summary_time': callback_set_summary_time,
     'set_delay_time': callback_set_delay_time,
     'select_delay_time': callback_select_delay_time,
     'delay_time_page': callback_delay_time_page,
     'page_rule': callback_page_rule,
+    'close_settings': callback_close_settings,
     # AI设置
     'set_summary_prompt': callback_set_summary_prompt,
     'set_ai_prompt': callback_set_ai_prompt,
@@ -532,7 +506,6 @@ CALLBACK_HANDLERS = {
     'media_extensions_page': callback_media_extensions_page,
     'toggle_media_extension': callback_toggle_media_extension,
     'noop': callback_noop,
-   
 }
 
 
