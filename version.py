@@ -11,7 +11,7 @@ VERSION_INFO = {
 
 UPDATE_INFO = """<blockquote><b>✨ 更新日志 v1.5</b>
 
--  新增 RSS 订阅功能，前往Readme查看完成说明
+-  新增 RSS 订阅功能，前往Readme查看完整说明
 
 - 增强 /settings 指令，可用/settings [规则ID] 直接打开规则设置页面
 
