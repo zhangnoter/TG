@@ -268,6 +268,11 @@ docker-compose up -d
    /bind https://t.me/tgnews 或者 /bind "TG 新闻"
    /bind https://t.me/tgread 或者 /bind "TG 阅读"
    ```
+    或者使用两个参数，第一个参数是源聊天窗口链接或名称，第二个参数是目标聊天窗口链接或名称
+   ```bash
+   /bind https://t.me/tgnews 当前聊天窗口名字/连接
+   /bind https://t.me/tgread 当前聊天窗口名字/连接
+   ```
 4. 设置消息处理模式：
    ```bash
    /settings
