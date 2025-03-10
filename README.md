@@ -113,6 +113,12 @@ RSS_BASE_URL=
 # RSS媒体文件基础URL，留空则使用默认的访问URL（例如：https://media.example.com）
 RSS_MEDIA_BASE_URL=
 
+# bot消息删除时间 (秒),0表示立即删除, -1表示不删除
+BOT_MESSAGE_DELETE_TIMEOUT=60
+
+# 是否自动删除用户发送的指令消息 (true/false)
+USER_MESSAGE_DELETE_ENABLE=true
+
 # 数据库配置
 DATABASE_URL=sqlite:///./db/forward.db
 
@@ -539,8 +545,8 @@ AI处理提示词中可以使用以下格式：
 /help(/h) - 显示此帮助信息
 
 绑定和设置
-/bind(/b) <聊天窗口链接/聊天窗口名字> - 绑定源聊天
-/settings(/s) - 管理转发规则
+/bind(/b) <源聊天链接或名称> [目标聊天链接或名称] - 绑定源聊天
+/settings(/s) [规则ID] - 管理转发规则
 /changelog(/cl) - 查看更新日志
 
 转发规则管理
