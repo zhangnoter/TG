@@ -467,7 +467,7 @@ AI处理提示词中可以使用以下格式：
 > 注意：旧版本用户需要用新的docker-compose.yml文件重新部署：[docker-compose.yml](./docker-compose.yml)
 ### 访问RSS仪表盘
 
-1. 浏览器访问 `http://你的服务器地址:9804/`
+浏览器访问 `http://你的服务器地址:9804/`
 
 ### RSS配置管理
 
