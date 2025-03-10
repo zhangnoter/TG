@@ -18,6 +18,7 @@ from utils.constants import RSS_HOST, RSS_PORT
 import models.models as models
 from utils.auto_delete import respond_and_delete,reply_and_delete,async_delete_user_message
 from utils.common import get_bot_client
+from handlers.button.settings_manager import create_settings_text, create_buttons
 
 logger = logging.getLogger(__name__)
 
@@ -152,8 +153,39 @@ async def handle_bind_command(event, client, parts):
         await reply_and_delete(event,'设置转发规则时出错，请检查日志')
         return
 
-async def handle_settings_command(event):
+async def handle_settings_command(event, command, parts):
     """处理 settings 命令"""
+    # 添加日志
+    logger.info(f'处理 settings 命令 - parts: {parts}')
+    
+    # 获取参数
+    args = parts[1:] if len(parts) > 1 else []
+    
+    # 检查是否提供了规则ID
+    if len(args) >= 1 and args[0].isdigit():
+        rule_id = int(args[0])
+        
+        # 直接打开指定规则的设置界面
+        session = get_session()
+        try:
+            rule = session.query(ForwardRule).get(rule_id)
+            if not rule:
+                await reply_and_delete(event, f'找不到ID为 {rule_id} 的规则')
+                return
+                
+            # 与callback_rule_settings函数相同的处理方式
+            settings_message = await event.respond(
+                await create_settings_text(rule),
+                buttons=await create_buttons(rule)
+            )
+            
+        except Exception as e:
+            logger.error(f'打开规则设置时出错: {str(e)}')
+            await reply_and_delete(event, '打开规则设置时出错，请检查日志')
+        finally:
+            session.close()
+        return
+    
     current_chat = await event.get_chat()
     current_chat_id = str(current_chat.id)
     # 添加日志

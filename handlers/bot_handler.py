@@ -97,8 +97,8 @@ async def handle_command(client, event):
     command_handlers = {
         'bind': lambda: handle_bind_command(event, client, parts),
         'b': lambda: handle_bind_command(event, client, parts),
-        'settings': lambda: handle_settings_command(event),
-        's': lambda: handle_settings_command(event),
+        'settings': lambda: handle_settings_command(event, command, parts),
+        's': lambda: handle_settings_command(event, command, parts),
         'switch': lambda: handle_switch_command(event),
         'sw': lambda: handle_switch_command(event),
         'add': lambda: handle_add_command(event, command, parts),
