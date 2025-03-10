@@ -37,9 +37,9 @@
   - [📰 RSS订阅](#-RSS订阅)
     - [启用RSS功能](#启用rss功能)
     - [访问RSS仪表盘](#访问rss仪表盘) 
+    - [Nginx配置](#nginx配置)
     - [RSS配置说明](#rss配置管理)
     - [特殊设置项](#特殊设置项)
-    - [Nginx配置](#nginx配置)
     - [注意事项](#注意事项)
   
 - [🎯 特殊功能](#-特殊功能)
@@ -112,6 +112,12 @@ RSS_ENABLED=true
 RSS_BASE_URL=
 # RSS媒体文件基础URL，留空则使用默认的访问URL（例如：https://media.example.com）
 RSS_MEDIA_BASE_URL=
+
+# bot消息删除时间 (秒),0表示立即删除, -1表示不删除
+BOT_MESSAGE_DELETE_TIMEOUT=60
+
+# 是否自动删除用户发送的指令消息 (true/false)
+USER_MESSAGE_DELETE_ENABLE=true
 
 # 数据库配置
 DATABASE_URL=sqlite:///./db/forward.db
@@ -192,7 +198,6 @@ UFB_TOKEN=
 
 ```
 
-#### docker-compose.yml 文件
 新建 `docker-compose.yml` 文件，内容如下：
 
 ```yaml
@@ -461,7 +466,21 @@ AI处理提示词中可以使用以下格式：
 > 注意：旧版本用户需要用新的docker-compose.yml文件重新部署：[docker-compose.yml](./docker-compose.yml)
 ### 访问RSS仪表盘
 
-1. 浏览器访问 `http://你的服务器地址:9804/`
+浏览器访问 `http://你的服务器地址:9804/`
+
+### Nginx配置
+```
+ location / {
+        proxy_pass http://127.0.0.1:9804;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+    }
+```
 
 ### RSS配置管理
 
@@ -500,19 +519,6 @@ AI处理提示词中可以使用以下格式：
 ### 特殊设置项
 若在.env中开启`RSS_ENABLED=true`，则会在bot的设置中会新增一个`只转发到RSS`的选项，启用后，消息经过各种处理后会在RSS过滤器处理后中断，不会执行转发/编辑
 
-### Nginx配置
-```
- location / {
-        proxy_pass http://127.0.0.1:9804;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Forwarded-Host $host;
-    }
-```
 
 ### 注意事项
 
@@ -539,8 +545,8 @@ AI处理提示词中可以使用以下格式：
 /help(/h) - 显示此帮助信息
 
 绑定和设置
-/bind(/b) <聊天窗口链接/聊天窗口名字> - 绑定源聊天
-/settings(/s) - 管理转发规则
+/bind(/b) <源聊天链接或名称> [目标聊天链接或名称] - 绑定源聊天
+/settings(/s) [规则ID] - 管理转发规则
 /changelog(/cl) - 查看更新日志
 
 转发规则管理
