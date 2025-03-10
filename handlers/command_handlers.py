@@ -781,8 +781,8 @@ async def handle_help_command(event, command):
         "/help(/h) - 显示此帮助信息\n\n"
 
         "**绑定和设置**\n"
-        "/bind(/b) <目标聊天链接或名称> - 绑定源聊天\n"
-        "/settings(/s) - 管理转发规则\n"
+        "/bind(/b) <源聊天链接或名称> [目标聊天链接或名称] - 绑定源聊天\n"
+        "/settings(/s) [规则ID] - 管理转发规则\n"
         "/changelog(/cl) - 查看更新日志\n\n"
 
         "**转发规则管理**\n"
