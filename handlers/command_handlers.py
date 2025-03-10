@@ -31,91 +31,114 @@ async def handle_bind_command(event, client, parts):
         if ' ' in message_text:
             command, args_str = message_text.split(' ', 1)
             args = shlex.split(args_str)
-            if args:
-                target = args[0]
+            if len(args) >= 1:
+                source_target = args[0]
+                # 检查是否有第二个参数（目标聊天）
+                target_chat_input = args[1] if len(args) >= 2 else None
             else:
                 raise ValueError("参数不足")
         else:
             raise ValueError("参数不足")
     except ValueError:
         await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
-        await reply_and_delete(event,'用法: /bind <目标聊天链接或名称>\n例如:\n/bind https://t.me/channel_name\n/bind "频道 名称"')
+        await reply_and_delete(event,'用法: /bind <源聊天链接或名称> [目标聊天链接或名称]\n例如:\n/bind https://t.me/channel_name\n/bind "频道 名称"\n/bind https://t.me/source_channel https://t.me/target_channel\n/bind "源频道名称" "目标频道名称"')
         return
 
     # 检查是否是链接
-    is_link = target.startswith(('https://', 't.me/'))
+    is_source_link = source_target.startswith(('https://', 't.me/'))
 
-    source_chat = await event.get_chat()
-
+    # 默认使用当前聊天作为目标聊天
+    current_chat = await event.get_chat()
+    
     try:
         # 获取 main 模块中的用户客户端
         main = await get_main_module()
         user_client = main.user_client
 
-        # 使用用户客户端获取目标聊天的实体信息
+        # 使用用户客户端获取源聊天的实体信息
         try:
-            if is_link:
+            if is_source_link:
                 # 如果是链接，直接获取实体
-                target_chat = await user_client.get_entity(target)
+                source_chat_entity = await user_client.get_entity(source_target)
             else:
                 # 如果是名称，获取对话列表并查找匹配的第一个
                 async for dialog in user_client.iter_dialogs():
-                    if dialog.name and target.lower() in dialog.name.lower():
-                        target_chat = dialog.entity
+                    if dialog.name and source_target.lower() in dialog.name.lower():
+                        source_chat_entity = dialog.entity
                         break
                 else:
                     await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
-                    await reply_and_delete(event,'未找到匹配的群组/频道，请确保名称正确且账号已加入该群组/频道')
+                    await reply_and_delete(event,'未找到匹配的源群组/频道，请确保名称正确且账号已加入该群组/频道')
                     return
+            
+            # 获取目标聊天实体
+            if target_chat_input:
+                is_target_link = target_chat_input.startswith(('https://', 't.me/'))
+                if is_target_link:
+                    # 如果是链接，直接获取实体
+                    target_chat_entity = await user_client.get_entity(target_chat_input)
+                else:
+                    # 如果是名称，获取对话列表并查找匹配的第一个
+                    async for dialog in user_client.iter_dialogs():
+                        if dialog.name and target_chat_input.lower() in dialog.name.lower():
+                            target_chat_entity = dialog.entity
+                            break
+                    else:
+                        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+                        await reply_and_delete(event,'未找到匹配的目标群组/频道，请确保名称正确且账号已加入该群组/频道')
+                        return
+            else:
+                # 使用当前聊天作为目标
+                target_chat_entity = current_chat
 
             # 检查是否在绑定自己
-            if str(target_chat.id) == str(source_chat.id):
+            if str(source_chat_entity.id) == str(target_chat_entity.id):
                 await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
                 await reply_and_delete(event,'⚠️ 不能将频道/群组绑定到自己')
                 return
 
         except ValueError:
             await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
-            await reply_and_delete(event,'无法获取目标聊天信息，请确保链接/名称正确且账号已加入该群组/频道')
+            await reply_and_delete(event,'无法获取聊天信息，请确保链接/名称正确且账号已加入该群组/频道')
             return
         except Exception as e:
-            logger.error(f'获取目标聊天信息时出错: {str(e)}')
+            logger.error(f'获取聊天信息时出错: {str(e)}')
             await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
-            await reply_and_delete(event,'获取目标聊天信息时出错，请检查日志')
+            await reply_and_delete(event,'获取聊天信息时出错，请检查日志')
             return
 
         # 保存到数据库
         session = get_session()
         try:
-            # 保存源聊天（链接指向的聊天）
+            # 保存源聊天
             source_chat_db = session.query(Chat).filter(
-                Chat.telegram_chat_id == str(target_chat.id)
+                Chat.telegram_chat_id == str(source_chat_entity.id)
             ).first()
 
             if not source_chat_db:
                 source_chat_db = Chat(
-                    telegram_chat_id=str(target_chat.id),
-                    name=target_chat.title if hasattr(target_chat, 'title') else 'Private Chat'
+                    telegram_chat_id=str(source_chat_entity.id),
+                    name=source_chat_entity.title if hasattr(source_chat_entity, 'title') else 'Private Chat'
                 )
                 session.add(source_chat_db)
                 session.flush()
 
-            # 保存目标聊天（当前聊天）
+            # 保存目标聊天
             target_chat_db = session.query(Chat).filter(
-                Chat.telegram_chat_id == str(source_chat.id)
+                Chat.telegram_chat_id == str(target_chat_entity.id)
             ).first()
 
             if not target_chat_db:
                 target_chat_db = Chat(
-                    telegram_chat_id=str(source_chat.id),
-                    name=source_chat.title if hasattr(source_chat, 'title') else 'Private Chat'
+                    telegram_chat_id=str(target_chat_entity.id),
+                    name=target_chat_entity.title if hasattr(target_chat_entity, 'title') else 'Private Chat'
                 )
                 session.add(target_chat_db)
                 session.flush()
 
             # 如果当前没有选中的源聊天，就设置为新绑定的聊天
             if not target_chat_db.current_add_id:
-                target_chat_db.current_add_id = str(target_chat.id)
+                target_chat_db.current_add_id = str(source_chat_entity.id)
 
             # 创建转发规则
             rule = ForwardRule(
@@ -148,7 +171,7 @@ async def handle_bind_command(event, client, parts):
             session.close()
 
     except Exception as e:
-        logger.error(f'设置转发规则时出错: {str(e)}')
+        logger.error(f'设置转发规则时出错: {str(e)}\n{traceback.format_exc()}')
         await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
         await reply_and_delete(event,'设置转发规则时出错，请检查日志')
         return
