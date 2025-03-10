@@ -105,8 +105,13 @@ USER_ID=
 # 默认最大媒体文件大小限制（单位：MB）
 DEFAULT_MAX_MEDIA_SIZE=15
 
-# 是否开启调试日志 (true/false)
-DEBUG=false
+# RSS配置
+# 是否启用RSS功能 (true/false)
+RSS_ENABLED=true
+# RSS基础访问URL，留空则使用默认的访问URL（例如：https://rss.example.com）
+RSS_BASE_URL=
+# RSS媒体文件基础URL，留空则使用默认的访问URL（例如：https://media.example.com）
+RSS_MEDIA_BASE_URL=
 
 # 数据库配置
 DATABASE_URL=sqlite:///./db/forward.db
@@ -193,7 +198,7 @@ UFB_TOKEN=
 ```yaml
 services:
   telegram-forwarder:
-    image: heavrnl/telegramforwarder:rss
+    image: heavrnl/telegramforwarder:latest
     container_name: telegram-forwarder
     ports:
       - 9804:8000
@@ -489,7 +494,7 @@ AI处理提示词中可以使用以下格式：
 
 ### 特殊说明
 - 若只开启自动提取标题，而不开启自动提取内容，则内容会是包含提取了标题的完整的Telegram消息内容
-- 若内容处理选项和正则表达式配置都为空，标题会自动匹配消息的前20个字符，内容则为原始消息
+- 若内容处理选项和正则表达式配置都为空，会自动匹配前20个字符作为标题，内容则为原始消息
 
 
 ### 特殊设置项
