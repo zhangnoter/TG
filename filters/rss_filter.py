@@ -9,7 +9,7 @@ from datetime import datetime
 import shutil
 from filters.base_filter import BaseFilter
 import uuid
-from utils.constants import TEMP_DIR, RSS_MEDIA_DIR, get_rule_media_dir,RSS_HOST,RSS_PORT
+from utils.constants import TEMP_DIR, RSS_MEDIA_DIR, get_rule_media_dir,RSS_HOST,RSS_PORT,RSS_ENABLED
 from models.models import get_session
 from utils.common import get_db_ops
 
@@ -42,8 +42,12 @@ class RSSFilter(BaseFilter):
     
     async def _process(self, context):
         """处理RSS过滤器逻辑"""
+        
+        if not RSS_ENABLED:
+            logger.info("RSS未启用，跳过RSS处理")
+            return True
+        
         if not context.should_forward:
-            logger.info("消息被前置过滤器过滤，跳过RSS处理")
             return False
         
         db_ops = await get_db_ops()
@@ -56,13 +60,13 @@ class RSSFilter(BaseFilter):
         if rss_config is None:
             logger.error(f"找不到规则ID为 {context.rule.id} 的RSS配置，跳过RSS处理")
             session.close()
-            return False
+            return True
         
         # 检查是否启用RSS
         if not rss_config.enable_rss:
             logger.info(f"规则ID为 {context.rule.id} 的RSS未启用，跳过RSS处理")
             session.close()
-            return False
+            return True
 
         # 执行RSS规则前，先确保媒体文件已经下载
         # 媒体组消息需要特殊处理
