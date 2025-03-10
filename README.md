@@ -198,7 +198,6 @@ UFB_TOKEN=
 
 ```
 
-#### docker-compose.yml 文件
 新建 `docker-compose.yml` 文件，内容如下：
 
 ```yaml
