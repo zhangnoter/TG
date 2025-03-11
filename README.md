@@ -446,8 +446,13 @@ AI处理提示词中可以使用以下格式：
    # RSS媒体文件基础URL，留空则使用默认的访问URL（例如：https://media.example.com）
    RSS_MEDIA_BASE_URL=
    ```
-
-2. 重启服务以启用RSS功能：
+2. docker-compose.yml取消注释
+   ```
+    # 如果需要使用 RSS功能，请取消以下注释
+     ports:
+       - 9804:8000
+   ```
+3. 重启服务以启用RSS功能：
    ```bash
    docker-compose restart
    ```
