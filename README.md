@@ -114,7 +114,7 @@ RSS_BASE_URL=
 RSS_MEDIA_BASE_URL=
 
 # bot消息删除时间 (秒),0表示立即删除, -1表示不删除
-BOT_MESSAGE_DELETE_TIMEOUT=600
+BOT_MESSAGE_DELETE_TIMEOUT=300
 
 # 是否自动删除用户发送的指令消息 (true/false)
 USER_MESSAGE_DELETE_ENABLE=true
