@@ -805,8 +805,8 @@ async def handle_help_command(event, command):
         "/copy_keywords_regex(/ckr) <规则ID> - 复制指定规则的正则关键字到当前规则\n\n"
 
         "**替换规则管理**\n"
-        "/replace(/r) <模式> [替换内容] - 添加替换规则\n"
-        "/replace_all(/ra) <模式> [替换内容] - 添加替换规则到所有规则\n"
+        "/replace(/r) <正则表达式> [替换内容] - 添加替换规则\n"
+        "/replace_all(/ra) <正则表达式> [替换内容] - 添加替换规则到所有规则\n"
         "/list_replace(/lrp) - 列出所有替换规则\n"
         "/remove_replace(/rr) <序号> - 删除替换规则\n"
         "/clear_all_replace(/car) - 清除当前规则的所有替换规则\n"
