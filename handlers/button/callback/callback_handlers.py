@@ -9,6 +9,7 @@ import logging
 import aiohttp
 from utils.constants import RSS_HOST, RSS_PORT
 from utils.auto_delete import respond_and_delete,reply_and_delete
+from utils.common import check_and_clean_chats
 
 logger = logging.getLogger(__name__)
 
@@ -96,9 +97,9 @@ async def callback_delete(event, rule_id, session, message, data):
         return
 
     try:
-        # 保存源频道ID以供后续检查
-        source_chat_id = rule.source_chat_id
-
+        # 先保存规则对象，用于后续检查聊天关联
+        rule_obj = rule
+        
         # 先删除替换规则
         session.query(ReplaceRule).filter(
             ReplaceRule.rule_id == rule.id
@@ -111,27 +112,12 @@ async def callback_delete(event, rule_id, session, message, data):
 
         # 删除规则
         session.delete(rule)
-
-        # 检查源频道是否还有其他规则引用
-        remaining_rules = session.query(ForwardRule).filter(
-            ForwardRule.source_chat_id == source_chat_id
-        ).count()
-
-        if remaining_rules == 0:
-            # 如果没有其他规则引用这个源频道，删除源频道记录
-            source_chat = session.query(Chat).filter(
-                Chat.id == source_chat_id
-            ).first()
-            if source_chat:
-                logger.info(f'删除未使用的源频道: {source_chat.name} (ID: {source_chat.telegram_chat_id})')
-                session.delete(source_chat)
-
-        # 提交所有更改
+        
+        # 提交规则删除的更改
         session.commit()
         
         # 尝试删除RSS服务中的相关数据
         try:
-            
             rss_url = f"http://{RSS_HOST}:{RSS_PORT}/api/rule/{rule_id}"
             async with aiohttp.ClientSession() as client_session:
                 async with client_session.delete(rss_url) as response:
@@ -143,9 +129,13 @@ async def callback_delete(event, rule_id, session, message, data):
         except Exception as rss_err:
             logger.error(f"调用RSS删除API时出错: {str(rss_err)}")
             # 不影响主要流程，继续执行
+        
+        # 使用通用方法检查并清理不再使用的聊天记录
+        deleted_chats = await check_and_clean_chats(session, rule_obj)
+        if deleted_chats > 0:
+            logger.info(f"删除规则后清理了 {deleted_chats} 个未使用的聊天记录")
 
-        # 更新消息
-                # 删除机器人的消息
+        # 删除机器人的消息
         await message.delete()
         # 发送新的通知消息
         await respond_and_delete(event,('✅ 已删除规则'))

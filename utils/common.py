@@ -8,6 +8,7 @@ from enums.enums import ForwardMode
 from models.models import Chat, ForwardRule
 import re
 import telethon
+from utils.auto_delete import respond_and_delete,reply_and_delete,async_delete_user_message
 
 from utils.constants import AI_SETTINGS_TEXT,MEDIA_SETTINGS_TEXT
 
@@ -374,6 +375,79 @@ async def get_sender_info(event, rule_id):
         logger.warning(f"规则 ID: {rule_id} - event.message 既没有 from_user 也没有 sender 属性")
         sender_info = "未知发送者 (无法获取用户信息)"
     return sender_info
+
+async def check_and_clean_chats(session, rule=None):
+    """
+    检查并清理不再与任何规则关联的聊天记录
+    
+    Args:
+        session: 数据库会话
+        rule: 被删除的规则对象（可选），如果提供则从中获取聊天ID
+        
+    Returns:
+        int: 删除的聊天记录数量
+    """
+    deleted_count = 0
+    
+    try:
+        # 获取所有聊天ID
+        chat_ids_to_check = set()
+        
+        # 如果提供了规则，先检查这些受影响的聊天
+        if rule:
+            if rule.source_chat_id:
+                chat_ids_to_check.add(rule.source_chat_id)
+            if rule.target_chat_id:
+                chat_ids_to_check.add(rule.target_chat_id)
+        else:
+            # 如果没有提供规则，则获取所有聊天
+            all_chats = session.query(Chat.id).all()
+            chat_ids_to_check = set(chat[0] for chat in all_chats)
+        
+        # 对每个聊天ID进行检查
+        for chat_id in chat_ids_to_check:
+            # 检查此聊天是否还被任何规则引用
+            as_source = session.query(ForwardRule).filter(
+                ForwardRule.source_chat_id == chat_id
+            ).count()
+            
+            as_target = session.query(ForwardRule).filter(
+                ForwardRule.target_chat_id == chat_id
+            ).count()
+            
+            # 如果聊天不再被任何规则引用
+            if as_source == 0 and as_target == 0:
+                chat = session.query(Chat).get(chat_id)
+                if chat:
+                    # 获取telegram_chat_id以便日志记录
+                    telegram_chat_id = chat.telegram_chat_id
+                    name = chat.name or "未命名聊天"
+                    
+                    # 清理所有引用此聊天作为current_add_id的记录
+                    chats_using_this = session.query(Chat).filter(
+                        Chat.current_add_id == telegram_chat_id
+                    ).all()
+                    
+                    for other_chat in chats_using_this:
+                        other_chat.current_add_id = None
+                        logger.info(f'清除聊天 {other_chat.name} 的current_add_id设置')
+                    
+                    # 删除聊天记录
+                    session.delete(chat)
+                    logger.info(f'删除未使用的聊天: {name} (ID: {telegram_chat_id})')
+                    deleted_count += 1
+        
+        # 如果有删除操作，提交更改
+        if deleted_count > 0:
+            session.commit()
+            logger.info(f'共清理了 {deleted_count} 个未使用的聊天记录')
+        
+        return deleted_count
+        
+    except Exception as e:
+        logger.error(f'检查和清理聊天记录时出错: {str(e)}')
+        session.rollback()
+        return 0
 
 
 

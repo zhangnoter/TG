@@ -2094,25 +2094,8 @@ async def handle_delete_rule_command(event, command, parts):
                 continue
 
             try:
-                # 保存源频道ID以供后续检查
-                source_chat_id = rule.source_chat_id
-
                 # 删除规则（关联的替换规则、关键字和媒体类型会自动删除）
                 session.delete(rule)
-
-                # 检查源频道是否还有其他规则引用
-                remaining_rules = session.query(ForwardRule).filter(
-                    ForwardRule.source_chat_id == source_chat_id
-                ).count()
-
-                if remaining_rules == 0:
-                    # 如果没有其他规则引用这个源频道，删除源频道记录
-                    source_chat = session.query(Chat).filter(
-                        Chat.id == source_chat_id
-                    ).first()
-                    if source_chat:
-                        logger.info(f'删除未使用的源频道: {source_chat.name} (ID: {source_chat.telegram_chat_id})')
-                        session.delete(source_chat)
 
                 # 尝试从RSS服务删除规则数据
                 try:
@@ -2135,6 +2118,13 @@ async def handle_delete_rule_command(event, command, parts):
 
         # 提交事务
         session.commit()
+        
+        # 清理不再使用的聊天记录
+        # 这里直接对整个数据库进行一次清理，不需要单独处理每个规则
+        # 因为所有规则都已经从数据库中删除
+        deleted_chats = await check_and_clean_chats(session)
+        if deleted_chats > 0:
+            logger.info(f"删除规则后清理了 {deleted_chats} 个未使用的聊天记录")
 
         # 构建响应消息
         response_parts = []
@@ -2144,6 +2134,8 @@ async def handle_delete_rule_command(event, command, parts):
             response_parts.append(f'❓ 未找到规则: {", ".join(map(str, not_found_ids))}')
         if failed_ids:
             response_parts.append(f'❌ 删除失败的规则: {", ".join(map(str, failed_ids))}')
+        if deleted_chats > 0:
+            response_parts.append(f'🧹 清理了 {deleted_chats} 个未使用的聊天记录')
 
         await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
         await reply_and_delete(event,'\n'.join(response_parts) or '没有规则被删除')
