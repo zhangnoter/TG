@@ -402,7 +402,7 @@ AI处理提示词中可以使用以下格式：
 /changelog(/cl) - 查看更新日志
 
 转发规则管理
-/copy_rule(/cr) <规则ID> - 复制指定规则的所有设置到当前规则
+/copy_rule(/cr)  <源规则ID> [目标规则ID] - 复制指定规则的所有设置到当前规则或目标规则ID
 /delete_rule(/dr) <规则ID> [规则ID] [规则ID] ... - 删除指定规则
 /list_rule(/lr) - 列出所有转发规则
 

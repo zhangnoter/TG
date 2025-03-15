@@ -786,7 +786,7 @@ async def handle_help_command(event, command):
         "/changelog(/cl) - 查看更新日志\n\n"
 
         "**转发规则管理**\n"
-        "/copy_rule(/cr) <规则ID> - 复制指定规则到当前规则\n"
+        "/copy_rule(/cr)  <源规则ID> [目标规则ID] - 复制指定规则的所有设置到当前规则或目标规则ID\n"
         "/list_rule(/lr) - 列出所有转发规则\n"
         "/delete_rule(/dr) <规则ID> [规则ID] [规则ID] ... - 删除指定规则\n\n"
 
@@ -1477,15 +1477,27 @@ async def handle_copy_replace_command(event, command):
         session.close()
 
 async def handle_copy_rule_command(event, command):
-    """处理复制规则命令 - 复制一个规则的所有设置到当前规则"""
+    """处理复制规则命令 - 复制一个规则的所有设置到当前规则或指定规则"""
     parts = event.message.text.split()
-    if len(parts) != 2:
+    
+    # 检查参数数量
+    if len(parts) not in [2, 3]:
         await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
-        await reply_and_delete(event,'用法: /copy_rule <规则ID>')
+        await reply_and_delete(event,'用法: /copy_rule <源规则ID> [目标规则ID]')
         return
 
     try:
         source_rule_id = int(parts[1])
+        
+        # 确定目标规则ID
+        if len(parts) == 3:
+            # 如果提供了两个参数，使用第二个参数作为目标规则ID
+            target_rule_id = int(parts[2])
+            use_current_rule = False
+        else:
+            # 如果只提供了一个参数，使用当前规则作为目标
+            target_rule_id = None
+            use_current_rule = True
     except ValueError:
         await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
         await reply_and_delete(event,'规则ID必须是数字')
@@ -1493,18 +1505,27 @@ async def handle_copy_rule_command(event, command):
 
     session = get_session()
     try:
-        # 获取当前规则
-        rule_info = await get_current_rule(session, event)
-        if not rule_info:
-            return
-        target_rule, source_chat = rule_info
-
         # 获取源规则
         source_rule = session.query(ForwardRule).get(source_rule_id)
         if not source_rule:
             await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
-            await reply_and_delete(event,f'找不到规则ID: {source_rule_id}')
+            await reply_and_delete(event,f'找不到源规则ID: {source_rule_id}')
             return
+
+        # 获取目标规则
+        if use_current_rule:
+            # 获取当前规则
+            rule_info = await get_current_rule(session, event)
+            if not rule_info:
+                return
+            target_rule, source_chat = rule_info
+        else:
+            # 使用指定的目标规则ID
+            target_rule = session.query(ForwardRule).get(target_rule_id)
+            if not target_rule:
+                await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+                await reply_and_delete(event,f'找不到目标规则ID: {target_rule_id}')
+                return
 
         if source_rule.id == target_rule.id:
             await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
