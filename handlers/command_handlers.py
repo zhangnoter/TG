@@ -1,7 +1,7 @@
 from sqlalchemy.exc import IntegrityError
 from telethon import Button
 from models.models import MediaTypes, MediaExtensions
-from enums.enums import AddMode
+from enums.enums import AddMode, ForwardMode
 from models.models import get_session, Keyword, ReplaceRule, User, RuleSync
 from utils.common import *
 from utils.media import *
@@ -145,6 +145,12 @@ async def handle_bind_command(event, client, parts):
                 source_chat_id=source_chat_db.id,
                 target_chat_id=target_chat_db.id
             )
+            
+            # 如果是绑定自己，则默认使用白名单模式
+            if str(source_chat_entity.id) == str(target_chat_entity.id):
+                rule.forward_mode = ForwardMode.WHITELIST
+                rule.add_mode = AddMode.WHITELIST
+                
             session.add(rule)
             session.commit()
 
