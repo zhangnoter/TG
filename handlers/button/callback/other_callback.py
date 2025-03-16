@@ -1,5 +1,8 @@
 import traceback
 import aiohttp
+import os
+import asyncio
+from telethon.tl import types
 
 from handlers.button.button_helpers import create_media_size_buttons,create_media_settings_buttons,create_media_types_buttons,create_media_extensions_buttons
 from models.models import ForwardRule, MediaTypes, MediaExtensions, RuleSync, Keyword, ReplaceRule
@@ -12,8 +15,9 @@ from handlers.button.button_helpers import create_other_settings_buttons
 from telethon import Button
 from sqlalchemy import inspect
 from utils.constants import RSS_HOST, RSS_PORT,RULES_PER_PAGE
-from utils.common import check_and_clean_chats
+from utils.common import check_and_clean_chats, is_admin
 from utils.auto_delete import reply_and_delete, send_message_and_delete, respond_and_delete
+from managers.state_manager import state_manager
 
 logger = logging.getLogger(__name__)
 
@@ -1124,3 +1128,221 @@ async def callback_perform_delete_rule(event, rule_id_data, session, message, da
         await event.answer(f"删除规则失败: {str(e)}")
     return
 
+async def callback_set_userinfo_template(event, rule_id, session, message, data):
+    """设置用户信息模板"""
+    logger.info(f"开始处理设置用户信息模板回调 - event: {event}, rule_id: {rule_id}")
+    
+    rule = session.query(ForwardRule).get(rule_id)
+    if not rule:
+        await event.answer('规则不存在')
+        return
+
+    # 检查是否频道消息
+    if isinstance(event.chat, types.Channel):
+        # 检查是否是管理员
+        if not await is_admin(event.chat_id, event.sender_id, event.client):
+            await event.answer('只有管理员可以修改设置')
+            return
+        user_id = os.getenv('USER_ID')
+    else:
+        user_id = event.sender_id
+
+    chat_id = abs(event.chat_id)
+    state = f"set_userinfo_template:{rule_id}"
+    
+    logger.info(f"准备设置状态 - user_id: {user_id}, chat_id: {chat_id}, state: {state}")
+    try:
+        state_manager.set_state(user_id, chat_id, state, message, state_type="userinfo")
+        # 启动超时取消任务
+        asyncio.create_task(cancel_state_after_timeout(user_id, chat_id))
+        logger.info("状态设置成功")
+    except Exception as e:
+        logger.error(f"设置状态时出错: {str(e)}")
+        logger.exception(e)
+
+    try:
+        current_template = rule.userinfo_template if hasattr(rule, 'userinfo_template') and rule.userinfo_template else '未设置'
+        
+        help_text = (
+            "用户信息模板用于在转发消息中添加用户信息。\n"
+            "可用变量：\n"
+            "{name} - 用户名\n"
+            "{id} - 用户ID\n"
+        )
+        
+        await message.edit(
+            f"请发送新的用户信息模板\n"
+            f"当前规则ID: `{rule_id}`\n"
+            f"当前用户信息模板：\n\n`{current_template}`\n\n"
+            f"{help_text}\n"
+            f"5分钟内未设置将自动取消",
+            buttons=[[Button.inline("取消", f"cancel_set_userinfo:{rule_id}")]]
+        )
+        logger.info("消息编辑成功")
+    except Exception as e:
+        logger.error(f"编辑消息时出错: {str(e)}")
+        logger.exception(e)
+    return
+
+async def callback_set_time_template(event, rule_id, session, message, data):
+    """设置时间模板"""
+    logger.info(f"开始处理设置时间模板回调 - event: {event}, rule_id: {rule_id}")
+    
+    rule = session.query(ForwardRule).get(rule_id)
+    if not rule:
+        await event.answer('规则不存在')
+        return
+
+    # 检查是否频道消息
+    if isinstance(event.chat, types.Channel):
+        # 检查是否是管理员
+        if not await is_admin(event.chat_id, event.sender_id, event.client):
+            await event.answer('只有管理员可以修改设置')
+            return
+        user_id = os.getenv('USER_ID')
+    else:
+        user_id = event.sender_id
+
+    chat_id = abs(event.chat_id)
+    state = f"set_time_template:{rule_id}"
+    
+    logger.info(f"准备设置状态 - user_id: {user_id}, chat_id: {chat_id}, state: {state}")
+    try:
+        state_manager.set_state(user_id, chat_id, state, message, state_type="time")
+        # 启动超时取消任务
+        asyncio.create_task(cancel_state_after_timeout(user_id, chat_id))
+        logger.info("状态设置成功")
+    except Exception as e:
+        logger.error(f"设置状态时出错: {str(e)}")
+        logger.exception(e)
+
+    try:
+        current_template = rule.time_template if hasattr(rule, 'time_template') and rule.time_template else '未设置'
+        
+        help_text = (
+            "时间模板用于在转发消息中添加时间信息。\n"
+            "可用变量:\n"
+            "{time} - 当前时间\n"
+        )
+        
+        await message.edit(
+            f"请发送新的时间模板\n"
+            f"当前规则ID: `{rule_id}`\n"
+            f"当前时间模板：\n\n`{current_template}`\n\n"
+            f"{help_text}\n"
+            f"5分钟内未设置将自动取消",
+            buttons=[[Button.inline("取消", f"cancel_set_time:{rule_id}")]]
+        )
+        logger.info("消息编辑成功")
+    except Exception as e:
+        logger.error(f"编辑消息时出错: {str(e)}")
+        logger.exception(e)
+    return
+
+async def cancel_state_after_timeout(user_id: int, chat_id: int, timeout_minutes: int = 5):
+    """在指定时间后自动取消状态"""
+    await asyncio.sleep(timeout_minutes * 60)
+    current_state, _, _ = state_manager.get_state(user_id, chat_id)
+    if current_state:  # 只有当状态还存在时才清除
+        logger.info(f"状态超时自动取消 - user_id: {user_id}, chat_id: {chat_id}")
+        state_manager.clear_state(user_id, chat_id)
+
+async def callback_cancel_set_userinfo(event, rule_id, session, message, data):
+    """取消设置用户信息模板"""
+    rule_id = data.split(':')[1]
+    try:
+        rule = session.query(ForwardRule).get(int(rule_id))
+        if rule:
+            # 清除状态
+            state_manager.clear_state(event.sender_id, abs(event.chat_id))
+            # 返回到其他设置页面
+            await event.edit("其他设置：", buttons=await create_other_settings_buttons(rule_id=rule_id))
+            await event.answer("已取消设置")
+    finally:
+        session.close()
+    return
+
+async def callback_cancel_set_time(event, rule_id, session, message, data):
+    """取消设置时间模板"""
+    rule_id = data.split(':')[1]
+    try:
+        rule = session.query(ForwardRule).get(int(rule_id))
+        if rule:
+            # 清除状态
+            state_manager.clear_state(event.sender_id, abs(event.chat_id))
+            # 返回到其他设置页面
+            await event.edit("其他设置：", buttons=await create_other_settings_buttons(rule_id=rule_id))
+            await event.answer("已取消设置")
+    finally:
+        session.close()
+    return
+
+async def callback_set_original_link_template(event, rule_id, session, message, data):
+    """设置原始链接模板"""
+    logger.info(f"开始处理设置原始链接模板回调 - event: {event}, rule_id: {rule_id}")
+    
+    rule = session.query(ForwardRule).get(rule_id)
+    if not rule:
+        await event.answer('规则不存在')
+        return
+
+    # 检查是否频道消息
+    if isinstance(event.chat, types.Channel):
+        # 检查是否是管理员
+        if not await is_admin(event.chat_id, event.sender_id, event.client):
+            await event.answer('只有管理员可以修改设置')
+            return
+        user_id = os.getenv('USER_ID')
+    else:
+        user_id = event.sender_id
+
+    chat_id = abs(event.chat_id)
+    state = f"set_original_link_template:{rule_id}"
+    
+    logger.info(f"准备设置状态 - user_id: {user_id}, chat_id: {chat_id}, state: {state}")
+    try:
+        state_manager.set_state(user_id, chat_id, state, message, state_type="link")
+        # 启动超时取消任务
+        asyncio.create_task(cancel_state_after_timeout(user_id, chat_id))
+        logger.info("状态设置成功")
+    except Exception as e:
+        logger.error(f"设置状态时出错: {str(e)}")
+        logger.exception(e)
+
+    try:
+        current_template = rule.original_link_template if hasattr(rule, 'original_link_template') and rule.original_link_template else '未设置'
+        
+        help_text = (
+            "原始链接模板用于在转发消息中添加原始链接。\n"
+            "可用变量:\n"
+            "{link} - 完整的原始链接\n"
+        )
+        
+        await message.edit(
+            f"请发送新的原始链接模板\n"
+            f"当前规则ID: `{rule_id}`\n"
+            f"当前原始链接模板：\n\n`{current_template}`\n\n"
+            f"{help_text}\n"
+            f"5分钟内未设置将自动取消",
+            buttons=[[Button.inline("取消", f"cancel_set_link:{rule_id}")]]
+        )
+        logger.info("消息编辑成功")
+    except Exception as e:
+        logger.error(f"编辑消息时出错: {str(e)}")
+        logger.exception(e)
+    return
+
+async def callback_cancel_set_original_link(event, rule_id, session, message, data):
+    """取消设置原始链接模板"""
+    rule_id = data.split(':')[1]
+    try:
+        rule = session.query(ForwardRule).get(int(rule_id))
+        if rule:
+            # 清除状态
+            state_manager.clear_state(event.sender_id, abs(event.chat_id))
+            # 返回到其他设置页面
+            await event.edit("其他设置：", buttons=await create_other_settings_buttons(rule_id=rule_id))
+            await event.answer("已取消设置")
+    finally:
+        session.close()
+    return

@@ -373,6 +373,26 @@ OTHER_SETTINGS = {
         'display_name': '删除规则',
         'toggle_action': 'delete_rule',
         'toggle_func': None
+    },
+    'null': {
+        'display_name': '-----------',
+        'toggle_action': 'null',
+        'toggle_func': None
+    },
+    'set_userinfo_template': {
+        'display_name': '设置用户信息模板',
+        'toggle_action': 'set_userinfo_template',
+        'toggle_func': None
+    },
+    'set_time_template': {
+        'display_name': '设置时间模板',
+        'toggle_action': 'set_time_template',
+        'toggle_func': None
+    },
+    'set_original_link_template': {
+        'display_name': '设置原始链接模板',
+        'toggle_action': 'set_original_link_template',
+        'toggle_func': None
     }
 }
 

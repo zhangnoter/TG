@@ -38,6 +38,9 @@ class ForwardRule(Base):
     ufb_item = Column(String, nullable=True,default='main')
     is_delete_original = Column(Boolean, default=False)  # 是否删除原始消息
     is_original_sender = Column(Boolean, default=False)  # 是否附带原始消息发送人名称
+    userinfo_template = Column(String, default='**{name}**', nullable=True)  # 用户信息模板
+    time_template = Column(String, default='{time}', nullable=True)  # 时间模板
+    original_link_template = Column(String, default='原始连接：{original_link}', nullable=True)  # 原始链接模板
     is_original_time = Column(Boolean, default=False)  # 是否附带原始消息发送时间
     add_mode = Column(Enum(AddMode), nullable=False, default=AddMode.BLACKLIST) # 添加模式,默认黑名单
     enable_rule = Column(Boolean, default=True)  # 是否启用规则
@@ -328,6 +331,9 @@ def migrate_db(engine):
         'extension_filter_mode': 'ALTER TABLE forward_rules ADD COLUMN extension_filter_mode VARCHAR DEFAULT "BLACKLIST"',
         'only_rss': 'ALTER TABLE forward_rules ADD COLUMN only_rss BOOLEAN DEFAULT FALSE',
         'enable_sync': 'ALTER TABLE forward_rules ADD COLUMN enable_sync BOOLEAN DEFAULT FALSE',
+        'userinfo_template': 'ALTER TABLE forward_rules ADD COLUMN userinfo_template VARCHAR DEFAULT "**{name}**"',
+        'time_template': 'ALTER TABLE forward_rules ADD COLUMN time_template VARCHAR DEFAULT "{time}"',
+        'original_link_template': 'ALTER TABLE forward_rules ADD COLUMN original_link_template VARCHAR DEFAULT "原始连接：{original_link}"',
     }
 
     keywords_new_columns = {

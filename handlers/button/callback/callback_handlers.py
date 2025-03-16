@@ -667,4 +667,10 @@ CALLBACK_HANDLERS = {
     'perform_clear_keyword': callback_perform_clear_keyword,
     'perform_clear_replace': callback_perform_clear_replace,
     'perform_delete_rule': callback_perform_delete_rule,
+    'set_userinfo_template': callback_set_userinfo_template,
+    'set_time_template': callback_set_time_template,
+    'set_original_link_template': callback_set_original_link_template,
+    'cancel_set_userinfo': callback_cancel_set_userinfo,
+    'cancel_set_time': callback_cancel_set_time,
+    'cancel_set_original_link': callback_cancel_set_original_link,
 }

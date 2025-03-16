@@ -56,7 +56,7 @@ async def callback_set_summary_prompt(event, rule_id, session, message, data):
     
     logger.info(f"准备设置状态 - user_id: {user_id}, chat_id: {chat_id}, state: {state}")
     try:
-        state_manager.set_state(user_id, chat_id, state, message)
+        state_manager.set_state(user_id, chat_id, state, message, state_type="ai")
         # 启动超时取消任务
         asyncio.create_task(cancel_state_after_timeout(user_id, chat_id))
         logger.info("状态设置成功")
@@ -82,7 +82,7 @@ async def callback_set_summary_prompt(event, rule_id, session, message, data):
 async def cancel_state_after_timeout(user_id: int, chat_id: int, timeout_minutes: int = 5):
     """在指定时间后自动取消状态"""
     await asyncio.sleep(timeout_minutes * 60)
-    current_state = state_manager.get_state(user_id, chat_id)
+    current_state, _, _ = state_manager.get_state(user_id, chat_id)
     if current_state:  # 只有当状态还存在时才清除
         logger.info(f"状态超时自动取消 - user_id: {user_id}, chat_id: {chat_id}")
         state_manager.clear_state(user_id, chat_id)
@@ -112,7 +112,7 @@ async def callback_set_ai_prompt(event, rule_id, session, message, data):
 
     logger.info(f"准备设置状态 - user_id: {user_id}, chat_id: {chat_id}, state: {state}")
     try:
-        state_manager.set_state(user_id, chat_id, state, message)
+        state_manager.set_state(user_id, chat_id, state, message, state_type="ai")
         # 启动超时取消任务
         asyncio.create_task(cancel_state_after_timeout(user_id, chat_id))
         logger.info("状态设置成功")
