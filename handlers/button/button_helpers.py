@@ -1,7 +1,7 @@
 from telethon import Button
 from utils.constants import *
 from utils.settings import load_summary_times, load_ai_models, load_delay_times, load_max_media_size, load_media_extensions
-from handlers.button.settings_manager import AI_SETTINGS, AI_MODELS, MEDIA_SETTINGS,OTHER_SETTINGS,RULES_PER_PAGE
+from handlers.button.settings_manager import AI_SETTINGS, AI_MODELS, MEDIA_SETTINGS,OTHER_SETTINGS
 from utils.common import get_db_ops
 from models.models import get_session
 from sqlalchemy import text
