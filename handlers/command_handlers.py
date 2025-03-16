@@ -91,11 +91,11 @@ async def handle_bind_command(event, client, parts):
                 # 使用当前聊天作为目标
                 target_chat_entity = current_chat
 
-            # 检查是否在绑定自己
-            if str(source_chat_entity.id) == str(target_chat_entity.id):
-                await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
-                await reply_and_delete(event,'⚠️ 不能将频道/群组绑定到自己')
-                return
+            # # 检查是否在绑定自己
+            # if str(source_chat_entity.id) == str(target_chat_entity.id):
+            #     await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+            #     await reply_and_delete(event,'⚠️ 不能将频道/群组绑定到自己')
+            #     return
 
         except ValueError:
             await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
