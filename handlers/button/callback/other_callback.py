@@ -24,9 +24,8 @@ async def callback_other_settings(event, rule_id, session, message, data):
     return
 
 async def callback_copy_rule(event, rule_id, session, message, data):
-    """复制规则设置
+    """显示复制规则选择界面
     
-    显示可选择的规则列表，供用户选择要复制到的目标规则。
     选择后将当前规则的设置复制到目标规则。
     """
     try:
@@ -36,8 +35,13 @@ async def callback_copy_rule(event, rule_id, session, message, data):
         if len(parts) > 2:
             page = int(parts[2])
         
+        # 从rule_id中提取源规则ID
+        source_rule_id = rule_id
+        if ':' in str(rule_id):
+            source_rule_id = str(rule_id).split(':')[0]
+        
         # 创建规则选择按钮
-        buttons = await create_copy_rule_buttons(rule_id, page)
+        buttons = await create_copy_rule_buttons(source_rule_id, page)
         await event.edit("请选择要将当前规则复制到的目标规则：", buttons=buttons)
     except Exception as e:
         logger.error(f"显示复制规则选择界面时出错: {str(e)}")
@@ -57,14 +61,18 @@ async def create_copy_rule_buttons(rule_id, page=0):
         按钮列表
     """
     # 设置分页参数
-    RULES_PER_PAGE = 5  # 每页显示的规则数量
     
     buttons = []
     session = get_session()
     
     try:
         # 获取当前规则
-        source_rule_id = int(rule_id)
+        if ':' in str(rule_id):
+            parts = str(rule_id).split(':')
+            source_rule_id = int(parts[0])
+        else:
+            source_rule_id = int(rule_id)
+            
         current_rule = session.query(ForwardRule).get(source_rule_id)
         if not current_rule:
             buttons.append([Button.inline('❌ 规则不存在', 'noop')])
@@ -539,8 +547,13 @@ async def show_rule_selection(event, rule_id, data, title, callback_action):
     if len(parts) > 2:
         page = int(parts[2])
     
+    # 从rule_id中提取源规则ID
+    source_rule_id = rule_id
+    if ':' in str(rule_id):
+        source_rule_id = str(rule_id).split(':')[0]
+    
     # 创建规则选择按钮
-    buttons = await create_rule_selection_buttons(rule_id, page, callback_action)
+    buttons = await create_rule_selection_buttons(source_rule_id, page, callback_action)
     await event.edit(title, buttons=buttons)
 
 async def create_rule_selection_buttons(rule_id, page=0, callback_action="perform_copy_rule"):
@@ -555,14 +568,18 @@ async def create_rule_selection_buttons(rule_id, page=0, callback_action="perfor
         按钮列表
     """
     # 设置分页参数
-    RULES_PER_PAGE = 5  # 每页显示的规则数量
     
     buttons = []
     session = get_session()
     
     try:
         # 获取当前规则
-        source_rule_id = int(rule_id)
+        if ':' in str(rule_id):
+            parts = str(rule_id).split(':')
+            source_rule_id = int(parts[0])
+        else:
+            source_rule_id = int(rule_id)
+            
         current_rule = session.query(ForwardRule).get(source_rule_id)
         if not current_rule:
             buttons.append([Button.inline('❌ 规则不存在', 'noop')])
