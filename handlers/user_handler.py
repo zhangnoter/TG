@@ -9,12 +9,19 @@ logger = logging.getLogger(__name__)
 
 async def process_forward_rule(client, event, chat_id, rule):
     """处理转发规则（用户模式）"""
+
+    
+    if not rule.enable_rule:
+        logger.info(f'规则 ID: {rule.id} 已禁用，跳过处理')
+        return
+    
     message_text = event.message.text or ''
     check_message_text = message_text
     # 添加日志
     logger.info(f'处理规则 ID: {rule.id}')
     logger.info(f'消息内容: {message_text}')
     logger.info(f'规则模式: {rule.forward_mode.value}')
+
 
     if rule.is_filter_user_info:
         sender_info = await get_sender_info(event, rule.id)  # 调用新的函数获取 sender_info
