@@ -186,6 +186,15 @@ RULE_SETTINGS = {
         'display_name': '关闭',
         'toggle_action': 'close_settings',
         'toggle_func': None
+    },
+    'enable_sync': {
+        'display_name': '启用同步',
+        'values': {
+            True: '开启',
+            False: '关闭'
+        },
+        'toggle_action': 'toggle_enable_sync',
+        'toggle_func': lambda current: not current
     }
 }
 
@@ -333,13 +342,46 @@ MEDIA_SETTINGS = {
     }
 }
 
+
+OTHER_SETTINGS = {
+    'copy_rule': {
+        'display_name': '复制规则',
+        'toggle_action': 'copy_rule',
+        'toggle_func': None
+    },
+    'copy_keyword': {
+        'display_name': '复制关键字',
+        'toggle_action': 'copy_keyword',
+        'toggle_func': None
+    },
+    'copy_replace': {
+        'display_name': '复制替换',
+        'toggle_action': 'copy_replace',
+        'toggle_func': None
+    },
+    'clear_keyword': {
+        'display_name': '清空所有关键字',
+        'toggle_action': 'clear_keyword',
+        'toggle_func': None
+    },
+    'clear_replace': {
+        'display_name': '清空所有替换规则',
+        'toggle_action': 'clear_replace',
+        'toggle_func': None
+    },
+    'delete_rule': {
+        'display_name': '删除规则',
+        'toggle_action': 'delete_rule',
+        'toggle_func': None
+    }
+}
+
 async def create_settings_text(rule):
     """创建设置信息文本"""
     text = (
         "📋 管理转发规则\n\n"
         f"规则ID: `{rule.id}`\n" 
-        f"目标聊天: {rule.target_chat.name}\n"
-        f"源聊天: {rule.source_chat.name}"
+        f"{rule.source_chat.name} --> {rule.target_chat.name}"
     )
     return text
 
@@ -460,7 +502,7 @@ async def create_buttons(rule):
                     f"toggle_delete_original:{rule.id}"
                 ),
                 Button.inline(
-                    f"🔄 UFB同步: {RULE_SETTINGS['is_ufb']['values'][rule.is_ufb]}",
+                    f"☁️ UFB同步: {RULE_SETTINGS['is_ufb']['values'][rule.is_ufb]}",
                     f"toggle_ufb:{rule.id}"
                 )
             ])
@@ -477,16 +519,17 @@ async def create_buttons(rule):
                 )
             ])
 
-            
 
+
+            # 添加同步规则相关按钮
             buttons.append([
                 Button.inline(
-                    "🤖 AI设置",
-                    f"ai_settings:{rule.id}"
+                    f"🔄 同步规则: {RULE_SETTINGS['enable_sync']['values'][rule.enable_sync]}",
+                    f"toggle_enable_sync:{rule.id}"
                 ),
                 Button.inline(
-                    "🎬 媒体设置",
-                    f"media_settings:{rule.id}"
+                    f"📡 同步设置",
+                    f"set_sync_rule:{rule.id}"
                 )
             ])
 
@@ -498,14 +541,24 @@ async def create_buttons(rule):
                     f"toggle_enable_comment_button:{rule.id}"
                 )
             ])
+            
 
-        # 删除规则和返回按钮
-        buttons.append([
-            Button.inline(
-                "❌ 删除规则",
-                f"delete:{rule.id}"
-            )
-        ])
+            buttons.append([
+                Button.inline(
+                    "🤖 AI设置",
+                    f"ai_settings:{rule.id}"
+                ),
+                Button.inline(
+                    "🎬 媒体设置",
+                    f"media_settings:{rule.id}"
+                ),
+                Button.inline(
+                    "➕ 其他设置",
+                    f"other_settings:{rule.id}"
+                )
+            ])
+            
+
 
         buttons.append([
             Button.inline(
@@ -513,7 +566,7 @@ async def create_buttons(rule):
                 "settings"
             ),
             Button.inline(
-                "关闭",
+                "❌ 关闭",
                 "close_settings"
             )
         ])

@@ -2,7 +2,7 @@ from sqlalchemy.exc import IntegrityError
 from telethon import Button
 from models.models import MediaTypes, MediaExtensions
 from enums.enums import AddMode
-from models.models import get_session, Keyword, ReplaceRule, User
+from models.models import get_session, Keyword, ReplaceRule, User, RuleSync
 from utils.common import *
 from utils.media import *
 from handlers.list_handlers import *
@@ -617,20 +617,25 @@ async def handle_remove_command(event, command, parts):
                 await reply_and_delete(event,f'当前规则在{mode_name}模式下没有任何关键字')
                 return
 
-            # 删除匹配的关键字
+            # 修改：删除匹配的关键字
             removed_count = 0
+            removed_indices = [] # 存储要删除的关键字索引
+            
             for keyword in keywords_to_remove:
                 logger.info(f"尝试删除关键字: {keyword}")
-                for item in items:
+                for i, item in enumerate(items):
                     if item.keyword == keyword:
                         logger.info(f"找到匹配的关键字: {item.keyword}")
-                        session.delete(item)
+                        removed_indices.append(i + 1) # 转为1-based索引
                         removed_count += 1
                         break
-
-            session.commit()
-            logger.info(f"成功删除 {removed_count} 个关键字")
-
+            
+            if removed_indices:
+                # 使用db_ops删除关键字（支持同步功能）
+                await db_ops.delete_keywords(session, rule.id, removed_indices)
+                session.commit()
+                logger.info(f"成功删除 {removed_count} 个关键字")
+            
             # 重新获取更新后的列表
             remaining_items = await db_ops.get_keywords(session, rule.id, rule_mode)
 
@@ -659,17 +664,16 @@ async def handle_remove_command(event, command, parts):
                 await reply_and_delete(event,f'无效的ID: {", ".join(map(str, invalid_ids))}')
                 return
 
-            # 删除指定ID的关键字
+            # 修改：记录要删除的关键字
             removed_count = 0
             removed_keywords = []
-            for id in ids_to_remove:
-                if 1 <= id <= len(items):
-                    item = items[id - 1]  # 转换为0基索引
-                    removed_keywords.append(item.keyword)
-                    session.delete(item)
-                    removed_count += 1
-                    logger.info(f"删除ID {id} 的关键字: {item.keyword}")
-
+            valid_ids = [id for id in ids_to_remove if 1 <= id <= max_id]
+            
+            for id in valid_ids:
+                removed_keywords.append(items[id - 1].keyword)
+                
+            # 使用db_ops删除关键字（支持同步功能）
+            removed_count, _ = await db_ops.delete_keywords(session, rule.id, valid_ids)
             session.commit()
             logger.info(f"成功删除 {removed_count} 个关键字")
 
@@ -1635,6 +1639,31 @@ async def handle_copy_rule_command(event, command):
                     if column_name not in ['id', 'rule_id']:
                         setattr(target_media_types, column_name, getattr(source_rule.media_types, column_name))
 
+        # 复制规则同步表数据
+        rule_syncs_success = 0
+        rule_syncs_skip = 0
+        
+        # 检查源规则是否有同步关系
+        if hasattr(source_rule, 'rule_syncs') and source_rule.rule_syncs:
+            for sync in source_rule.rule_syncs:
+                # 检查是否已存在
+                exists = any(s.sync_rule_id == sync.sync_rule_id for s in target_rule.rule_syncs)
+                if not exists:
+                    # 确保不会创建自引用的同步关系
+                    if sync.sync_rule_id != target_rule.id:
+                        new_sync = RuleSync(
+                            rule_id=target_rule.id,
+                            sync_rule_id=sync.sync_rule_id
+                        )
+                        session.add(new_sync)
+                        rule_syncs_success += 1
+                        
+                        # 启用目标规则的同步功能
+                        if rule_syncs_success > 0:
+                            target_rule.enable_sync = True
+                else:
+                    rule_syncs_skip += 1
+
         # 复制规则设置
         # 获取ForwardRule模型的所有字段
         inspector = inspect(ForwardRule)
@@ -1649,7 +1678,6 @@ async def handle_copy_rule_command(event, command):
         session.commit()
 
 
-
         # 发送结果消息
         await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
         await reply_and_delete(event,
@@ -1658,6 +1686,7 @@ async def handle_copy_rule_command(event, command):
             f"正则关键字: 成功复制 {keywords_regex_success} 个, 跳过重复 {keywords_regex_skip} 个\n"
             f"替换规则: 成功复制 {replace_rules_success} 个, 跳过重复 {replace_rules_skip} 个\n"
             f"媒体扩展名: 成功复制 {media_extensions_success} 个, 跳过重复 {media_extensions_skip} 个\n"
+            f"同步规则: 成功复制 {rule_syncs_success} 个, 跳过重复 {rule_syncs_skip} 个\n"
             f"媒体类型设置和其他规则设置已复制\n",
             parse_mode='markdown'
         )

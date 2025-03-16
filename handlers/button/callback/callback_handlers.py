@@ -1,15 +1,17 @@
 from handlers.button.button_helpers import create_delay_time_buttons
 from handlers.list_handlers import show_list
-from handlers.button.settings_manager import create_settings_text, create_buttons, RULE_SETTINGS
-from models.models import Chat, ReplaceRule, Keyword,get_session
+from handlers.button.settings_manager import create_settings_text, create_buttons, RULE_SETTINGS, MEDIA_SETTINGS, AI_SETTINGS
+from models.models import Chat, ReplaceRule, Keyword,get_session, ForwardRule, RuleSync
 from telethon import Button
 from handlers.button.callback.ai_callback import *
 from handlers.button.callback.media_callback import *
+from handlers.button.callback.other_callback import *
 import logging
 import aiohttp
 from utils.constants import RSS_HOST, RSS_PORT
 from utils.auto_delete import respond_and_delete,reply_and_delete
 from utils.common import check_and_clean_chats
+from handlers.button.button_helpers import create_sync_rule_buttons,create_other_settings_buttons
 
 logger = logging.getLogger(__name__)
 
@@ -296,6 +298,90 @@ async def callback_select_delay_time(event, rule_id, session, message, data):
             session.close()
     return
 
+async def callback_set_sync_rule(event, rule_id, session, message, data):
+    """处理设置同步规则的回调"""
+    try:
+        rule = session.query(ForwardRule).get(int(rule_id))
+        if not rule:
+            await event.answer('规则不存在')
+            return
+        
+        await message.edit("请选择要同步到的规则：", buttons=await create_sync_rule_buttons(rule_id, page=0))
+    except Exception as e:
+        logger.error(f"设置同步规则时出错: {str(e)}")
+        await event.answer('处理请求时出错，请检查日志')
+    return
+
+async def callback_toggle_rule_sync(event, rule_id_data, session, message, data):
+    """处理切换规则同步状态的回调"""
+    try:
+        # 解析回调数据 - 格式为 source_rule_id:target_rule_id:page
+        parts = rule_id_data.split(":")
+        if len(parts) != 3:
+            await event.answer('回调数据格式错误')
+            return
+        
+        source_rule_id = int(parts[0])
+        target_rule_id = int(parts[1])
+        page = int(parts[2])
+        
+        # 获取数据库操作对象
+        db_ops = await get_db_ops()
+        
+        # 检查是否已存在同步关系
+        syncs = await db_ops.get_rule_syncs(session, source_rule_id)
+        sync_target_ids = [sync.sync_rule_id for sync in syncs]
+        
+        # 切换同步状态
+        if target_rule_id in sync_target_ids:
+            # 如果已同步，则删除同步关系
+            success, message_text = await db_ops.delete_rule_sync(session, source_rule_id, target_rule_id)
+            if success:
+                await event.answer(f'已取消同步规则 {target_rule_id}')
+            else:
+                await event.answer(f'取消同步失败: {message_text}')
+        else:
+            # 如果未同步，则添加同步关系
+            success, message_text = await db_ops.add_rule_sync(session, source_rule_id, target_rule_id)
+            if success:
+                await event.answer(f'已设置同步到规则 {target_rule_id}')
+            else:
+                await event.answer(f'设置同步失败: {message_text}')
+        
+        # 更新按钮显示
+        await message.edit("请选择要同步到的规则：", buttons=await create_sync_rule_buttons(source_rule_id, page))
+        
+    except Exception as e:
+        logger.error(f"切换规则同步状态时出错: {str(e)}")
+        await event.answer('处理请求时出错，请检查日志')
+    return
+
+async def callback_sync_rule_page(event, rule_id_data, session, message, data):
+    """处理同步规则页面的翻页功能"""
+    try:
+        # 解析回调数据 - 格式为 rule_id:page
+        parts = rule_id_data.split(":")
+        if len(parts) != 2:
+            await event.answer('回调数据格式错误')
+            return
+        
+        rule_id = int(parts[0])
+        page = int(parts[1])
+        
+        # 检查规则是否存在
+        rule = session.query(ForwardRule).get(rule_id)
+        if not rule:
+            await event.answer('规则不存在')
+            return
+        
+        # 更新按钮显示
+        await message.edit("请选择要同步到的规则：", buttons=await create_sync_rule_buttons(rule_id, page))
+        
+    except Exception as e:
+        logger.error(f"处理同步规则页面翻页时出错: {str(e)}")
+        await event.answer('处理请求时出错，请检查日志')
+    return
+
 
 async def callback_close_settings(event, rule_id, session, message, data):
     """处理关闭设置按钮的回调，删除当前消息"""
@@ -380,12 +466,103 @@ async def callback_page_rule(event, page_str, session, message, data):
         logger.error(f'处理规则列表分页时出错: {str(e)}')
         await event.answer('处理分页请求时出错，请检查日志')
 
+async def update_rule_setting(event, rule_id, session, message, field_name, config, setting_type):
+    """通用的规则设置更新函数
+    
+    Args:
+        event: 回调事件
+        rule_id: 规则ID
+        session: 数据库会话
+        message: 消息对象
+        field_name: 字段名
+        config: 设置配置
+        setting_type: 设置类型 ('rule', 'media', 'ai')
+    """
+    logger.info(f'找到匹配的设置项: {field_name}')
+    rule = session.query(ForwardRule).get(int(rule_id))
+    if not rule:
+        logger.warning(f'规则不存在: {rule_id}')
+        await event.answer('规则不存在')
+        return False
+
+    current_value = getattr(rule, field_name)
+    new_value = config['toggle_func'](current_value)
+    setattr(rule, field_name, new_value)
+
+    try:
+        # 首先更新当前规则
+        session.commit()
+        logger.info(f'更新规则 {rule.id} 的 {field_name} 从 {current_value} 到 {new_value}')
+
+        # 检查是否启用了同步功能，且不是"是否启用规则"字段和"启用同步"字段
+        if rule.enable_sync and field_name != 'enable_rule' and field_name != 'enable_sync':
+            logger.info(f"规则 {rule.id} 启用了同步功能，正在同步设置更改到关联规则")
+            # 获取需要同步的规则列表
+            sync_rules = session.query(RuleSync).filter(RuleSync.rule_id == rule.id).all()
+            
+            # 为每个同步规则应用相同的设置
+            for sync_rule in sync_rules:
+                sync_rule_id = sync_rule.sync_rule_id
+                logger.info(f"正在同步设置 {field_name} 到规则 {sync_rule_id}")
+                
+                # 获取同步目标规则
+                target_rule = session.query(ForwardRule).get(sync_rule_id)
+                if not target_rule:
+                    logger.warning(f"同步目标规则 {sync_rule_id} 不存在，跳过")
+                    continue
+                
+                # 更新同步目标规则的设置
+                try:
+                    # 记录旧值
+                    old_value = getattr(target_rule, field_name)
+                    
+                    # 设置新值
+                    setattr(target_rule, field_name, new_value)
+                    session.flush()
+                    
+                    logger.info(f"同步规则 {sync_rule_id} 的 {field_name} 从 {old_value} 到 {new_value}")
+                except Exception as e:
+                    logger.error(f"同步设置到规则 {sync_rule_id} 时出错: {str(e)}")
+                    continue
+            
+            # 提交所有同步更改
+            session.commit()
+            logger.info("所有同步更改已提交")
+
+        # 根据设置类型更新UI
+        if setting_type == 'rule':
+            await message.edit(
+                await create_settings_text(rule),
+                buttons=await create_buttons(rule)
+            )
+        elif setting_type == 'media':
+            await event.edit("媒体设置：", buttons=await create_media_settings_buttons(rule))
+        elif setting_type == 'ai':
+            await message.edit(
+                await get_ai_settings_text(rule),
+                buttons=await create_ai_settings_buttons(rule)
+            )
+        elif setting_type == 'other':
+            await event.edit("其他设置：", buttons=await create_other_settings_buttons(rule))
+
+        display_name = config.get('display_name', field_name)
+        if field_name == 'use_bot':
+            await event.answer(f'已切换到{"机器人" if new_value else "用户账号"}模式')
+        else:
+            await event.answer(f'已更新{display_name}')
+        return True
+    except Exception as e:
+        session.rollback()
+        logger.error(f'更新规则设置时出错: {str(e)}')
+        await event.answer('更新设置失败，请检查日志')
+        return False
+
+
 async def handle_callback(event):
     """处理按钮回调"""
     try:
         data = event.data.decode()
         logger.info(f'收到回调数据: {data}')
-
 
         # 解析回调数据
         parts = data.split(':')
@@ -399,56 +576,41 @@ async def handle_callback(event):
         # 使用会话
         session = get_session()
         try:  
-
             # 获取对应的处理器
             handler = CALLBACK_HANDLERS.get(action)
             if handler:
+                logger.info(f'找到对应的处理器: {handler}')
                 await handler(event, rule_id, session, message, data)
             else:
-                # 处理规则设置的切换
+                logger.info(f'未找到对应的处理器,尝试处理规则设置切换: {action}')
+                
+                # 尝试在RULE_SETTINGS中查找
                 for field_name, config in RULE_SETTINGS.items():
                     if action == config['toggle_action']:
-                        rule = session.query(ForwardRule).get(int(rule_id))
-                        if not rule:
-                            await event.answer('规则不存在')
+                        success = await update_rule_setting(event, rule_id, session, message, field_name, config, 'rule')
+                        if success:
                             return
 
-                        current_value = getattr(rule, field_name)
-                        new_value = config['toggle_func'](current_value)
-                        setattr(rule, field_name, new_value)
+                # 尝试在MEDIA_SETTINGS中查找
+                for field_name, config in MEDIA_SETTINGS.items():
+                    if action == config['toggle_action']:
+                        success = await update_rule_setting(event, rule_id, session, message, field_name, config, 'media')
+                        if success:
+                            return
 
-                        try:
-                            session.commit()
-                            logger.info(f'更新规则 {rule.id} 的 {field_name} 从 {current_value} 到 {new_value}')
-
-                            # 如果切换了转发方式，立即更新按钮
-                            try:
-                                await message.edit(
-                                    await create_settings_text(rule),
-                                    buttons=await create_buttons(rule)
-                                )
-                            except Exception as e:
-                                if 'message was not modified' not in str(e).lower():
-                                    raise
-
-                            display_name = config['display_name']
-                            if field_name == 'use_bot':
-                                await event.answer(f'已切换到{"机器人" if new_value else "用户账号"}模式')
-                            else:
-                                await event.answer(f'已更新{display_name}')
-                        except Exception as e:
-                            session.rollback()
-                            logger.error(f'更新规则设置时出错: {str(e)}')
-                            await event.answer('更新设置失败，请检查日志')
-                        break
+                # 尝试在AI_SETTINGS中查找
+                for field_name, config in AI_SETTINGS.items():
+                    if action == config['toggle_action']:
+                        success = await update_rule_setting(event, rule_id, session, message, field_name, config, 'ai')
+                        if success:
+                            return
         finally:
             session.close()
 
     except Exception as e:
-        if 'message was not modified' not in str(e).lower():
-            logger.error(f'处理按钮回调时出错: {str(e)}')
-            logger.error(f'错误堆栈: {traceback.format_exc()}')
-            await event.answer('处理请求时出错，请检查日志')
+        logger.error(f'处理按钮回调时出错: {str(e)}')
+        logger.error(f'错误堆栈: {traceback.format_exc()}')
+        await event.answer('处理请求时出错，请检查日志')
 
 
 
@@ -466,18 +628,17 @@ CALLBACK_HANDLERS = {
     'delay_time_page': callback_delay_time_page,
     'page_rule': callback_page_rule,
     'close_settings': callback_close_settings,
+    'set_sync_rule': callback_set_sync_rule,
+    'toggle_rule_sync': callback_toggle_rule_sync,
+    'sync_rule_page': callback_sync_rule_page,
     # AI设置
     'set_summary_prompt': callback_set_summary_prompt,
     'set_ai_prompt': callback_set_ai_prompt,
-    'toggle_top_summary': callback_toggle_top_summary,
     'ai_settings': callback_ai_settings,
-    'toggle_summary': callback_toggle_summary,
     'time_page': callback_time_page,
     'select_time': callback_select_time,
     'select_model': callback_select_model,
     'model_page': callback_model_page,
-    'toggle_keyword_after_ai': callback_toggle_keyword_after_ai,
-    'toggle_ai': callback_toggle_ai,
     'change_model': callback_change_model,
     'cancel_set_prompt': callback_cancel_set_prompt,
     'cancel_set_summary': callback_cancel_set_summary,
@@ -485,11 +646,6 @@ CALLBACK_HANDLERS = {
     # 媒体设置
     'select_max_media_size': callback_select_max_media_size,
     'set_max_media_size': callback_set_max_media_size,
-    'toggle_enable_media_size_filter': callback_toggle_enable_media_size_filter,
-    'toggle_send_over_media_size_message': callback_toggle_send_over_media_size_message,
-    'toggle_enable_media_type_filter': callback_toggle_enable_media_type_filter,
-    'toggle_enable_media_extension_filter': callback_toggle_enable_media_extension_filter,
-    'toggle_media_extension_filter_mode': callback_toggle_media_extension_filter_mode,
     'media_settings': callback_media_settings,
     'set_media_types': callback_set_media_types,
     'toggle_media_type': callback_toggle_media_type,
@@ -497,4 +653,18 @@ CALLBACK_HANDLERS = {
     'media_extensions_page': callback_media_extensions_page,
     'toggle_media_extension': callback_toggle_media_extension,
     'noop': callback_noop,
+    # 其他设置
+    'other_settings': callback_other_settings,
+    'copy_rule': callback_copy_rule,
+    'copy_keyword': callback_copy_keyword,
+    'copy_replace': callback_copy_replace,
+    'clear_keyword': callback_clear_keyword,
+    'clear_replace': callback_clear_replace,
+    'delete_rule': callback_delete_rule,
+    'perform_copy_rule': callback_perform_copy_rule,
+    'perform_copy_keyword': callback_perform_copy_keyword,
+    'perform_copy_replace': callback_perform_copy_replace,
+    'perform_clear_keyword': callback_perform_clear_keyword,
+    'perform_clear_replace': callback_perform_clear_replace,
+    'perform_delete_rule': callback_perform_delete_rule,
 }

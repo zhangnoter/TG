@@ -1,5 +1,5 @@
 from sqlalchemy.exc import IntegrityError
-from models.models import Keyword, ReplaceRule, ForwardRule, MediaTypes, MediaExtensions, RSSConfig, RSSPattern, User
+from models.models import Keyword, ReplaceRule, ForwardRule, MediaTypes, MediaExtensions, RSSConfig, RSSPattern, User, RuleSync
 from werkzeug.security import check_password_hash, generate_password_hash
 from sqlalchemy.orm import joinedload
 import logging
@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 from ufb.ufb_client import UFBClient
 from models.models import get_session
 from sqlalchemy import text
+from enums.enums import ForwardMode, PreviewMode, MessageMode, AddMode, HandleMode
 
 logger = logging.getLogger(__name__)
 load_dotenv()
@@ -239,6 +240,13 @@ class DBOperations:
         success_count = 0
         duplicate_count = 0
 
+        # 获取当前规则
+        rule = session.query(ForwardRule).get(rule_id)
+        if not rule:
+            logger.error(f"规则ID {rule_id} 不存在")
+            return 0, 0
+
+        # 处理单个规则的关键字添加
         for keyword in keywords:
             try:
                 # 检查是否存在相同的关键字（考虑黑白名单）
@@ -266,6 +274,55 @@ class DBOperations:
                 session.rollback()
                 duplicate_count += 1
                 continue
+
+        # 检查是否启用了同步功能
+        if rule.enable_sync:
+            logger.info(f"规则 {rule_id} 启用了同步功能，正在同步关键字到关联规则")
+            # 获取需要同步的规则列表
+            sync_rules = session.query(RuleSync).filter(RuleSync.rule_id == rule_id).all()
+            
+            # 为每个同步规则添加相同的关键字
+            for sync_rule in sync_rules:
+                sync_rule_id = sync_rule.sync_rule_id
+                logger.info(f"正在同步关键字到规则 {sync_rule_id}")
+                
+                # 获取同步目标规则
+                target_rule = session.query(ForwardRule).get(sync_rule_id)
+                if not target_rule:
+                    logger.warning(f"同步目标规则 {sync_rule_id} 不存在，跳过")
+                    continue
+                
+                # 为同步目标规则添加关键字
+                sync_success = 0
+                sync_duplicate = 0
+                for keyword in keywords:
+                    try:
+                        # 检查同步规则是否已有此关键字
+                        existing_keyword = session.query(Keyword).filter(
+                            Keyword.rule_id == sync_rule_id,
+                            Keyword.keyword == keyword,
+                            Keyword.is_blacklist == is_blacklist
+                        ).first()
+                        
+                        if existing_keyword:
+                            sync_duplicate += 1
+                            continue
+                            
+                        # 添加新关键字到同步规则
+                        new_keyword = Keyword(
+                            rule_id=sync_rule_id,
+                            keyword=keyword,
+                            is_regex=is_regex,
+                            is_blacklist=is_blacklist
+                        )
+                        session.add(new_keyword)
+                        session.flush()
+                        sync_success += 1
+                    except Exception as e:
+                        logger.error(f"同步关键字到规则 {sync_rule_id} 时出错: {str(e)}")
+                        continue
+                
+                logger.info(f"同步规则 {sync_rule_id} 的结果: 成功={sync_success}, 重复={sync_duplicate}")
 
         await self.sync_to_server(session, rule_id)
         return success_count, duplicate_count
@@ -296,21 +353,74 @@ class DBOperations:
         Returns:
             tuple: (删除数量, 剩余关键字列表)
         """
-        keywords = await self.get_keywords(session, rule_id)
+        # 获取当前规则
+        rule = session.query(ForwardRule).get(rule_id)
+        if not rule:
+            logger.error(f"规则ID {rule_id} 不存在")
+            return 0, []
+            
+        # 获取当前规则的关键字
+        keywords = await self.get_keywords(session, rule_id, 'blacklist' if rule.add_mode == AddMode.BLACKLIST else 'whitelist')
         if not keywords:
             return 0, []
             
         deleted_count = 0
         max_id = len(keywords)
         
+        # 保存要删除的关键字信息，用于后续同步
+        keywords_to_delete = []
         for idx in indices:
             if 1 <= idx <= max_id:
                 keyword = keywords[idx - 1]
+                keywords_to_delete.append({
+                    'keyword': keyword.keyword,
+                    'is_regex': keyword.is_regex,
+                    'is_blacklist': keyword.is_blacklist
+                })
                 session.delete(keyword)
                 deleted_count += 1
+        
+        # 检查是否启用了同步功能
+        if rule.enable_sync and keywords_to_delete:
+            logger.info(f"规则 {rule_id} 启用了同步功能，正在同步删除关联规则的关键字")
+            # 获取需要同步的规则列表
+            sync_rules = session.query(RuleSync).filter(RuleSync.rule_id == rule_id).all()
+            
+            # 为每个同步规则删除相同的关键字
+            for sync_rule in sync_rules:
+                sync_rule_id = sync_rule.sync_rule_id
+                logger.info(f"正在同步删除规则 {sync_rule_id} 的关键字")
+                
+                # 获取同步目标规则
+                target_rule = session.query(ForwardRule).get(sync_rule_id)
+                if not target_rule:
+                    logger.warning(f"同步目标规则 {sync_rule_id} 不存在，跳过")
+                    continue
+                
+                # 在同步目标规则中删除相同的关键字
+                sync_deleted = 0
+                for kw_info in keywords_to_delete:
+                    try:
+                        # 查找目标规则中匹配的关键字
+                        target_keywords = session.query(Keyword).filter(
+                            Keyword.rule_id == sync_rule_id,
+                            Keyword.keyword == kw_info['keyword'],
+                            Keyword.is_regex == kw_info['is_regex'],
+                            Keyword.is_blacklist == kw_info['is_blacklist']
+                        ).all()
+                        
+                        # 删除匹配的关键字
+                        for target_kw in target_keywords:
+                            session.delete(target_kw)
+                            sync_deleted += 1
+                    except Exception as e:
+                        logger.error(f"同步删除规则 {sync_rule_id} 的关键字时出错: {str(e)}")
+                        continue
+                
+                logger.info(f"同步删除规则 {sync_rule_id} 的关键字: 删除了 {sync_deleted} 个")
 
         await self.sync_to_server(session, rule_id)
-        return deleted_count, await self.get_keywords(session, rule_id)
+        return deleted_count, await self.get_keywords(session, rule_id, 'blacklist' if rule.add_mode == AddMode.BLACKLIST else 'whitelist')
 
     async def add_replace_rules(self, session, rule_id, patterns, contents=None):
         """添加替换规则
@@ -324,14 +434,33 @@ class DBOperations:
         Returns:
             tuple: (成功数量, 重复数量)
         """
+        # 获取当前规则
+        rule = session.query(ForwardRule).get(rule_id)
+        if not rule:
+            logger.error(f"规则ID {rule_id} 不存在")
+            return 0, 0
+            
         success_count = 0
         duplicate_count = 0
         
         if contents is None:
             contents = [''] * len(patterns)
         
+        # 添加替换规则到主规则
+        added_rules = []  # 存储成功添加的规则，用于后续同步
         for pattern, content in zip(patterns, contents):
             try:
+                # 检查是否已存在相同的替换规则
+                existing_rule = session.query(ReplaceRule).filter(
+                    ReplaceRule.rule_id == rule_id,
+                    ReplaceRule.pattern == pattern,
+                    ReplaceRule.content == content
+                ).first()
+                
+                if existing_rule:
+                    duplicate_count += 1
+                    continue
+                    
                 new_rule = ReplaceRule(
                     rule_id=rule_id,
                     pattern=pattern,
@@ -340,11 +469,60 @@ class DBOperations:
                 session.add(new_rule)
                 session.flush()
                 success_count += 1
+                added_rules.append({'pattern': pattern, 'content': content})
             except IntegrityError:
                 session.rollback()
                 duplicate_count += 1
                 continue
+        
+        # 检查是否启用了同步功能
+        if rule.enable_sync and added_rules:
+            logger.info(f"规则 {rule_id} 启用了同步功能，正在同步添加替换规则到关联规则")
+            # 获取需要同步的规则列表
+            sync_rules = session.query(RuleSync).filter(RuleSync.rule_id == rule_id).all()
+            
+            # 为每个同步规则添加相同的替换规则
+            for sync_rule in sync_rules:
+                sync_rule_id = sync_rule.sync_rule_id
+                logger.info(f"正在同步添加替换规则到规则 {sync_rule_id}")
                 
+                # 获取同步目标规则
+                target_rule = session.query(ForwardRule).get(sync_rule_id)
+                if not target_rule:
+                    logger.warning(f"同步目标规则 {sync_rule_id} 不存在，跳过")
+                    continue
+                
+                # 为同步目标规则添加替换规则
+                sync_success = 0
+                sync_duplicate = 0
+                for rule_info in added_rules:
+                    try:
+                        # 检查同步规则是否已有此替换规则
+                        existing_rule = session.query(ReplaceRule).filter(
+                            ReplaceRule.rule_id == sync_rule_id,
+                            ReplaceRule.pattern == rule_info['pattern'],
+                            ReplaceRule.content == rule_info['content']
+                        ).first()
+                        
+                        if existing_rule:
+                            sync_duplicate += 1
+                            continue
+                            
+                        # 添加新替换规则到同步规则
+                        new_rule = ReplaceRule(
+                            rule_id=sync_rule_id,
+                            pattern=rule_info['pattern'],
+                            content=rule_info['content']
+                        )
+                        session.add(new_rule)
+                        session.flush()
+                        sync_success += 1
+                    except Exception as e:
+                        logger.error(f"同步添加替换规则到规则 {sync_rule_id} 时出错: {str(e)}")
+                        continue
+                
+                logger.info(f"同步规则 {sync_rule_id} 的替换规则添加结果: 成功={sync_success}, 重复={sync_duplicate}")
+        
         return success_count, duplicate_count
 
     async def get_replace_rules(self, session, rule_id):
@@ -372,6 +550,12 @@ class DBOperations:
         Returns:
             tuple: (删除数量, 剩余替换规则列表)
         """
+        # 获取当前规则
+        rule = session.query(ForwardRule).get(rule_id)
+        if not rule:
+            logger.error(f"规则ID {rule_id} 不存在")
+            return 0, []
+            
         rules = await self.get_replace_rules(session, rule_id)
         if not rules:
             return 0, []
@@ -379,13 +563,57 @@ class DBOperations:
         deleted_count = 0
         max_id = len(rules)
         
+        # 保存要删除的替换规则信息，用于后续同步
+        rules_to_delete = []
         for idx in indices:
             if 1 <= idx <= max_id:
-                rule = rules[idx - 1]
-                session.delete(rule)
+                replace_rule = rules[idx - 1]
+                rules_to_delete.append({
+                    'pattern': replace_rule.pattern,
+                    'content': replace_rule.content
+                })
+                session.delete(replace_rule)
                 deleted_count += 1
+        
+        # 检查是否启用了同步功能
+        if rule.enable_sync and rules_to_delete:
+            logger.info(f"规则 {rule_id} 启用了同步功能，正在同步删除关联规则的替换规则")
+            # 获取需要同步的规则列表
+            sync_rules = session.query(RuleSync).filter(RuleSync.rule_id == rule_id).all()
+            
+            # 为每个同步规则删除相同的替换规则
+            for sync_rule in sync_rules:
+                sync_rule_id = sync_rule.sync_rule_id
+                logger.info(f"正在同步删除规则 {sync_rule_id} 的替换规则")
                 
-        return deleted_count, await self.get_replace_rules(session, rule_id) 
+                # 获取同步目标规则
+                target_rule = session.query(ForwardRule).get(sync_rule_id)
+                if not target_rule:
+                    logger.warning(f"同步目标规则 {sync_rule_id} 不存在，跳过")
+                    continue
+                
+                # 在同步目标规则中删除相同的替换规则
+                sync_deleted = 0
+                for rule_info in rules_to_delete:
+                    try:
+                        # 查找目标规则中匹配的替换规则
+                        target_rules = session.query(ReplaceRule).filter(
+                            ReplaceRule.rule_id == sync_rule_id,
+                            ReplaceRule.pattern == rule_info['pattern'],
+                            ReplaceRule.content == rule_info['content']
+                        ).all()
+                        
+                        # 删除匹配的替换规则
+                        for target_rule in target_rules:
+                            session.delete(target_rule)
+                            sync_deleted += 1
+                    except Exception as e:
+                        logger.error(f"同步删除规则 {sync_rule_id} 的替换规则时出错: {str(e)}")
+                        continue
+                
+                logger.info(f"同步删除规则 {sync_rule_id} 的替换规则: 删除了 {sync_deleted} 个")
+                
+        return deleted_count, await self.get_replace_rules(session, rule_id)
 
     async def get_media_types(self, session, rule_id):
         """获取媒体类型设置"""
@@ -713,3 +941,122 @@ class DBOperations:
         return session.query(RSSConfig).options(
             joinedload(RSSConfig.patterns)
         ).filter(RSSConfig.rule_id == rule_id).first() 
+
+    # 规则同步相关操作
+    async def add_rule_sync(self, session, rule_id, sync_rule_id):
+        """添加规则同步关系
+        
+        Args:
+            session: 数据库会话
+            rule_id: 源规则ID
+            sync_rule_id: 目标规则ID（要同步到的规则）
+        
+        Returns:
+            tuple: (bool, str) - (成功状态, 消息)
+        """
+        try:
+            # 检查源规则是否存在
+            source_rule = session.query(ForwardRule).get(rule_id)
+            if not source_rule:
+                return False, f"源规则ID {rule_id} 不存在"
+            
+            # 检查目标规则是否存在
+            target_rule = session.query(ForwardRule).get(sync_rule_id)
+            if not target_rule:
+                return False, f"目标规则ID {sync_rule_id} 不存在"
+            
+            # 检查是否已存在相同的同步关系
+            existing_sync = session.query(RuleSync).filter(
+                RuleSync.rule_id == rule_id,
+                RuleSync.sync_rule_id == sync_rule_id
+            ).first()
+            
+            if existing_sync:
+                return False, f"同步关系已存在"
+            
+            # 创建新的同步关系
+            new_sync = RuleSync(
+                rule_id=rule_id,
+                sync_rule_id=sync_rule_id
+            )
+            
+            # 启用规则的同步功能
+            source_rule.enable_sync = True
+            
+            session.add(new_sync)
+            session.commit()
+            
+            logger.info(f"已添加规则同步: 从规则 {rule_id} 到规则 {sync_rule_id}")
+            return True, f"成功添加同步关系"
+        
+        except Exception as e:
+            session.rollback()
+            logger.error(f"添加规则同步关系时出错: {str(e)}")
+            return False, f"添加同步关系失败: {str(e)}"
+    
+    async def get_rule_syncs(self, session, rule_id):
+        """获取指定规则的同步关系列表
+        
+        Args:
+            session: 数据库会话
+            rule_id: 规则ID
+        
+        Returns:
+            list: 同步关系列表
+        """
+        try:
+            # 获取该规则的所有同步目标
+            syncs = session.query(RuleSync).filter(
+                RuleSync.rule_id == rule_id
+            ).all()
+            
+            return syncs
+        
+        except Exception as e:
+            logger.error(f"获取规则同步关系时出错: {str(e)}")
+            return []
+    
+    async def delete_rule_sync(self, session, rule_id, sync_rule_id):
+        """删除规则同步关系
+        
+        Args:
+            session: 数据库会话
+            rule_id: 源规则ID
+            sync_rule_id: 目标规则ID
+        
+        Returns:
+            tuple: (bool, str) - (成功状态, 消息)
+        """
+        try:
+            # 查找同步关系
+            sync = session.query(RuleSync).filter(
+                RuleSync.rule_id == rule_id,
+                RuleSync.sync_rule_id == sync_rule_id
+            ).first()
+            
+            if not sync:
+                return False, "指定的同步关系不存在"
+            
+            # 删除同步关系
+            session.delete(sync)
+            
+            # 检查规则是否还有其他同步关系
+            remaining_syncs = session.query(RuleSync).filter(
+                RuleSync.rule_id == rule_id
+            ).count()
+            
+            # 如果没有其他同步关系，关闭规则的同步功能
+            if remaining_syncs == 0:
+                rule = session.query(ForwardRule).get(rule_id)
+                if rule:
+                    rule.enable_sync = False
+            
+            session.commit()
+            
+            logger.info(f"已删除规则同步: 从规则 {rule_id} 到规则 {sync_rule_id}")
+            return True, "成功删除同步关系"
+        
+        except Exception as e:
+            session.rollback()
+            logger.error(f"删除规则同步关系时出错: {str(e)}")
+            return False, f"删除同步关系失败: {str(e)}"

@@ -63,6 +63,8 @@ class ForwardRule(Base):
     delay_seconds = Column(Integer, default=5)  # 延迟处理秒数
     # RSS相关字段
     only_rss = Column(Boolean, default=False)  # 是否只转发RSS
+    # 同步功能相关
+    enable_sync = Column(Boolean, default=False)  # 是否启用规则同步功能
 
     # 添加唯一约束
     __table_args__ = (
@@ -77,7 +79,7 @@ class ForwardRule(Base):
     media_types = relationship('MediaTypes', uselist=False, back_populates='rule', cascade="all, delete-orphan")
     media_extensions = relationship('MediaExtensions', back_populates='rule', cascade="all, delete-orphan")
     rss_config = relationship('RSSConfig', uselist=False, back_populates='rule', cascade="all, delete-orphan")
-
+    rule_syncs = relationship('RuleSync', back_populates='rule', cascade="all, delete-orphan")
 
 class Keyword(Base):
     __tablename__ = 'keywords'
@@ -141,6 +143,16 @@ class MediaExtensions(Base):
     __table_args__ = (
         UniqueConstraint('rule_id', 'extension', name='unique_rule_extension'),
     )
+
+class RuleSync(Base):
+    __tablename__ = 'rule_syncs'
+
+    id = Column(Integer, primary_key=True)
+    rule_id = Column(Integer, ForeignKey('forward_rules.id'), nullable=False)
+    sync_rule_id = Column(Integer, nullable=False)
+
+    # 关系
+    rule = relationship('ForwardRule', back_populates='rule_syncs')
 
 
 class RSSConfig(Base):
@@ -208,6 +220,13 @@ def migrate_db(engine):
         
     try:
         with engine.connect() as connection:
+
+            # 如果rule_syncs表不存在，创建表
+            if 'rule_syncs' not in existing_tables:
+                logging.info("创建rule_syncs表...")
+                RuleSync.__table__.create(engine)
+
+
             # 如果users表不存在，创建表
             if 'users' not in existing_tables:
                 logging.info("创建users表...")
@@ -308,6 +327,7 @@ def migrate_db(engine):
         'enable_extension_filter': 'ALTER TABLE forward_rules ADD COLUMN enable_extension_filter BOOLEAN DEFAULT FALSE',
         'extension_filter_mode': 'ALTER TABLE forward_rules ADD COLUMN extension_filter_mode VARCHAR DEFAULT "BLACKLIST"',
         'only_rss': 'ALTER TABLE forward_rules ADD COLUMN only_rss BOOLEAN DEFAULT FALSE',
+        'enable_sync': 'ALTER TABLE forward_rules ADD COLUMN enable_sync BOOLEAN DEFAULT FALSE',
     }
 
     keywords_new_columns = {

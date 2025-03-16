@@ -87,22 +87,7 @@ async def handle_user_message(event, user_client, bot_client):
         # 设置一个合理的过期时间（比如5分钟后）
         asyncio.create_task(clear_group_cache(group_key))
     
-    # 记录消息信息
-    session = get_session()
-    try:
-        chat_exists = session.query(Chat).filter(
-            Chat.telegram_chat_id == str(chat_id)  # 这里转换为字符串
-        ).first()
-        
-        if chat_exists:
-            if event.message.grouped_id:
-                logger.info(f'[用户] 收到媒体组消息 来自聊天: {chat_exists.name} ({chat_id}) 组ID: {event.message.grouped_id}')
-            else:
-                logger.info(f'[用户] 收到新消息 来自聊天: {chat_exists.name} ({chat_id}) 内容: {event.message.text}')
-    finally:
-        session.close()
-    
-    # 检查数据库中是否有该聊天的转发规则
+    # 首先检查数据库中是否有该聊天的转发规则
     session = get_session()
     try:
         # 查询源聊天
@@ -124,11 +109,15 @@ async def handle_user_message(event, user_client, bot_client):
         if not rules:
             logger.info(f'聊天 {source_chat.name} 没有转发规则')
             return
+        
+        # 有转发规则时，才记录消息信息
+        if event.message.grouped_id:
+            logger.info(f'[用户] 收到媒体组消息 来自聊天: {source_chat.name} ({chat_id}) 组ID: {event.message.grouped_id}')
+        else:
+            logger.info(f'[用户] 收到新消息 来自聊天: {source_chat.name} ({chat_id}) 内容: {event.message.text}')
             
         # 添加日志：处理规则
         logger.info(f'找到 {len(rules)} 条转发规则')
-
-
         
         # 处理每条转发规则
         for rule in rules:

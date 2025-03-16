@@ -1,5 +1,5 @@
 import logging
-from models.models import get_session, ForwardRule
+from models.models import get_session, ForwardRule, RuleSync
 from managers.state_manager import state_manager
 from utils.common import get_ai_settings_text
 from handlers import bot_handler
@@ -48,6 +48,40 @@ async def handle_prompt_setting(event, client, sender_id, chat_id, current_state
             setattr(rule, field_name, new_prompt)
             session.commit()
             logger.info(f"已更新规则{rule_id}的{prompt_type}提示词")
+
+            # 检查是否启用了同步功能
+            if rule.enable_sync:
+                logger.info(f"规则 {rule.id} 启用了同步功能，正在同步提示词设置到关联规则")
+                # 获取需要同步的规则列表
+                sync_rules = session.query(RuleSync).filter(RuleSync.rule_id == rule.id).all()
+                
+                # 为每个同步规则应用相同的提示词设置
+                for sync_rule in sync_rules:
+                    sync_rule_id = sync_rule.sync_rule_id
+                    logger.info(f"正在同步{prompt_type}提示词到规则 {sync_rule_id}")
+                    
+                    # 获取同步目标规则
+                    target_rule = session.query(ForwardRule).get(sync_rule_id)
+                    if not target_rule:
+                        logger.warning(f"同步目标规则 {sync_rule_id} 不存在，跳过")
+                        continue
+                    
+                    # 更新同步目标规则的提示词设置
+                    try:
+                        # 记录旧提示词
+                        old_target_prompt = getattr(target_rule, field_name)
+                        
+                        # 设置新提示词
+                        setattr(target_rule, field_name, new_prompt)
+                        
+                        logger.info(f"同步规则 {sync_rule_id} 的{prompt_type}提示词从 '{old_target_prompt}' 到 '{new_prompt}'")
+                    except Exception as e:
+                        logger.error(f"同步{prompt_type}提示词到规则 {sync_rule_id} 时出错: {str(e)}")
+                        continue
+                
+                # 提交所有同步更改
+                session.commit()
+                logger.info("所有同步提示词更改已提交")
             
             logger.info(f"清除用户状态,用户ID:{sender_id},聊天ID:{chat_id}")
             state_manager.clear_state(sender_id, chat_id)

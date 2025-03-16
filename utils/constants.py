@@ -20,7 +20,7 @@ RSS_MEDIA_BASE_URL = os.getenv('RSS_MEDIA_BASE_URL', '')
 
 RSS_ENABLED = os.getenv('RSS_ENABLED', 'false')
 
-
+RULES_PER_PAGE = int(os.getenv('RULES_PER_PAGE', 20))
 
 DEFAULT_TIMEZONE = os.getenv('DEFAULT_TIMEZONE', 'Asia/Shanghai')
 PROJECT_NAME = os.getenv('PROJECT_NAME', 'TG Forwarder RSS')

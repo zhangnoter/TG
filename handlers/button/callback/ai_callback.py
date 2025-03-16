@@ -5,7 +5,7 @@ import asyncio
 from telethon.tl import types
 
 from handlers.button.button_helpers import create_ai_settings_buttons, create_model_buttons, create_summary_time_buttons
-from models.models import ForwardRule
+from models.models import ForwardRule, RuleSync
 from telethon import Button
 import logging
 from utils.common import get_main_module, get_ai_settings_text
@@ -135,47 +135,7 @@ async def callback_set_ai_prompt(event, rule_id, session, message, data):
         logger.exception(e)
 
 
-
-async def callback_toggle_top_summary(event, rule_id, session, message, data):
-    """处理切换顶置总结消息的回调"""
-    logger.info(f"处理切换顶置总结消息回调 - rule_id: {rule_id}")
-    rule = session.query(ForwardRule).get(rule_id)
-    if not rule:
-        await event.answer('规则不存在')
-        return
-
-    # 切换状态
-    rule.is_top_summary = not rule.is_top_summary
-    session.commit()
-    logger.info(f"已更新规则 {rule_id} 的顶置总结状态为: {rule.is_top_summary}")
-
-    # 更新按钮
-    await message.edit(
-        buttons=await create_ai_settings_buttons(rule)
-    )
-    
-    # 显示提示
-    await event.answer(f"已{'开启' if rule.is_top_summary else '关闭'}顶置总结消息")
-
-
-async def callback_toggle_summary(event, rule_id, session, message, data):
-    try:
-        rule = session.query(ForwardRule).get(int(rule_id))
-        if rule:
-            rule.is_summary = not rule.is_summary
-            session.commit()
-
-            # 更新调度任务
-            main = await get_main_module()
-            if hasattr(main, 'scheduler') and main.scheduler:
-                await main.scheduler.schedule_rule(rule)
-            else:
-                logger.warning("调度器未初始化")
-
-            await event.edit(await get_ai_settings_text(rule), buttons=await create_ai_settings_buttons(rule))
-    finally:
-        session.close()
-    return        
+   
             
 
 async def callback_time_page(event, rule_id, session, message, data):
@@ -200,6 +160,50 @@ async def callback_select_time(event, rule_id, session, message, data):
                 rule.summary_time = time
                 session.commit()
                 logger.info(f"数据库更新成功: {old_time} -> {time}")
+                
+                # 检查是否启用了同步功能
+                if rule.enable_sync:
+                    logger.info(f"规则 {rule.id} 启用了同步功能，正在同步总结时间设置到关联规则")
+                    # 获取需要同步的规则列表
+                    sync_rules = session.query(RuleSync).filter(RuleSync.rule_id == rule.id).all()
+                    
+                    # 为每个同步规则应用相同的总结时间设置
+                    for sync_rule in sync_rules:
+                        sync_rule_id = sync_rule.sync_rule_id
+                        logger.info(f"正在同步总结时间到规则 {sync_rule_id}")
+                        
+                        # 获取同步目标规则
+                        target_rule = session.query(ForwardRule).get(sync_rule_id)
+                        if not target_rule:
+                            logger.warning(f"同步目标规则 {sync_rule_id} 不存在，跳过")
+                            continue
+                        
+                        # 更新同步目标规则的总结时间设置
+                        try:
+                            # 记录旧时间
+                            old_target_time = target_rule.summary_time
+                            
+                            # 设置新时间
+                            target_rule.summary_time = time
+                            
+                            # 如果目标规则启用了总结功能，也更新它的调度
+                            if target_rule.is_summary:
+                                logger.info(f"目标规则 {sync_rule_id} 启用了总结功能，更新其调度任务")
+                                main = await get_main_module()
+                                if hasattr(main, 'scheduler') and main.scheduler:
+                                    await main.scheduler.schedule_rule(target_rule)
+                                    logger.info(f"目标规则调度任务更新成功，新时间: {time}")
+                                else:
+                                    logger.warning("调度器未初始化")
+                            
+                            logger.info(f"同步规则 {sync_rule_id} 的总结时间从 {old_target_time} 到 {time}")
+                        except Exception as e:
+                            logger.error(f"同步总结时间到规则 {sync_rule_id} 时出错: {str(e)}")
+                            continue
+                    
+                    # 提交所有同步更改
+                    session.commit()
+                    logger.info("所有同步总结时间更改已提交")
 
                 # 如果总结功能已开启，重新调度任务
                 if rule.is_summary:
@@ -229,9 +233,47 @@ async def callback_select_model(event, rule_id, session, message, data):
     try:
         rule = session.query(ForwardRule).get(int(rule_id))
         if rule:
+            # 记录旧模型
+            old_model = rule.ai_model
+            
+            # 更新模型
             rule.ai_model = model
             session.commit()
             logger.info(f"已更新规则 {rule_id} 的AI模型为: {model}")
+            
+            # 检查是否启用了同步功能
+            if rule.enable_sync:
+                logger.info(f"规则 {rule.id} 启用了同步功能，正在同步AI模型设置到关联规则")
+                # 获取需要同步的规则列表
+                sync_rules = session.query(RuleSync).filter(RuleSync.rule_id == rule.id).all()
+                
+                # 为每个同步规则应用相同的AI模型设置
+                for sync_rule in sync_rules:
+                    sync_rule_id = sync_rule.sync_rule_id
+                    logger.info(f"正在同步AI模型到规则 {sync_rule_id}")
+                    
+                    # 获取同步目标规则
+                    target_rule = session.query(ForwardRule).get(sync_rule_id)
+                    if not target_rule:
+                        logger.warning(f"同步目标规则 {sync_rule_id} 不存在，跳过")
+                        continue
+                    
+                    # 更新同步目标规则的AI模型设置
+                    try:
+                        # 记录旧模型
+                        old_target_model = target_rule.ai_model
+                        
+                        # 设置新模型
+                        target_rule.ai_model = model
+                        
+                        logger.info(f"同步规则 {sync_rule_id} 的AI模型从 {old_target_model} 到 {model}")
+                    except Exception as e:
+                        logger.error(f"同步AI模型到规则 {sync_rule_id} 时出错: {str(e)}")
+                        continue
+                
+                # 提交所有同步更改
+                session.commit()
+                logger.info("所有同步AI模型更改已提交")
 
             # 返回到 AI 设置页面
             await event.edit(await get_ai_settings_text(rule), buttons=await create_ai_settings_buttons(rule))
@@ -248,28 +290,6 @@ async def callback_model_page(event, rule_id, session, message, data):
     await event.edit("请选择AI模型：", buttons=await create_model_buttons(rule_id, page=page))
     return
 
-
-async def callback_toggle_keyword_after_ai(event, rule_id, session, message, data):
-    try:
-        rule = session.query(ForwardRule).get(int(rule_id))             
-        rule.is_keyword_after_ai = not rule.is_keyword_after_ai
-        session.commit()
-        await event.edit(await get_ai_settings_text(rule), buttons=await create_ai_settings_buttons(rule))
-        await event.answer(f'AI处理后关键字过滤已{"开启" if rule.is_keyword_after_ai else "关闭"}')
-        return
-    finally:
-        session.close()
-
-
-async def callback_toggle_ai(event, rule_id, session, message, data):
-    try:
-        rule = session.query(ForwardRule).get(int(rule_id))
-        rule.is_ai = not rule.is_ai
-        session.commit()
-        await event.edit(await get_ai_settings_text(rule), buttons=await create_ai_settings_buttons(rule))
-        return
-    finally:
-        session.close()
 
 
 async def callback_change_model(event, rule_id, session, message, data):
