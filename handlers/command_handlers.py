@@ -410,34 +410,24 @@ async def handle_replace_command(event, parts):
         await reply_and_delete(event,'用法: /replace <匹配规则> [替换内容]\n例如:\n/replace 广告  # 删除匹配内容\n/replace 广告 [已替换]\n/replace "广告 文本" [已替换]\n/replace \'广告 文本\' [已替换]')
         return
 
-    # 分离命令和参数部分
-    _, args_text = message_text.split(None, 1)
-
-    # 解析带引号的参数
-    pattern = None
-    content = ''
-
-    # 检查第一个参数是否带引号
-    if args_text.startswith('"') or args_text.startswith("'"):
-        quote_char = args_text[0]
-        end_quote_pos = args_text.find(quote_char, 1)
-
-        if end_quote_pos > 0:
-            # 提取引号内的内容作为匹配规则
-            pattern = args_text[1:end_quote_pos]
-            # 剩余部分作为替换内容（如果有）
-            if len(args_text) > end_quote_pos + 1:
-                content = args_text[end_quote_pos + 1:].strip()
-        else:
-            # 引号未闭合，使用整个参数作为模式
-            pattern = args_text
-    else:
-        # 没有引号的情况，使用第一个空格前的内容作为匹配规则
-        args_parts = args_text.split(None, 1)
-        pattern = args_parts[0]
-        if len(args_parts) > 1:
-            content = args_parts[1]
-
+    # 使用shlex模块解析参数，它会正确处理引号
+    try:
+        args = shlex.split(message_text.split(None, 1)[1])
+        if not args:
+            await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+            await reply_and_delete(event,'请提供有效的匹配规则')
+            return
+            
+        pattern = args[0]
+        content = args[1] if len(args) > 1 else ''
+        
+        logger.info(f"解析替换命令参数: pattern='{pattern}', content='{content}'")
+        
+    except ValueError as e:
+        await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
+        await reply_and_delete(event,f'参数解析错误: {str(e)}\n请确保引号成对出现')
+        return
+        
     if not pattern:
         await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
         await reply_and_delete(event,'请提供有效的匹配规则')
