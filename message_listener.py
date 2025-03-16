@@ -19,9 +19,9 @@ logger = logging.getLogger(__name__)
 # 添加一个缓存来存储已处理的媒体组
 PROCESSED_GROUPS = set()
 
+BOT_ID = None
 
-
-def setup_listeners(user_client, bot_client):
+async def setup_listeners(user_client, bot_client):
     """
     设置消息监听器
     
@@ -29,14 +29,40 @@ def setup_listeners(user_client, bot_client):
         user_client: 用户客户端（用于监听消息和转发）
         bot_client: 机器人客户端（用于处理命令和转发）
     """
-    # 用户客户端监听器
-    @user_client.on(events.NewMessage)
+    global BOT_ID
+    
+    # 直接获取机器人ID
+    try:
+        me = await bot_client.get_me()
+        BOT_ID = me.id
+        logger.info(f"获取到机器人ID: {BOT_ID} (类型: {type(BOT_ID)})")
+    except Exception as e:
+        logger.error(f"获取机器人ID时出错: {str(e)}")
+    
+    # 过滤器，排除机器人自己的消息
+    async def not_from_bot(event):
+        if BOT_ID is None:
+            return True  # 如果未获取到机器人ID，不进行过滤
+        
+        sender = event.sender_id
+        try:
+            sender_id = int(sender) if sender is not None else None
+            is_not_bot = sender_id != BOT_ID
+            if not is_not_bot:
+                logger.info(f"过滤器识别到机器人消息，忽略处理: {sender_id}")
+            return is_not_bot
+        except (ValueError, TypeError):
+            return True  # 转换失败时不过滤
+    
+    # 用户客户端监听器 - 使用过滤器，避免处理机器人消息
+    @user_client.on(events.NewMessage(func=not_from_bot))
     async def user_message_handler(event):
         await handle_user_message(event, user_client, bot_client)
     
-    # 机器人客户端监听器
-    @bot_client.on(events.NewMessage)
+    # 机器人客户端监听器 - 使用过滤器
+    @bot_client.on(events.NewMessage(func=not_from_bot))
     async def bot_message_handler(event):
+        logger.info(f"机器人收到非自身消息, 发送者ID: {event.sender_id}")
         await handle_bot_message(event, bot_client)
         
     # 注册机器人回调处理器
@@ -141,6 +167,7 @@ async def handle_user_message(event, user_client, bot_client):
 async def handle_bot_message(event, bot_client):
     """处理机器人客户端收到的消息（命令）"""
     try:
+            
         # logger.info("handle_bot_message:开始处理机器人消息")
         
         chat = await event.get_chat()

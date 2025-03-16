@@ -67,9 +67,6 @@ bot_client = TelegramClient('./sessions/bot', api_id, api_hash)
 # 初始化数据库
 engine = init_db()
 
-# 设置消息监听器
-setup_listeners(user_client, bot_client)
-
 
 def run_rss_server(host: str, port: int):
     """在新进程中运行 RSS 服务器"""
@@ -95,6 +92,9 @@ async def start_clients():
         await bot_client.start(bot_token=bot_token)
         me_bot = await bot_client.get_me()
         print(f'机器人客户端已启动: {me_bot.first_name} (@{me_bot.username})')
+
+        # 设置消息监听器
+        await setup_listeners(user_client, bot_client)
 
         # 注册命令
         await register_bot_commands(bot_client)
