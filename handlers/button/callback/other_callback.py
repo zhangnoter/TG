@@ -1315,7 +1315,7 @@ async def callback_set_original_link_template(event, rule_id, session, message, 
         help_text = (
             "原始链接模板用于在转发消息中添加原始链接。\n"
             "可用变量:\n"
-            "{link} - 完整的原始链接\n"
+            "{original_link} - 完整的原始链接\n"
         )
         
         await message.edit(
