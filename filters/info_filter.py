@@ -50,22 +50,50 @@ class InfoFilter(BaseFilter):
                 
                 logger.info(f'添加原始链接: {context.original_link}')
             
-            # 添加发送者信息（如果在过滤器链中已经有KeywordFilter处理了发送者信息，这里就跳过）
-            if rule.is_original_sender and event.sender and not context.sender_info:
+            # 添加发送者信息
+            if rule.is_original_sender:
                 try:
-                    # 获取发送者基本信息
-                    sender = event.sender
-                    sender_name = (
-                        sender.title if hasattr(sender, 'title')
-                        else f"{sender.first_name or ''} {sender.last_name or ''}".strip()
-                    )
+                    logger.info("开始获取发送者信息")
+                    sender_name = "Unknown Sender"  # 默认值
+                    sender_id = "Unknown"
+
+                    if hasattr(event.message, 'sender_chat') and event.message.sender_chat:
+                        # 用户以频道身份发送消息
+                        sender = event.message.sender_chat
+                        sender_name = sender.title if hasattr(sender, 'title') else "Unknown Channel"
+                        sender_id = sender.id
+                        logger.info(f"使用频道信息: {sender_name} (ID: {sender_id})")
+
+                    elif event.sender:
+                        # 用户以个人身份发送消息
+                        sender = event.sender
+                        sender_name = (
+                            sender.title if hasattr(sender, 'title')
+                            else f"{sender.first_name or ''} {sender.last_name or ''}".strip()
+                        )
+                        sender_id = sender.id
+                        logger.info(f"使用发送者信息: {sender_name} (ID: {sender_id})")
+
+                    elif hasattr(event.message, 'peer_id') and event.message.peer_id:
+                        # 尝试从 peer_id 获取信息
+                        peer = event.message.peer_id
+                        if hasattr(peer, 'channel_id'):
+                            sender_id = peer.channel_id
+                            try:
+                                # 尝试获取频道信息
+                                channel = await event.client.get_entity(peer)
+                                sender_name = channel.title if hasattr(channel, 'title') else "Unknown Channel"
+                            except Exception as ce:
+                                logger.error(f'获取频道信息失败: {str(ce)}')
+                                sender_name = "Unknown Channel"
+                        logger.info(f"使用peer_id信息: {sender_name} (ID: {sender_id})")
                     
                     # 检查是否有用户自定义模板
                     if hasattr(rule, 'userinfo_template') and rule.userinfo_template:
                         # 替换模板中的变量
                         user_info = rule.userinfo_template
                         user_info = user_info.replace("{name}", sender_name)
-                        user_info = user_info.replace("{id}", str(sender.id))
+                        user_info = user_info.replace("{id}", str(sender_id))
                         
                         context.sender_info = f"{user_info}\n\n"
                     else:
