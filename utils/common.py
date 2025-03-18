@@ -153,7 +153,7 @@ async def check_keywords(rule, message_text, event = None):
 
     logger.info(f"是否开启过滤用户选项: {rule.is_filter_user_info}")
     if rule.is_filter_user_info:
-        username = await get_sender_info(event, rule.id)  # 调用新的函数获取 sender_info
+        username = await get_sender_info(event, rule.id) 
         name =  (
                 event.sender.title if hasattr(event.sender, 'title')
                 else f"{event.sender.first_name or ''} {event.sender.last_name or ''}".strip()
@@ -347,34 +347,56 @@ async def get_ai_settings_text(rule):
     )
 
 async def get_sender_info(event, rule_id):
-    """获取消息发送者信息，处理各种情况并返回 sender_info 字符串"""
-    sender_info = ""
-    if hasattr(event.message, 'from_user'):
-        if event.message.from_user:
-            sender_info = f"{event.message.from_user.mention} ({event.message.from_user.id})"
+    """
+    获取发送者信息
+    
+    Args:
+        event: 消息事件
+        rule_id: 规则ID
+        
+    Returns:
+        str: 发送者信息
+    """
+    try:
+        logger.info("开始获取发送者信息")
+        sender_name = None
+
+        if hasattr(event.message, 'sender_chat') and event.message.sender_chat:
+            # 用户以频道身份发送消息
+            sender = event.message.sender_chat
+            sender_name = sender.title if hasattr(sender, 'title') else None
+            logger.info(f"使用频道信息: {sender_name}")
+
+        elif event.sender:
+            # 用户以个人身份发送消息
+            sender = event.sender
+            sender_name = (
+                sender.title if hasattr(sender, 'title')
+                else f"{sender.first_name or ''} {sender.last_name or ''}".strip()
+            )
+            logger.info(f"使用发送者信息: {sender_name}")
+
+        elif hasattr(event.message, 'peer_id') and event.message.peer_id:
+            # 尝试从 peer_id 获取信息
+            peer = event.message.peer_id
+            if hasattr(peer, 'channel_id'):
+                try:
+                    # 尝试获取频道信息
+                    channel = await event.client.get_entity(peer)
+                    sender_name = channel.title if hasattr(channel, 'title') else None
+                    logger.info(f"使用peer_id信息: {sender_name}")
+                except Exception as ce:
+                    logger.error(f'获取频道信息失败: {str(ce)}')
+
+        if sender_name:
+            return sender_name
         else:
-            logger.warning(f"规则 ID: {rule_id} - event.message.from_user 存在但为 None")
-            sender_info = "未知发送者 (from_user 为 None)"
-    elif hasattr(event.message, 'sender'):
-        if event.message.sender:
-            sender = await event.get_sender()
-            if sender:
-                if isinstance(sender, telethon.tl.types.Channel):
-                    sender_info = f"{sender.title} ({sender.id})"
-                elif isinstance(sender, telethon.tl.types.User):
-                    sender_info = f"{sender.username or sender.first_name or '未知用户'} ({sender.id})"
-                else:
-                    sender_info = f"未知类型发送者 ({sender.id})"
-            else:
-                logger.warning(f"规则 ID: {rule_id} - event.message.sender 存在但 get_sender() 返回 None")
-                sender_info = "未知发送者 (sender 为 None after get_sender)"
-        else:
-            logger.warning(f"规则 ID: {rule_id} - event.message.sender 存在但为 None")
-            sender_info = "未知发送者 (sender 为 None)"
-    else:
-        logger.warning(f"规则 ID: {rule_id} - event.message 既没有 from_user 也没有 sender 属性")
-        sender_info = "未知发送者 (无法获取用户信息)"
-    return sender_info
+            logger.warning(f"规则 ID: {rule_id} - 无法获取发送者信息")
+            return None
+
+    except Exception as e:
+        logger.error(f'获取发送者信息出错: {str(e)}')
+        return None
 
 async def check_and_clean_chats(session, rule=None):
     """
