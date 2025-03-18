@@ -153,11 +153,21 @@ async def check_keywords(rule, message_text, event = None):
 
     logger.info(f"是否开启过滤用户选项: {rule.is_filter_user_info}")
     if rule.is_filter_user_info:
-        username = await get_sender_info(event, rule.id) 
-        name =  (
-                event.sender.title if hasattr(event.sender, 'title')
-                else f"{event.sender.first_name or ''} {event.sender.last_name or ''}".strip()
-                )
+        username = await get_sender_info(event, rule.id)
+        name = None
+        
+        if hasattr(event.message, 'sender_chat') and event.message.sender_chat:
+            # 用户以频道身份发送消息
+            sender = event.message.sender_chat
+            name = sender.title if hasattr(sender, 'title') else None
+        elif event.sender:
+            # 用户以个人身份发送消息
+            sender = event.sender
+            name = (
+                sender.title if hasattr(sender, 'title')
+                else f"{sender.first_name or ''} {sender.last_name or ''}".strip()
+            )
+            
         if username and name:
             logger.info(f"成功获取用户信息: {username} {name}")
             message_text = f"{username} {name}:\n{message_text}"
