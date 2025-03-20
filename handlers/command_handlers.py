@@ -410,16 +410,20 @@ async def handle_replace_command(event, parts):
         await reply_and_delete(event,'用法: /replace <匹配规则> [替换内容]\n例如:\n/replace 广告  # 删除匹配内容\n/replace 广告 [已替换]\n/replace "广告 文本" [已替换]\n/replace \'广告 文本\' [已替换]')
         return
 
-    # 使用shlex模块解析参数，它会正确处理引号
+    # 直接分割参数，保持正则表达式的原始形式
     try:
-        args = shlex.split(message_text.split(None, 1)[1])
-        if not args:
+        # 去掉命令前缀，获取原始参数字符串
+        _, args_text = message_text.split(None, 1)
+        
+        # 按第一个空格分割，保持后续内容不变
+        parts = args_text.split(None, 1)
+        if not parts:
             await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
             await reply_and_delete(event,'请提供有效的匹配规则')
             return
             
-        pattern = args[0]
-        content = args[1] if len(args) > 1 else ''
+        pattern = parts[0]
+        content = parts[1] if len(parts) > 1 else ''
         
         logger.info(f"解析替换命令参数: pattern='{pattern}', content='{content}'")
         
@@ -1883,8 +1887,11 @@ async def handle_add_all_command(event, command, parts):
             await reply_and_delete(event,'参数格式错误：请确保引号正确配对')
             return
     else:
-        # add_regex_all 命令保持原样
-        keywords = parts[1:]
+        # add_regex_all 命令使用简单分割，保持正则表达式的原始形式
+        if len(args_text.split()) > 0:
+            keywords = args_text.split()
+        else:
+            keywords = [args_text]
         logger.info(f"add_regex_all 命令，使用原始参数: {keywords}")
 
     if not keywords:
@@ -1945,13 +1952,22 @@ async def handle_add_all_command(event, command, parts):
 
 async def handle_replace_all_command(event, parts):
     """处理 replace_all 命令"""
-    if len(parts) < 2:
+    message_text = event.message.text
+    
+    if len(message_text.split(None, 1)) < 2:
         await async_delete_user_message(event.client, event.message.chat_id, event.message.id, 0)
         await reply_and_delete(event,'用法: /replace_all <匹配规则> [替换内容]\n例如:\n/replace_all 广告  # 删除匹配内容\n/replace_all 广告 [已替换]')
         return
 
-    pattern = parts[1]
-    content = ' '.join(parts[2:]) if len(parts) > 2 else ''
+    # 直接分割参数，保持正则表达式的原始形式
+    _, args_text = message_text.split(None, 1)
+    
+    # 按第一个空格分割，保持后续内容不变
+    parts = args_text.split(None, 1)
+    pattern = parts[0]
+    content = parts[1] if len(parts) > 1 else ''
+    
+    logger.info(f"解析替换命令参数: pattern='{pattern}', content='{content}'")
 
     session = get_session()
     try:
