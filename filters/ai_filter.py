@@ -29,6 +29,7 @@ class AIFilter(BaseFilter):
         rule = context.rule
         message_text = context.message_text
         original_message_text = context.original_message_text
+        event = context.event
 
         # logger.info(f"AIFilter处理消息前，context: {context.__dict__}")
         try:
@@ -47,8 +48,9 @@ class AIFilter(BaseFilter):
                     context.message_text = processed_text
                     
                     # 如果需要在AI处理后再次检查关键字
+                    logger.info(f"rule.is_keyword_after_ai:{rule.is_keyword_after_ai}")
                     if rule.is_keyword_after_ai:
-                        should_forward = await check_keywords(rule, processed_text)
+                        should_forward = await check_keywords(rule, processed_text, event)
                         
                         if not should_forward:
                             logger.info('AI处理后的文本未通过关键字检查，取消转发')
