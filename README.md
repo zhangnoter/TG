@@ -494,11 +494,16 @@ UFB相关
 • 导入命令需要同时发送文件
 ```
 
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=Heavrnl/TelegramForwarder&type=Date)](https://www.star-history.com/#Heavrnl/TelegramForwarder&Date)
+
 ## ☕ 捐赠
 
 如果你觉得这个项目对你有帮助，欢迎通过以下方式请我喝杯咖啡：
 
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/0heavrnl)
+
 
 ## 📄 开源协议
 
