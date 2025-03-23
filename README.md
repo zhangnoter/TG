@@ -201,7 +201,7 @@ docker-compose up -d
 ---
 
 #### 4. 如何转发到收藏夹 (Saved Messages)
-
+> 不推荐，操作比较繁琐
 1. 在你的 bot 管理的任意群组或频道中发送以下命令：  
    ```bash
    /bind https://t.me/tgnews 你的用户名（即展示的名称）
