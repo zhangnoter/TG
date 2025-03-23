@@ -494,7 +494,7 @@ UFB相关
 • 导入命令需要同时发送文件
 ```
 
-## Star History
+## 感谢大家的小星星⭐
 
 [![Star History Chart](https://api.star-history.com/svg?repos=Heavrnl/TelegramForwarder&type=Date)](https://www.star-history.com/#Heavrnl/TelegramForwarder&Date)
 
