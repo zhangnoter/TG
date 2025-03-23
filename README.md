@@ -89,6 +89,7 @@ mkdir ./TelegramForwarder && cd ./TelegramForwarder
 wget https://raw.githubusercontent.com/Heavrnl/TelegramForwarder/refs/heads/main/.env.example -O .env
 ```
 
+下载仓库的[docker-compose.yml](https://github.com/Heavrnl/TelegramForwarder/blob/main/docker-compose.yml)到目录下
 
 ### 3️⃣ 启动服务
 
