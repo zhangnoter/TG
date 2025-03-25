@@ -238,15 +238,24 @@ async def callback_toggle_current(event, rule_id, session, message, data):
     target_chat = rule.target_chat
     source_chat = rule.source_chat
 
+    # 检查是否已经是当前选中的规则
+    if target_chat.current_add_id == source_chat.telegram_chat_id:
+        await event.answer('已经是当前选中的规则')
+        return
+
     # 更新当前选中的源聊天
     target_chat.current_add_id = source_chat.telegram_chat_id
     session.commit()
 
     # 更新按钮显示
-    await message.edit(
-        await create_settings_text(rule),
-        buttons=await create_buttons(rule)
-    )
+    try:
+        await message.edit(
+            await create_settings_text(rule),
+            buttons=await create_buttons(rule)
+        )
+    except Exception as e:
+        if 'message was not modified' not in str(e).lower():
+            raise
 
     await event.answer(f'已切换到: {source_chat.name}')
 
