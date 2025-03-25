@@ -139,188 +139,6 @@ async def get_all_rules(session, event):
         return None
 
 
-async def check_keywords(rule, message_text, event = None):
-    """
-    检查消息是否匹配关键字规则
-
-    Args:
-        rule: 转发规则对象，包含 forward_mode 和 keywords 属性
-        message_text: 要检查的消息文本
-
-    Returns:
-        bool: 是否应该转发消息
-    """
-
-    logger.info(f"是否开启过滤用户选项: {rule.is_filter_user_info}")
-    if rule.is_filter_user_info:
-        username = await get_sender_info(event, rule.id)
-        name = None
-        
-        if hasattr(event.message, 'sender_chat') and event.message.sender_chat:
-            # 用户以频道身份发送消息
-            sender = event.message.sender_chat
-            name = sender.title if hasattr(sender, 'title') else None
-        elif event.sender:
-            # 用户以个人身份发送消息
-            sender = event.sender
-            name = (
-                sender.title if hasattr(sender, 'title')
-                else f"{sender.first_name or ''} {sender.last_name or ''}".strip()
-            )
-            
-        if username and name:
-            logger.info(f"成功获取用户信息: {username} {name}")
-            message_text = f"{username} {name}:\n{message_text}"
-        elif username:
-            logger.info(f"成功获取用户信息: {username}")
-            message_text = f"{username}:\n{message_text}"
-        elif name:
-            logger.info(f"成功获取用户信息: {name}")
-            message_text = f"{name}:\n{message_text}"
-        else:
-            logger.warning(f"规则 ID: {rule.id} - 无法获取发送者信息")
-            
-        logger.info(f'附带用户信息后的消息: {message_text}')    
-
-    logger.info("开始检查关键字规则")
-    logger.info(f"当前转发模式: {rule.forward_mode}")
-    should_forward = None
-    forward_mode = rule.forward_mode
-
-    # 处理仅白名单或仅黑名单模式
-    if forward_mode in [ForwardMode.WHITELIST, ForwardMode.BLACKLIST]:
-        logger.info("进入仅白名单/仅黑名单模式")
-        is_whitelist = (forward_mode == ForwardMode.WHITELIST)
-        keywords = [k for k in rule.keywords if k.is_blacklist != is_whitelist]
-        logger.info(f"待检查关键词: {[k.keyword for k in keywords]}")
-        # 白名单模式默认不转发，黑名单模式默认转发
-        should_forward = not is_whitelist  
-        logger.info(f"初始 should_forward 设置为: {should_forward}")
-
-        for keyword in keywords:
-            logger.info(f"检查{'白名单' if is_whitelist else '黑名单'}关键字: {keyword.keyword} (正则: {keyword.is_regex})")
-            matched = False
-            if keyword.is_regex:
-                try:
-                    if re.search(keyword.keyword, message_text):
-                        matched = True
-                        logger.info(f"正则匹配成功: {keyword.keyword}")
-                except re.error:
-                    logger.error(f"正则表达式错误: {keyword.keyword}")
-            else:
-                if keyword.keyword.lower() in message_text.lower():
-                    matched = True
-                    logger.info(f"关键字匹配成功: {keyword.keyword}")
-            if matched:
-                should_forward = is_whitelist
-                logger.info(f"匹配到关键词 '{keyword.keyword}'，设置 should_forward 为: {should_forward}")
-                break
-        logger.info("结束仅白名单/仅黑名单模式检查")
-
-    # 处理 先白后黑 模式
-    elif forward_mode == ForwardMode.WHITELIST_THEN_BLACKLIST:
-        logger.info("进入 先白后黑 模式")
-        # 先检查白名单：必须匹配至少一个白名单关键词
-        whitelist_keywords = [k for k in rule.keywords if not k.is_blacklist]
-        logger.info(f"白名单关键词: {[k.keyword for k in whitelist_keywords]}")
-        should_forward = False
-        for keyword in whitelist_keywords:
-            logger.info(f"检查白名单关键字: {keyword.keyword} (正则: {keyword.is_regex})")
-            matched = False
-            if keyword.is_regex:
-                try:
-                    if re.search(keyword.keyword, message_text):
-                        matched = True
-                        logger.info(f"白名单正则匹配成功: {keyword.keyword}")
-                except re.error:
-                    logger.error(f"正则表达式错误: {keyword.keyword}")
-            else:
-                if keyword.keyword.lower() in message_text.lower():
-                    matched = True
-                    logger.info(f"白名单关键字匹配成功: {keyword.keyword}")
-            if matched:
-                should_forward = True
-                logger.info(f"匹配到白名单关键词 '{keyword.keyword}'，设置 should_forward 为: True")
-                break
-
-        # 如果白名单匹配成功，再检查黑名单
-        if should_forward:
-            logger.info("白名单匹配成功，开始检查黑名单关键词")
-            blacklist_keywords = [k for k in rule.keywords if k.is_blacklist]
-            logger.info(f"黑名单关键词: {[k.keyword for k in blacklist_keywords]}")
-            for keyword in blacklist_keywords:
-                logger.info(f"检查黑名单关键字: {keyword.keyword} (正则: {keyword.is_regex})")
-                matched = False
-                if keyword.is_regex:
-                    try:
-                        if re.search(keyword.keyword, message_text):
-                            matched = True
-                            logger.info(f"黑名单正则匹配成功: {keyword.keyword}")
-                    except re.error:
-                        logger.error(f"正则表达式错误: {keyword.keyword}")
-                else:
-                    if keyword.keyword.lower() in message_text.lower():
-                        matched = True
-                        logger.info(f"黑名单关键字匹配成功: {keyword.keyword}")
-                if matched:
-                    should_forward = False
-                    logger.info(f"匹配到黑名单关键词 '{keyword.keyword}'，设置 should_forward 为: False")
-                    break
-        else:
-            logger.info("未匹配到任何白名单关键词，直接不转发")
-        logger.info("结束 先白后黑 模式检查")
-
-    # 处理 先黑后白 模式
-    elif forward_mode == ForwardMode.BLACKLIST_THEN_WHITELIST:
-        logger.info("进入 先黑后白 模式")
-        # 先检查黑名单：如果匹配任一黑名单关键词，直接拒绝转发
-        blacklist_keywords = [k for k in rule.keywords if k.is_blacklist]
-        logger.info(f"黑名单关键词: {[k.keyword for k in blacklist_keywords]}")
-        for keyword in blacklist_keywords:
-            logger.info(f"检查黑名单关键字: {keyword.keyword} (正则: {keyword.is_regex})")
-            matched = False
-            if keyword.is_regex:
-                try:
-                    if re.search(keyword.keyword, message_text):
-                        matched = True
-                        logger.info(f"黑名单正则匹配成功: {keyword.keyword}")
-                except re.error:
-                    logger.error(f"正则表达式错误: {keyword.keyword}")
-            else:
-                if keyword.keyword.lower() in message_text.lower():
-                    matched = True
-                    logger.info(f"黑名单关键字匹配成功: {keyword.keyword}")
-            if matched:
-                logger.info("匹配到黑名单关键词，拒绝转发消息")
-                return False
-
-        # 如果没有匹配到黑名单，再检查白名单：必须匹配至少一个白名单关键词
-        whitelist_keywords = [k for k in rule.keywords if not k.is_blacklist]
-        logger.info(f"白名单关键词: {[k.keyword for k in whitelist_keywords]}")
-        for keyword in whitelist_keywords:
-            logger.info(f"检查白名单关键字: {keyword.keyword} (正则: {keyword.is_regex})")
-            matched = False
-            if keyword.is_regex:
-                try:
-                    if re.search(keyword.keyword, message_text):
-                        matched = True
-                        logger.info(f"白名单正则匹配成功: {keyword.keyword}")
-                except re.error:
-                    logger.error(f"正则表达式错误: {keyword.keyword}")
-            else:
-                if keyword.keyword.lower() in message_text.lower():
-                    matched = True
-                    logger.info(f"白名单关键字匹配成功: {keyword.keyword}")
-            if matched:
-                logger.info("匹配到白名单关键词，转发消息")
-                return True
-
-        logger.info("未匹配到任何白名单关键词，拒绝转发")
-        should_forward = False
-        logger.info("结束 先黑后白 模式检查")
-
-    logger.info(f"关键字检查最终结果: {'转发' if should_forward else '不转发'}")
-    return should_forward
 
 async def is_admin(channel_id, user_id, client):
     """检查用户是否为频道/群组管理员
@@ -493,47 +311,251 @@ def get_admin_list():
     return [int(admin.strip()) for admin in admin_str.split(',') if admin.strip()]
 
 
-# async def ai_handle(message: str, rule) -> str:
-#     """使用AI处理消息
+
+
+async def check_keywords(rule, message_text, event = None):
+    """
+    检查消息是否匹配关键字规则
+
+    Args:
+        rule: 转发规则对象，包含 forward_mode 和 keywords 属性
+        message_text: 要检查的消息文本
+        event: 可选的消息事件对象
+
+    Returns:
+        bool: 是否应该转发消息
+    """
+    reverse_blacklist = rule.enable_reverse_blacklist
+    reverse_whitelist = rule.enable_reverse_whitelist
+    logger.info(f"反转黑名单: {reverse_blacklist}, 反转白名单: {reverse_whitelist}")
+
+    # 处理用户信息过滤
+    if rule.is_filter_user_info and event:
+        message_text = await process_user_info(event, rule.id, message_text)
+
+    logger.info("开始检查关键字规则")
+    logger.info(f"当前转发模式: {rule.forward_mode}")
+    forward_mode = rule.forward_mode
+
+    # 仅白名单模式
+    if forward_mode == ForwardMode.WHITELIST:
+        return await process_whitelist_mode(rule, message_text, reverse_blacklist)
+
+    # 仅黑名单模式
+    elif forward_mode == ForwardMode.BLACKLIST:
+        return await process_blacklist_mode(rule, message_text, reverse_whitelist)
+
+    # 先白后黑模式
+    elif forward_mode == ForwardMode.WHITELIST_THEN_BLACKLIST:
+        return await process_whitelist_then_blacklist_mode(rule, message_text, reverse_blacklist)
+
+    # 先黑后白模式
+    elif forward_mode == ForwardMode.BLACKLIST_THEN_WHITELIST:
+        return await process_blacklist_then_whitelist_mode(rule, message_text, reverse_whitelist)
+
+    logger.error(f"未知的转发模式: {forward_mode}")
+    return False
+
+async def process_whitelist_mode(rule, message_text, reverse_blacklist):
+    """处理仅白名单模式"""
+    logger.info("进入仅白名单模式")
+    should_forward = False
+
+    # 检查普通白名单关键词
+    whitelist_keywords = [k for k in rule.keywords if not k.is_blacklist]
+    logger.info(f"普通白名单关键词: {[k.keyword for k in whitelist_keywords]}")
     
-#     Args:
-#         message: 原始消息文本
-#         rule: 转发规则对象，包含AI相关设置
+    for keyword in whitelist_keywords:
+        if await check_keyword_match(keyword, message_text):
+            should_forward = True
+            break
+    
+    if not should_forward:
+        logger.info("未匹配到普通白名单关键词，不转发")
+        return False
+
+    # 如果启用了黑名单反转，还需要匹配反转后的黑名单（作为第二重白名单）
+    if reverse_blacklist:
+        logger.info("检查反转后的黑名单关键词（作为白名单）")
+        reversed_blacklist = [k for k in rule.keywords if k.is_blacklist]
+        logger.info(f"反转后的黑名单关键词: {[k.keyword for k in reversed_blacklist]}")
         
-#     Returns:
-#         str: 处理后的消息文本
-#     """
-#     try:
-#         if not rule.is_ai:
-#             logger.info("AI处理未开启，返回原始消息")
-#             return message
-#         # 先读取数据库，如果ai模型为空，则使用.env中的默认模型
-#         if not rule.ai_model:
-#             rule.ai_model = os.getenv('DEFAULT_AI_MODEL')
-#             logger.info(f"使用默认AI模型: {rule.ai_model}")
-#         else:
-#             logger.info(f"使用规则配置的AI模型: {rule.ai_model}")
-            
-#         provider = await get_ai_provider(rule.ai_model)
+        reversed_match = False
+        for keyword in reversed_blacklist:
+            if await check_keyword_match(keyword, message_text):
+                reversed_match = True
+                break
         
-#         if not rule.ai_prompt:
-#             rule.ai_prompt = os.getenv('DEFAULT_AI_PROMPT')
-#             logger.info("使用默认AI提示词")
-#         else:
-#             logger.info("使用规则配置的AI提示词")
+        if not reversed_match:
+            logger.info("未匹配到反转后的黑名单关键词，不转发")
+            return False
+
+    logger.info("所有白名单条件都满足，允许转发")
+    return True
+
+async def process_blacklist_mode(rule, message_text, reverse_whitelist):
+    """处理仅黑名单模式"""
+    logger.info("进入仅黑名单模式")
+
+    # 检查普通黑名单关键词
+    blacklist_keywords = [k for k in rule.keywords if k.is_blacklist]
+    logger.info(f"普通黑名单关键词: {[k.keyword for k in blacklist_keywords]}")
+    
+    for keyword in blacklist_keywords:
+        if await check_keyword_match(keyword, message_text):
+            logger.info(f"匹配到黑名单关键词 '{keyword.keyword}'，不转发")
+            return False
+
+    # 如果启用了白名单反转，检查反转后的白名单（作为黑名单）
+    if reverse_whitelist:
+        logger.info("检查反转后的白名单关键词（作为黑名单）")
+        reversed_whitelist = [k for k in rule.keywords if not k.is_blacklist]
+        logger.info(f"反转后的白名单关键词: {[k.keyword for k in reversed_whitelist]}")
         
-#         # 处理特殊提示词格式
-#         prompt = rule.ai_prompt
+        for keyword in reversed_whitelist:
+            if await check_keyword_match(keyword, message_text):
+                logger.info(f"匹配到反转后的白名单关键词 '{keyword.keyword}'，不转发")
+                return False
+
+    logger.info("未匹配到任何黑名单关键词，允许转发")
+    return True
+
+async def check_keyword_match(keyword, message_text):
+    """检查单个关键词是否匹配"""
+    logger.info(f"检查关键字: {keyword.keyword} (正则: {keyword.is_regex})")
+    if keyword.is_regex:
+        try:
+            if re.search(keyword.keyword, message_text):
+                logger.info(f"正则匹配成功: {keyword.keyword}")
+                return True
+        except re.error:
+            logger.error(f"正则表达式错误: {keyword.keyword}")
+    else:
+        if keyword.keyword.lower() in message_text.lower():
+            logger.info(f"关键字匹配成功: {keyword.keyword}")
+            return True
+    return False
+
+async def process_user_info(event, rule_id, message_text):
+    """处理用户信息过滤"""
+    username = await get_sender_info(event, rule_id)
+    name = None
+    
+    if hasattr(event.message, 'sender_chat') and event.message.sender_chat:
+        sender = event.message.sender_chat
+        name = sender.title if hasattr(sender, 'title') else None
+    elif event.sender:
+        sender = event.sender
+        name = (
+            sender.title if hasattr(sender, 'title')
+            else f"{sender.first_name or ''} {sender.last_name or ''}".strip()
+        )
+        
+    if username and name:
+        logger.info(f"成功获取用户信息: {username} {name}")
+        return f"{username} {name}:\n{message_text}"
+    elif username:
+        logger.info(f"成功获取用户信息: {username}")
+        return f"{username}:\n{message_text}"
+    elif name:
+        logger.info(f"成功获取用户信息: {name}")
+        return f"{name}:\n{message_text}"
+    else:
+        logger.warning(f"规则 ID: {rule_id} - 无法获取发送者信息")
+        return message_text
 
 
-#         processed_text = await provider.process_message(
-#             message=message,
-#             prompt=prompt,
-#             model=rule.ai_model
-#         )
-#         logger.info(f"AI处理完成: {processed_text}")
-#         return processed_text
+async def process_whitelist_then_blacklist_mode(rule, message_text, reverse_blacklist):
+    """处理先白后黑模式
+    
+    先检查白名单（必须匹配），然后检查黑名单（不能匹配）
+    如果启用黑名单反转，则黑名单变成第二重白名单（必须匹配）
+    """
+    logger.info("进入先白后黑模式")
+
+    # 检查普通白名单（必须匹配）
+    whitelist_match = False
+    whitelist_keywords = [k for k in rule.keywords if not k.is_blacklist]
+    logger.info(f"检查普通白名单关键词: {[k.keyword for k in whitelist_keywords]}")
+    
+    for keyword in whitelist_keywords:
+        if await check_keyword_match(keyword, message_text):
+            whitelist_match = True
+            break
+    
+    if not whitelist_match:
+        logger.info("未匹配到白名单关键词，不转发")
+        return False
+
+    # 根据反转设置处理黑名单
+    blacklist_keywords = [k for k in rule.keywords if k.is_blacklist]
+    
+    if reverse_blacklist:
+        # 黑名单反转为白名单，必须匹配才转发
+        logger.info("黑名单已反转，作为第二重白名单检查")
+        logger.info(f"反转后的黑名单关键词: {[k.keyword for k in blacklist_keywords]}")
         
-#     except Exception as e:
-#         logger.error(f"AI处理消息时出错: {str(e)}")
-#         return message  
+        blacklist_match = False
+        for keyword in blacklist_keywords:
+            if await check_keyword_match(keyword, message_text):
+                blacklist_match = True
+                break
+        
+        if not blacklist_match:
+            logger.info("未匹配到反转后的黑名单关键词，不转发")
+            return False
+    else:
+        # 正常黑名单，匹配则不转发
+        logger.info(f"检查普通黑名单关键词: {[k.keyword for k in blacklist_keywords]}")
+        for keyword in blacklist_keywords:
+            if await check_keyword_match(keyword, message_text):
+                logger.info(f"匹配到黑名单关键词 '{keyword.keyword}'，不转发")
+                return False
+
+    logger.info("所有条件都满足，允许转发")
+    return True
+
+async def process_blacklist_then_whitelist_mode(rule, message_text, reverse_whitelist):
+    """处理先黑后白模式
+    
+    先检查黑名单（不能匹配），然后检查白名单（必须匹配）
+    如果启用白名单反转，则白名单变成第二重黑名单（不能匹配）
+    """
+    logger.info("进入先黑后白模式")
+
+    # 检查普通黑名单（匹配则拒绝）
+    blacklist_keywords = [k for k in rule.keywords if k.is_blacklist]
+    logger.info(f"检查普通黑名单关键词: {[k.keyword for k in blacklist_keywords]}")
+    
+    for keyword in blacklist_keywords:
+        if await check_keyword_match(keyword, message_text):
+            logger.info(f"匹配到黑名单关键词 '{keyword.keyword}'，不转发")
+            return False
+
+    # 处理白名单
+    whitelist_keywords = [k for k in rule.keywords if not k.is_blacklist]
+    
+    if reverse_whitelist:
+        # 白名单反转为黑名单，匹配则不转发
+        logger.info("白名单已反转，作为第二重黑名单检查")
+        logger.info(f"反转后的白名单关键词: {[k.keyword for k in whitelist_keywords]}")
+        
+        for keyword in whitelist_keywords:
+            if await check_keyword_match(keyword, message_text):
+                logger.info(f"匹配到反转后的白名单关键词 '{keyword.keyword}'，不转发")
+                return False
+    else:
+        # 正常白名单，必须匹配才转发
+        logger.info(f"检查普通白名单关键词: {[k.keyword for k in whitelist_keywords]}")
+        whitelist_match = False
+        for keyword in whitelist_keywords:
+            if await check_keyword_match(keyword, message_text):
+                whitelist_match = True
+                break
+        
+        if not whitelist_match:
+            logger.info("未匹配到白名单关键词，不转发")
+            return False
+
+    logger.info("所有条件都满足，允许转发")
+    return True

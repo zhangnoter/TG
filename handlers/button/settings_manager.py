@@ -393,6 +393,16 @@ OTHER_SETTINGS = {
         'display_name': '设置原始链接模板',
         'toggle_action': 'set_original_link_template',
         'toggle_func': None
+    },
+    'reverse_blacklist': {
+        'display_name': '反转黑名单',
+        'toggle_action': 'toggle_reverse_blacklist',
+        'toggle_func': None
+    },
+    'reverse_whitelist': {
+        'display_name': '反转白名单',
+        'toggle_action': 'toggle_reverse_whitelist',
+        'toggle_func': None
     }
 }
 

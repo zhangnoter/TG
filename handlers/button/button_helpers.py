@@ -92,12 +92,31 @@ async def create_other_settings_buttons(rule=None,rule_id=None):
     
     if rule_id is None:
         rule_id = rule.id
+    else:
+        session = get_session()
+        try:
+            rule = session.query(ForwardRule).get(int(rule_id))
+        finally:
+            session.close()
 
-    # 遍历OTHER_SETTINGS的每个项目，field_name是字段名，config是配置信息
+    current_row = []
     for field, config in OTHER_SETTINGS.items():
-        display_value = f"{config['display_name']}"
-        callback_data = f"{config['toggle_action']}:{rule_id}"
-        buttons.append([Button.inline(display_value, callback_data)])
+        if field in ['reverse_blacklist', 'reverse_whitelist']:
+            is_enabled = getattr(rule, f'enable_{field}', False)
+            display_value = f"{'✅ ' if is_enabled else ''}{config['display_name']}"
+            callback_data = f"{config['toggle_action']}:{rule_id}"
+
+            current_row.append(Button.inline(display_value, callback_data))
+            
+
+            if field == 'reverse_whitelist':
+                buttons.append(current_row)
+                current_row = []
+        else:
+            # 其他按钮单独一行
+            display_value = f"{config['display_name']}"
+            callback_data = f"{config['toggle_action']}:{rule_id}"
+            buttons.append([Button.inline(display_value, callback_data)])
 
     # 添加返回按钮
     buttons.append([

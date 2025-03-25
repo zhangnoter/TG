@@ -1346,3 +1346,37 @@ async def callback_cancel_set_original_link(event, rule_id, session, message, da
     finally:
         session.close()
     return
+
+async def callback_toggle_reverse_blacklist(event, rule_id, session, message, data):
+    """切换反转黑名单设置"""
+    try:
+        rule = session.query(ForwardRule).get(int(rule_id))
+        if rule:
+            rule.enable_reverse_blacklist = not rule.enable_reverse_blacklist
+            session.commit()
+            await event.answer("设置已更新")
+           
+            await event.edit(
+                buttons=await create_other_settings_buttons(rule_id=rule_id)
+            )
+    except Exception as e:
+        logger.error(f"切换反转黑名单设置时出错: {str(e)}")
+        await event.answer("更新设置失败")
+    return
+
+async def callback_toggle_reverse_whitelist(event, rule_id, session, message, data):
+    """切换反转白名单设置"""
+    try:
+        rule = session.query(ForwardRule).get(int(rule_id))
+        if rule:
+            rule.enable_reverse_whitelist = not rule.enable_reverse_whitelist
+            session.commit()
+            await event.answer("设置已更新")
+            
+            await event.edit(
+                buttons=await create_other_settings_buttons(rule_id=rule_id)
+            )
+    except Exception as e:
+        logger.error(f"切换反转白名单设置时出错: {str(e)}")
+        await event.answer("更新设置失败")
+    return
