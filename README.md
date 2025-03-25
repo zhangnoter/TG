@@ -84,10 +84,13 @@ Telegram 转发器是一个消息转发工具，只需要你的账号加入频�
 ```bash
 mkdir ./TelegramForwarder && cd ./TelegramForwarder
 ```
-直接下载或复制仓库的 **[.env.example](./.env.example)** 文件，填入必填项，然后重命名为`.env`
+下载仓库的 [**docker-compose.yml**](https://github.com/Heavrnl/TelegramForwarder/blob/main/docker-compose.yml) 到目录下
+
+接着下载或复制仓库的 **[.env.example](./.env.example)** 文件，填入必填项，然后重命名为`.env`
 ```bash
 wget https://raw.githubusercontent.com/Heavrnl/TelegramForwarder/refs/heads/main/.env.example -O .env
 ```
+
 
 
 ### 3️⃣ 启动服务
@@ -201,7 +204,7 @@ docker-compose up -d
 ---
 
 #### 4. 如何转发到收藏夹 (Saved Messages)
-
+> 不推荐，操作比较繁琐
 1. 在你的 bot 管理的任意群组或频道中发送以下命令：  
    ```bash
    /bind https://t.me/tgnews 你的用户名（即展示的名称）
@@ -494,11 +497,16 @@ UFB相关
 • 导入命令需要同时发送文件
 ```
 
+## 感谢大家的小星星⭐
+
+[![Star History Chart](https://api.star-history.com/svg?repos=Heavrnl/TelegramForwarder&type=Date)](https://www.star-history.com/#Heavrnl/TelegramForwarder&Date)
+
 ## ☕ 捐赠
 
 如果你觉得这个项目对你有帮助，欢迎通过以下方式请我喝杯咖啡：
 
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/0heavrnl)
+
 
 ## 📄 开源协议
 
