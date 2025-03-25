@@ -47,29 +47,32 @@ async def get_channel_admins(client, chat_id):
 
 async def handle_command(client, event):
     """处理机器人命令"""
-    # 检查是否是频道消息
-    if event.is_channel and not event.sender_id:
+    message = event.message
+    
+    if message.is_channel and not message.is_group:
         # 获取频道管理员列表（使用缓存）
-        admin_ids = await get_channel_admins(client, event.chat_id)
-        if admin_ids is None:
+        channel_admins = await get_channel_admins(client, event.chat_id)
+        if channel_admins is None:
             return
             
-        # 获取所有管理员列表
+        # 获取所有机器人管理员列表
         bot_admins = get_admin_list()
-        user_id = await get_user_id()
-        # 检查是否是机器人管理员或频道管理员
-        if user_id not in admin_ids and user_id not in bot_admins:
-            logger.info(f'非管理员的频道消息，已忽略')
+        
+        # 检查机器人管理员是否在频道管理员列表中
+        admin_in_channel = any(admin_id in channel_admins for admin_id in bot_admins)
+        if not admin_in_channel:
+            logger.info(f'机器人管理员不在频道管理员列表中，已忽略')
             return
     else:
         # 检查发送者ID
-        user_id = event.sender_id
+        user_id = event.sender_id  # 使用 sender_id 作为主要ID来源
+        logger.info(f'发送者ID：{user_id}')
+        
         bot_admins = get_admin_list()
         # 检查是否是机器人管理员
         if user_id not in bot_admins:
             logger.info(f'非管理员的消息，已忽略')
             return
-
     
     # 处理命令逻辑
     message = event.message

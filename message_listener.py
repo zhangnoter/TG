@@ -62,7 +62,7 @@ async def setup_listeners(user_client, bot_client):
     # 机器人客户端监听器 - 使用过滤器
     @bot_client.on(events.NewMessage(func=not_from_bot))
     async def bot_message_handler(event):
-        logger.info(f"机器人收到非自身消息, 发送者ID: {event.sender_id}")
+        # logger.info(f"机器人收到非自身消息, 发送者ID: {event.sender_id}")
         await handle_bot_message(event, bot_client)
         
     # 注册机器人回调处理器
