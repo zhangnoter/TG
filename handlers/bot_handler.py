@@ -47,22 +47,26 @@ async def get_channel_admins(client, chat_id):
 
 async def handle_command(client, event):
     """处理机器人命令"""
-
     # 检查是否是频道消息
-    if event.is_channel:
+    if event.is_channel and not event.sender_id:
         # 获取频道管理员列表（使用缓存）
         admin_ids = await get_channel_admins(client, event.chat_id)
         if admin_ids is None:
             return
             
+        # 获取所有管理员列表
+        bot_admins = get_admin_list()
         user_id = await get_user_id()
-        if user_id not in admin_ids:
+        # 检查是否是机器人管理员或频道管理员
+        if user_id not in admin_ids and user_id not in bot_admins:
             logger.info(f'非管理员的频道消息，已忽略')
             return
     else:
-        # 普通聊天消息，检查发送者ID
+        # 检查发送者ID
         user_id = event.sender_id
-        if user_id != await get_user_id():
+        bot_admins = get_admin_list()
+        # 检查是否是机器人管理员
+        if user_id not in bot_admins:
             logger.info(f'非管理员的消息，已忽略')
             return
 
@@ -181,8 +185,9 @@ async def handle_command(client, event):
 @events.register(events.CallbackQuery)
 async def callback_handler(event):
     """回调处理器入口"""
-    # 只处理来自管理员的回调
-    if event.sender_id != await get_user_id():
+    # 检查是否是管理员的回调
+    admin_list = get_admin_list()
+    if event.sender_id not in admin_list:
         return
     await handle_callback(event)
 

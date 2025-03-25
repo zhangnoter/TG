@@ -481,7 +481,16 @@ async def check_and_clean_chats(session, rule=None):
         session.rollback()
         return 0
 
-
+def get_admin_list():
+    """获取管理员ID列表，如果ADMINS为空则使用USER_ID"""
+    admin_str = os.getenv('ADMINS', '')
+    if not admin_str:
+        user_id = os.getenv('USER_ID')
+        if not user_id:
+            logger.error('未设置 USER_ID 环境变量')
+            raise ValueError('必须在 .env 文件中设置 USER_ID')
+        return [int(user_id)]
+    return [int(admin.strip()) for admin in admin_str.split(',') if admin.strip()]
 
 
 # async def ai_handle(message: str, rule) -> str:
