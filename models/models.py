@@ -362,7 +362,7 @@ def migrate_db(engine):
         'original_link_template': 'ALTER TABLE forward_rules ADD COLUMN original_link_template VARCHAR DEFAULT "原始连接：{original_link}"',
         'enable_push': 'ALTER TABLE forward_rules ADD COLUMN enable_push BOOLEAN DEFAULT FALSE',
         'enable_only_push': 'ALTER TABLE forward_rules ADD COLUMN enable_only_push BOOLEAN DEFAULT FALSE',
-        'media_allow_text': 'ALTER TABLE forward_rules ADD COLUMN allow_text BOOLEAN DEFAULT FALSE',
+        'media_allow_text': 'ALTER TABLE forward_rules ADD COLUMN media_allow_text BOOLEAN DEFAULT FALSE',
     }
 
     keywords_new_columns = {
