@@ -11,9 +11,9 @@ db/forward.db1
 *$py.class
 
 # 忽略虚拟环境
-venv/
-env/
-ENV/
+**/venv/
+**/env/
+**/ENV/
 
 # 忽略 Telethon 会话文件
 *.session
@@ -26,7 +26,7 @@ ufb/.idea
 # 忽略示例和临时配置文件
 /example
 /config/*
-ufb/config/config.json
+ufb/config/*
 
 # 忽略无用的图片和测试目录
 **/test/
