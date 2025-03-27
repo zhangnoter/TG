@@ -363,7 +363,7 @@ AI处理提示词中可以使用以下格式：
 ### 如何添加推送配置？
 完整的推送平台列表和配置格式请参考 [Apprise Wiki](https://github.com/caronc/apprise/wiki)
 
-例如ntfy的推送格式为，那么点击 `添加推送配置` 按钮后输入以下内容即可
+以ntfy为例，推送格式为`ntfy://ntfy.sh/你的主题名`，那么点击 `添加推送配置` 按钮后输入以下内容即可
 ```
 ntfy://ntfy.sh/你的主题名
 ```
