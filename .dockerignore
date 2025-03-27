@@ -48,3 +48,6 @@ logs/*
 .gitignore
 .dockerignore
 Dockerfile
+docker-compose.yml
+.github
+.gitattributes
