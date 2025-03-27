@@ -6,7 +6,7 @@
 db/forward.db1
 
 # 忽略 Python 生成的缓存文件
-__pycache__/
+**/__pycache__/
 *.py[cod]
 *$py.class
 
@@ -25,23 +25,22 @@ ufb/.idea
 
 # 忽略示例和临时配置文件
 /example
-/config
+/config/*
 ufb/config/config.json
 
 # 忽略无用的图片和测试目录
-/images/logo/svg
-/test
+**/test/
+**/images/
 
 # 忽略 RSS 相关数据和临时文件
-/rss/media
-/rss/data
+/rss/media/*
+/rss/data/*
 
 # 忽略日志文件
-logs/
-logs/telegram_forwarder.log
+logs/*
 
 # 忽略临时文件夹
-/temp
+/temp/*
 
 # 额外忽略 `.git` 和 Docker 相关文件，防止意外复制
 .git
