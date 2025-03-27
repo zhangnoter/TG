@@ -13,6 +13,7 @@ from filters.comment_button_filter import CommentButtonFilter
 from filters.init_filter import InitFilter
 from filters.reply_filter import ReplyFilter
 from filters.rss_filter import RSSFilter
+from filters.push_filter import PushFilter
 logger = logging.getLogger(__name__)
 
 async def process_forward_rule(client, event, chat_id, rule):
@@ -44,6 +45,9 @@ async def process_forward_rule(client, event, chat_id, rule):
     
     # 添加替换过滤器
     filter_chain.add_filter(ReplaceFilter())
+
+    # 添加媒体过滤器（处理媒体内容）
+    filter_chain.add_filter(MediaFilter())
     
     # 添加AI处理过滤器（如果启用了AI处理后的关键字检查，可能会中断处理链）
     filter_chain.add_filter(AIFilter())
@@ -51,8 +55,7 @@ async def process_forward_rule(client, event, chat_id, rule):
     # 添加信息过滤器（处理原始链接和发送者信息）
     filter_chain.add_filter(InfoFilter())
     
-    # 添加媒体过滤器（处理媒体内容）
-    filter_chain.add_filter(MediaFilter())
+    
     
     # 添加评论区按钮过滤器
     filter_chain.add_filter(CommentButtonFilter())
@@ -68,6 +71,9 @@ async def process_forward_rule(client, event, chat_id, rule):
     
     # 添加回复过滤器（处理媒体组消息的评论区按钮）
     filter_chain.add_filter(ReplyFilter())
+
+    # 添加推送过滤器
+    filter_chain.add_filter(PushFilter())
     
     # 添加删除原始消息过滤器（最后执行）
     filter_chain.add_filter(DeleteOriginalFilter())

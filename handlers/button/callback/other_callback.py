@@ -1140,7 +1140,7 @@ async def callback_set_userinfo_template(event, rule_id, session, message, data)
     # 检查是否频道消息
     if isinstance(event.chat, types.Channel):
         # 检查是否是管理员
-        if not await is_admin(event.chat_id, event.sender_id, event.client):
+        if not await is_admin(event):
             await event.answer('只有管理员可以修改设置')
             return
         user_id = os.getenv('USER_ID')
@@ -1196,7 +1196,7 @@ async def callback_set_time_template(event, rule_id, session, message, data):
     # 检查是否频道消息
     if isinstance(event.chat, types.Channel):
         # 检查是否是管理员
-        if not await is_admin(event.chat_id, event.sender_id, event.client):
+        if not await is_admin(event):
             await event.answer('只有管理员可以修改设置')
             return
         user_id = os.getenv('USER_ID')
@@ -1289,7 +1289,7 @@ async def callback_set_original_link_template(event, rule_id, session, message, 
     # 检查是否频道消息
     if isinstance(event.chat, types.Channel):
         # 检查是否是管理员
-        if not await is_admin(event.chat_id, event.sender_id, event.client):
+        if not await is_admin(event):
             await event.answer('只有管理员可以修改设置')
             return
         user_id = os.getenv('USER_ID')

@@ -110,7 +110,6 @@ async def handle_user_message(event, user_client, bot_client):
             return
         # 标记这个媒体组为已处理
         PROCESSED_GROUPS.add(group_key)
-        # 设置一个合理的过期时间（比如5分钟后）
         asyncio.create_task(clear_group_cache(group_key))
     
     # 首先检查数据库中是否有该聊天的转发规则
@@ -209,13 +208,3 @@ async def clear_group_cache(group_key, delay=300):  # 5分钟后清除缓存
     await asyncio.sleep(delay)
     PROCESSED_GROUPS.discard(group_key) 
 
-async def is_admin(channel_id, user_id, client):
-    """检查用户是否为频道管理员"""
-    try:
-        # 获取频道的管理员列表
-        admins = await client.get_participants(channel_id, filter=ChannelParticipantsAdmins)
-        # 检查用户是否在管理员列表中
-        return any(admin.id == user_id for admin in admins)
-    except Exception as e:
-        logger.error(f"检查管理员权限时出错: {str(e)}")
-        return False 

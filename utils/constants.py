@@ -22,6 +22,8 @@ RSS_ENABLED = os.getenv('RSS_ENABLED', 'false')
 
 RULES_PER_PAGE = int(os.getenv('RULES_PER_PAGE', 20))
 
+PUSH_CHANNEL_PER_PAGE = int(os.getenv('PUSH_CHANNEL_PER_PAGE', 10))
+
 DEFAULT_TIMEZONE = os.getenv('DEFAULT_TIMEZONE', 'Asia/Shanghai')
 PROJECT_NAME = os.getenv('PROJECT_NAME', 'TG Forwarder RSS')
 # RSS相关路径配置
@@ -71,6 +73,9 @@ BOT_MESSAGE_DELETE_TIMEOUT = int(os.getenv("BOT_MESSAGE_DELETE_TIMEOUT", 300))
 # 自动删除用户发送的指令消息
 USER_MESSAGE_DELETE_ENABLE = os.getenv("USER_MESSAGE_DELETE_ENABLE", "false")
 
+# 是否启用UFB
+UFB_ENABLED = os.getenv("UFB_ENABLED", "false")
+
 # 菜单标题
 AI_SETTINGS_TEXT = """
 当前AI提示词：
@@ -86,7 +91,11 @@ AI_SETTINGS_TEXT = """
 MEDIA_SETTINGS_TEXT = """
 媒体设置：
 """
-
+PUSH_SETTINGS_TEXT = """
+推送设置：
+请前往 https://github.com/caronc/apprise/wiki 查看添加推送配置格式说明
+如 `ntfy://ntfy.sh/你的主题名`
+"""
 
 
 # 为每个规则生成特定的路径

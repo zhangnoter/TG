@@ -3,7 +3,8 @@ from utils.settings import load_ai_models
 from enums.enums import ForwardMode, MessageMode, PreviewMode, AddMode, HandleMode
 from models.models import get_session
 from telethon import Button
-from utils.constants import RSS_ENABLED
+from utils.constants import RSS_ENABLED, UFB_ENABLED
+
 AI_MODELS = load_ai_models()
 
 # 规则配置字段定义
@@ -339,6 +340,15 @@ MEDIA_SETTINGS = {
         'toggle_action': 'set_media_extensions',
         'toggle_func': None,
         'values': {}
+    },
+    'media_allow_text': {
+        'display_name': '放行文本',
+        'values': {
+            True: '开启',
+            False: '关闭'
+        },
+        'toggle_action': 'toggle_media_allow_text',
+        'toggle_func': lambda current: not current
     }
 }
 
@@ -402,6 +412,24 @@ OTHER_SETTINGS = {
     'reverse_whitelist': {
         'display_name': '反转白名单',
         'toggle_action': 'toggle_reverse_whitelist',
+        'toggle_func': None
+    }
+}
+
+PUSH_SETTINGS = {
+    'enable_push_channel': {
+        'display_name': '启用推送',
+        'toggle_action': 'toggle_enable_push',
+        'toggle_func': None
+    },
+    'add_push_channel': {
+        'display_name': '➕ 添加推送配置',
+        'toggle_action': 'add_push_channel',
+        'toggle_func': None
+    },
+    'enable_only_push': {
+        'display_name': '只转发到推送配置',
+        'toggle_action': 'toggle_enable_only_push',
         'toggle_func': None
     }
 }
@@ -474,7 +502,7 @@ async def create_buttons(rule):
                     f"toggle_handle_mode:{rule.id}"
                 ),
                 Button.inline(
-                    f"🔔 只转发到RSS: {RULE_SETTINGS['only_rss']['values'][rule.only_rss]}",
+                    f"⚠️ 只转发到RSS: {RULE_SETTINGS['only_rss']['values'][rule.only_rss]}",
                     f"toggle_only_rss:{rule.id}"
                 )
             ])
@@ -532,9 +560,10 @@ async def create_buttons(rule):
                     f"toggle_delete_original:{rule.id}"
                 ),
                 Button.inline(
-                    f"☁️ UFB同步: {RULE_SETTINGS['is_ufb']['values'][rule.is_ufb]}",
-                    f"toggle_ufb:{rule.id}"
+                    f"💬 评论区按钮: {RULE_SETTINGS['enable_comment_button']['values'][rule.enable_comment_button]}",
+                    f"toggle_enable_comment_button:{rule.id}"
                 )
+
             ])
 
             # 添加延迟过滤器按钮
@@ -563,14 +592,15 @@ async def create_buttons(rule):
                 )
             ])
 
+            if UFB_ENABLED == 'true':
+                buttons.append([
+                    Button.inline(
+                        f"☁️ UFB同步: {RULE_SETTINGS['is_ufb']['values'][rule.is_ufb]}",
+                        f"toggle_ufb:{rule.id}"
+                    )
+                ])
 
-            # 评论区直达按钮
-            buttons.append([
-                Button.inline(
-                    f"💬 评论区直达按钮: {RULE_SETTINGS['enable_comment_button']['values'][rule.enable_comment_button]}",
-                    f"toggle_enable_comment_button:{rule.id}"
-                )
-            ])
+            
             
 
             buttons.append([
@@ -587,19 +617,25 @@ async def create_buttons(rule):
                     f"other_settings:{rule.id}"
                 )
             ])
-            
 
+    
+            buttons.append([
+                Button.inline(
+                    "🔔 推送设置",
+                    f"push_settings:{rule.id}"
+                )
+            ])
 
-        buttons.append([
-            Button.inline(
-                "👈 返回",
-                "settings"
-            ),
-            Button.inline(
-                "❌ 关闭",
-                "close_settings"
-            )
-        ])
+            buttons.append([
+                Button.inline(
+                    "👈 返回",
+                    "settings"
+                ),
+                Button.inline(
+                    "❌ 关闭",
+                    "close_settings"
+                )
+            ])
 
 
     finally:

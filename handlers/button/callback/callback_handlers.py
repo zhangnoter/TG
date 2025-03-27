@@ -6,6 +6,7 @@ from telethon import Button
 from handlers.button.callback.ai_callback import *
 from handlers.button.callback.media_callback import *
 from handlers.button.callback.other_callback import *
+from handlers.button.callback.push_callback import *
 import logging
 import aiohttp
 from utils.constants import RSS_HOST, RSS_PORT
@@ -553,7 +554,8 @@ async def update_rule_setting(event, rule_id, session, message, field_name, conf
             )
         elif setting_type == 'other':
             await event.edit("其他设置：", buttons=await create_other_settings_buttons(rule))
-
+        elif setting_type == 'push':
+            await event.edit(PUSH_SETTINGS_TEXT, buttons=await create_push_settings_buttons(rule), link_preview=False)
         display_name = config.get('display_name', field_name)
         if field_name == 'use_bot':
             await event.answer(f'已切换到{"机器人" if new_value else "用户账号"}模式')
@@ -661,6 +663,7 @@ CALLBACK_HANDLERS = {
     'set_media_extensions': callback_set_media_extensions,
     'media_extensions_page': callback_media_extensions_page,
     'toggle_media_extension': callback_toggle_media_extension,
+    'toggle_media_allow_text': callback_toggle_media_allow_text,
     'noop': callback_noop,
     # 其他设置
     'other_settings': callback_other_settings,
@@ -684,4 +687,15 @@ CALLBACK_HANDLERS = {
     'cancel_set_original_link': callback_cancel_set_original_link,
     'toggle_reverse_blacklist': callback_toggle_reverse_blacklist,
     'toggle_reverse_whitelist': callback_toggle_reverse_whitelist,
+    # 推送设置
+    'push_settings': callback_push_settings,
+    'toggle_enable_push': callback_toggle_enable_push,
+    'toggle_enable_only_push': callback_toggle_enable_only_push,
+    'add_push_channel': callback_add_push_channel,
+    'cancel_add_push_channel': callback_cancel_add_push_channel,
+    'toggle_push_config': callback_toggle_push_config,
+    'toggle_push_config_status': callback_toggle_push_config_status,
+    'toggle_media_send_mode': callback_toggle_media_send_mode,
+    'delete_push_config': callback_delete_push_config,
+    'push_page': callback_push_page,
 }

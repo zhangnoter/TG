@@ -55,6 +55,10 @@ class ForwardRule(Base):
     extension_filter_mode = Column(Enum(AddMode), nullable=False, default=AddMode.BLACKLIST)  # 媒体扩展名过滤模式，默认黑名单
     enable_reverse_blacklist = Column(Boolean, default=False)  # 是否反转黑名单
     enable_reverse_whitelist = Column(Boolean, default=False)  # 是否反转白名单
+    media_allow_text = Column(Boolean, default=False)  # 是否放行文本
+    # 推送相关字段
+    enable_push = Column(Boolean, default=False)  # 是否启用推送
+    enable_only_push = Column(Boolean, default=False)  # 是否只转发到推送配置
 
     # AI相关字段
     is_ai = Column(Boolean, default=False)  # 是否启用AI处理
@@ -86,6 +90,7 @@ class ForwardRule(Base):
     media_extensions = relationship('MediaExtensions', back_populates='rule', cascade="all, delete-orphan")
     rss_config = relationship('RSSConfig', uselist=False, back_populates='rule', cascade="all, delete-orphan")
     rule_syncs = relationship('RuleSync', back_populates='rule', cascade="all, delete-orphan")
+    push_config = relationship('PushConfig', uselist=False, back_populates='rule', cascade="all, delete-orphan")
 
 class Keyword(Base):
     __tablename__ = 'keywords'
@@ -160,6 +165,18 @@ class RuleSync(Base):
     # 关系
     rule = relationship('ForwardRule', back_populates='rule_syncs')
 
+class PushConfig(Base):
+    __tablename__ = 'push_configs'
+
+    id = Column(Integer, primary_key=True)
+    rule_id = Column(Integer, ForeignKey('forward_rules.id'), nullable=False)
+    enable_push_channel = Column(Boolean, default=False)
+    push_channel = Column(String, nullable=False)
+    #媒体发送方式，一次一张Single还是多张Multiple
+    media_send_mode = Column(String, nullable=False, default='Single')
+
+    # 关系
+    rule = relationship('ForwardRule', back_populates='push_config')
 
 class RSSConfig(Base):
     __tablename__ = 'rss_configs'
@@ -249,6 +266,10 @@ def migrate_db(engine):
                 logging.info("创建rss_patterns表...")
                 RSSPattern.__table__.create(engine)
 
+            # 如果push_configs表不存在，创建表
+            if 'push_configs' not in existing_tables:
+                logging.info("创建push_configs表...")
+                PushConfig.__table__.create(engine)
    
                 
             # 如果media_types表不存在，创建表
@@ -339,6 +360,9 @@ def migrate_db(engine):
         'userinfo_template': 'ALTER TABLE forward_rules ADD COLUMN userinfo_template VARCHAR DEFAULT "**{name}**"',
         'time_template': 'ALTER TABLE forward_rules ADD COLUMN time_template VARCHAR DEFAULT "{time}"',
         'original_link_template': 'ALTER TABLE forward_rules ADD COLUMN original_link_template VARCHAR DEFAULT "原始连接：{original_link}"',
+        'enable_push': 'ALTER TABLE forward_rules ADD COLUMN enable_push BOOLEAN DEFAULT FALSE',
+        'enable_only_push': 'ALTER TABLE forward_rules ADD COLUMN enable_only_push BOOLEAN DEFAULT FALSE',
+        'media_allow_text': 'ALTER TABLE forward_rules ADD COLUMN allow_text BOOLEAN DEFAULT FALSE',
     }
 
     keywords_new_columns = {

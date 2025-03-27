@@ -1,7 +1,7 @@
 from telethon import Button
 from utils.constants import *
 from utils.settings import load_summary_times, load_ai_models, load_delay_times, load_max_media_size, load_media_extensions
-from handlers.button.settings_manager import AI_SETTINGS, AI_MODELS, MEDIA_SETTINGS,OTHER_SETTINGS
+from handlers.button.settings_manager import AI_SETTINGS, AI_MODELS, MEDIA_SETTINGS,OTHER_SETTINGS, PUSH_SETTINGS
 from utils.common import get_db_ops
 from models.models import get_session
 from sqlalchemy import text
@@ -70,6 +70,13 @@ async def create_media_settings_buttons(rule=None,rule_id=None):
             display_value = f"{config['display_name']}"
             callback_data = f"{config['toggle_action']}:{rule.id}"
             buttons.append([Button.inline(display_value, callback_data)])
+            continue
+        elif field == 'media_allow_text':
+            current_value = getattr(rule, field)
+            display_value = config['values'].get(current_value, str(current_value))
+            button_text = f"{config['display_name']}: {display_value}"
+            callback_data = f"{config['toggle_action']}:{rule.id}"
+            buttons.append([Button.inline(button_text, callback_data)])
             continue
         else:
             current_value = getattr(rule, field)
@@ -597,6 +604,162 @@ async def create_sync_rule_buttons(rule_id, page=0):
             Button.inline('❌ 关闭', 'close_settings')
         ])
     
+    finally:
+        session.close()
+    
+    return buttons
+
+async def create_push_settings_buttons(rule_id, page=0):
+    """创建推送设置按钮菜单，支持分页
+    
+    Args:
+        rule_id: 规则ID
+        page: 页码（从0开始）
+    
+    Returns:
+        按钮列表
+    """
+    buttons = []
+    configs_per_page = PUSH_CHANNEL_PER_PAGE
+    
+    # 从数据库获取规则对象和推送配置
+    db_ops = await get_db_ops()
+    session = get_session()
+    try:
+        # 获取规则对象
+        rule = session.query(ForwardRule).get(rule_id)
+        if not rule:
+            buttons.append([Button.inline("❌ 规则不存在", "noop")])
+            buttons.append([Button.inline("关闭", "close_settings")])
+            return buttons
+        
+        
+        # 添加"启用推送"按钮
+        buttons.append([
+            Button.inline(
+                f"{'✅ ' if rule.enable_push else ''}{PUSH_SETTINGS['enable_push_channel']['display_name']}", 
+                f"{PUSH_SETTINGS['enable_push_channel']['toggle_action']}:{rule_id}"
+            )
+        ])
+        
+        # 添加"只转发到推送配置"按钮
+        buttons.append([
+            Button.inline(
+                f"{'✅ ' if rule.enable_only_push else ''}{PUSH_SETTINGS['enable_only_push']['display_name']}", 
+                f"{PUSH_SETTINGS['enable_only_push']['toggle_action']}:{rule_id}"
+            )
+        ])
+        
+        # 添加"添加推送配置"按钮
+        buttons.append([
+            Button.inline(
+                PUSH_SETTINGS['add_push_channel']['display_name'],
+                f"{PUSH_SETTINGS['add_push_channel']['toggle_action']}:{rule_id}"
+            )
+        ])
+        
+        # 获取当前规则的所有推送配置
+        push_configs = await db_ops.get_push_configs(session, rule_id)
+        
+        # 计算总页数
+        total_configs = len(push_configs)
+        total_pages = (total_configs + configs_per_page - 1) // configs_per_page
+        
+        # 计算当前页的范围
+        start_idx = page * configs_per_page
+        end_idx = min(start_idx + configs_per_page, total_configs)
+        
+        # 为每个推送配置创建按钮（仅当前页）
+        for config in push_configs[start_idx:end_idx]:
+            # 取前20个字符
+            display_name = config.push_channel[:25] + ('...' if len(config.push_channel) > 25 else '')
+            button_text = display_name
+            # 创建按钮
+            buttons.append([Button.inline(button_text, f"toggle_push_config:{config.id}")])
+        
+        # 添加分页按钮（如果需要）
+        if total_pages > 1:
+            nav_buttons = []
+            
+            # 上一页按钮
+            if page > 0:
+                nav_buttons.append(Button.inline("⬅️", f"push_page:{rule_id}:{page-1}"))
+            else:
+                nav_buttons.append(Button.inline("⬅️", "noop"))
+            
+            # 页码指示
+            nav_buttons.append(Button.inline(f"{page+1}/{total_pages}", "noop"))
+            
+            # 下一页按钮
+            if page < total_pages - 1:
+                nav_buttons.append(Button.inline("➡️", f"push_page:{rule_id}:{page+1}"))
+            else:
+                nav_buttons.append(Button.inline("➡️", "noop"))
+            
+            buttons.append(nav_buttons)
+    
+    finally:
+        session.close()
+    
+    # 添加返回和关闭按钮
+    buttons.append([
+        Button.inline('👈 返回', f"rule_settings:{rule_id}"),
+        Button.inline('❌ 关闭', "close_settings")
+    ])
+    
+    return buttons
+
+async def create_push_config_details_buttons(config_id):
+    """创建推送配置详情按钮
+    
+    Args:
+        config_id: 推送配置ID
+    
+    Returns:
+        按钮列表
+    """
+    buttons = []
+    
+    # 从数据库获取推送配置
+    session = get_session()
+    try:
+        from models.models import PushConfig
+        
+        # 获取推送配置
+        config = session.query(PushConfig).get(config_id)
+        if not config:
+            buttons.append([Button.inline("❌ 推送配置不存在", "noop")])
+            buttons.append([Button.inline("关闭", "close_settings")])
+            return buttons
+        
+        # 添加启用/禁用按钮
+        buttons.append([
+            Button.inline(
+                f"{'✅ ' if config.enable_push_channel else ''}启用推送", 
+                f"toggle_push_config_status:{config_id}"
+            )
+        ])
+        
+        # 添加媒体发送方式切换按钮
+        mode_text = "单个" if config.media_send_mode == "Single" else "全部"
+        buttons.append([
+            Button.inline(
+                f"📁 媒体发送方式: {mode_text}", 
+                f"toggle_media_send_mode:{config_id}"
+            )
+        ])
+        
+        # 添加删除按钮
+        buttons.append([
+            Button.inline("🗑️ 删除推送配置", f"delete_push_config:{config_id}")
+        ])
+        
+        # 添加返回按钮
+        buttons.append([
+            Button.inline("👈 返回", f"push_settings:{config.rule_id}"),
+            Button.inline("❌ 关闭", "close_settings")
+        ])
+        
     finally:
         session.close()
     

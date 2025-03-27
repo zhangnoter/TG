@@ -9,6 +9,7 @@ from models.models import Chat, ForwardRule
 import re
 import telethon
 from utils.auto_delete import respond_and_delete,reply_and_delete,async_delete_user_message
+from datetime import datetime, timedelta
 
 from utils.constants import AI_SETTINGS_TEXT,MEDIA_SETTINGS_TEXT
 
@@ -140,22 +141,89 @@ async def get_all_rules(session, event):
 
 
 
-async def is_admin(channel_id, user_id, client):
+# 添加缓存字典
+_admin_cache = {}
+_CACHE_DURATION = timedelta(minutes=30)  # 缓存30分钟
+
+
+
+async def get_channel_admins(client, chat_id):
+    """获取频道管理员列表，带缓存机制"""
+    current_time = datetime.now()
+    
+    # 检查缓存是否存在且未过期
+    if chat_id in _admin_cache:
+        cache_data = _admin_cache[chat_id]
+        if current_time - cache_data['timestamp'] < _CACHE_DURATION:
+            return cache_data['admin_ids']
+    
+    # 缓存不存在或已过期，重新获取管理员列表
+    try:
+        admins = await client.get_participants(chat_id, filter=ChannelParticipantsAdmins)
+        admin_ids = [admin.id for admin in admins]
+        
+        # 更新缓存
+        _admin_cache[chat_id] = {
+            'admin_ids': admin_ids,
+            'timestamp': current_time
+        }
+        return admin_ids
+    except Exception as e:
+        logger.error(f'获取频道管理员列表失败: {str(e)}')
+        return None
+
+async def is_admin(event):
     """检查用户是否为频道/群组管理员
     
     Args:
-        channel_id: 频道/群组ID
-        user_id: 用户ID
-        client: Telethon客户端实例
-    
+        event: 事件对象
     Returns:
         bool: 是否是管理员
     """
     try:
-        # 获取频道的管理员列表
-        admins = await client.get_participants(channel_id, filter=ChannelParticipantsAdmins)
-        # 检查用户是否在管理员列表中
-        return any(admin.id == user_id for admin in admins)
+        # 获取所有机器人管理员列表
+        bot_admins = get_admin_list()
+
+        # 检查是否有message属性
+        if not hasattr(event, 'message'):
+            # 没有message属性,是回调处理
+            if event.sender_id in bot_admins:
+                return True
+            else:
+                logger.info(f'用户 {event.sender_id} 非管理员，操作已被忽略')
+                return False
+            
+        message = event.message
+        main = await get_main_module()
+        client = main.user_client
+        
+        
+    
+        if message.is_channel and not message.is_group:
+            # 获取频道管理员列表（使用缓存）
+            channel_admins = await get_channel_admins(client, event.chat_id)
+            if channel_admins is None:
+                return False
+                
+            
+            
+            # 检查机器人管理员是否在频道管理员列表中
+            admin_in_channel = any(admin_id in channel_admins for admin_id in bot_admins)
+            if not admin_in_channel:
+                logger.info(f'机器人管理员不在频道管理员列表中，已忽略')
+                return False
+            return True
+        else:
+            # 检查发送者ID
+            user_id = event.sender_id  # 使用 sender_id 作为主要ID来源
+            logger.info(f'发送者ID：{user_id}')
+            
+            bot_admins = get_admin_list()
+            # 检查是否是机器人管理员
+            if user_id not in bot_admins:
+                logger.info(f'非管理员的消息，已忽略')
+                return False
+            return True
     except Exception as e:
         logger.error(f"检查管理员权限时出错: {str(e)}")
         return False

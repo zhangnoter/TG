@@ -375,3 +375,59 @@ async def callback_toggle_media_extension(event, rule_id, session, message, data
     finally:
         session.close()
     return
+
+async def callback_toggle_media_allow_text(event, rule_id, session, message, data):
+    """处理切换放行文本的回调"""
+    try:
+        rule = session.query(ForwardRule).get(int(rule_id))
+        if not rule:
+            await event.answer("规则不存在")
+            return
+        
+        # 切换状态
+        rule.media_allow_text = not rule.media_allow_text
+        
+        # 检查是否启用了同步功能
+        if rule.enable_sync:
+            logger.info(f"规则 {rule.id} 启用了同步功能，正在同步'放行文本'设置到关联规则")
+            
+            # 获取需要同步的规则列表
+            sync_rules = session.query(RuleSync).filter(RuleSync.rule_id == rule.id).all()
+            
+            # 为每个同步规则应用相同的设置
+            for sync_rule in sync_rules:
+                sync_rule_id = sync_rule.sync_rule_id
+                logger.info(f"正在同步'放行文本'设置到规则 {sync_rule_id}")
+                
+                # 获取同步目标规则
+                target_rule = session.query(ForwardRule).get(sync_rule_id)
+                if not target_rule:
+                    logger.warning(f"同步目标规则 {sync_rule_id} 不存在，跳过")
+                    continue
+                
+                # 更新同步目标规则的设置
+                try:
+                    target_rule.media_allow_text = rule.media_allow_text
+                    logger.info(f"同步规则 {sync_rule_id} 的'放行文本'设置已更新为 {rule.media_allow_text}")
+                except Exception as e:
+                    logger.error(f"同步'放行文本'设置到规则 {sync_rule_id} 时出错: {str(e)}")
+                    continue
+        
+        # 提交更改
+        session.commit()
+        
+        # 更新界面
+        await event.edit(await get_media_settings_text(), buttons=await create_media_settings_buttons(rule))
+        
+        # 向用户显示结果
+        status = "开启" if rule.media_allow_text else "关闭"
+        await event.answer(f"已{status}放行文本")
+        
+    except Exception as e:
+        session.rollback()
+        logger.error(f"切换放行文本设置时出错: {str(e)}")
+        logger.error(f"错误详情: {traceback.format_exc()}")
+        await event.answer(f"切换放行文本设置时出错: {str(e)}")
+    finally:
+        session.close()
+    return

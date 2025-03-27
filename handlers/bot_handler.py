@@ -16,63 +16,13 @@ os.makedirs(TEMP_DIR, exist_ok=True)
 
 load_dotenv()
 
-# 添加缓存字典
-_admin_cache = {}
-_CACHE_DURATION = timedelta(minutes=30)  # 缓存30分钟
-
-async def get_channel_admins(client, chat_id):
-    """获取频道管理员列表，带缓存机制"""
-    current_time = datetime.now()
-    
-    # 检查缓存是否存在且未过期
-    if chat_id in _admin_cache:
-        cache_data = _admin_cache[chat_id]
-        if current_time - cache_data['timestamp'] < _CACHE_DURATION:
-            return cache_data['admin_ids']
-    
-    # 缓存不存在或已过期，重新获取管理员列表
-    try:
-        admins = await client.get_participants(chat_id, filter=ChannelParticipantsAdmins)
-        admin_ids = [admin.id for admin in admins]
-        
-        # 更新缓存
-        _admin_cache[chat_id] = {
-            'admin_ids': admin_ids,
-            'timestamp': current_time
-        }
-        return admin_ids
-    except Exception as e:
-        logger.error(f'获取频道管理员列表失败: {str(e)}')
-        return None
 
 async def handle_command(client, event):
     """处理机器人命令"""
-    message = event.message
-    
-    if message.is_channel and not message.is_group:
-        # 获取频道管理员列表（使用缓存）
-        channel_admins = await get_channel_admins(client, event.chat_id)
-        if channel_admins is None:
-            return
-            
-        # 获取所有机器人管理员列表
-        bot_admins = get_admin_list()
-        
-        # 检查机器人管理员是否在频道管理员列表中
-        admin_in_channel = any(admin_id in channel_admins for admin_id in bot_admins)
-        if not admin_in_channel:
-            logger.info(f'机器人管理员不在频道管理员列表中，已忽略')
-            return
-    else:
-        # 检查发送者ID
-        user_id = event.sender_id  # 使用 sender_id 作为主要ID来源
-        logger.info(f'发送者ID：{user_id}')
-        
-        bot_admins = get_admin_list()
-        # 检查是否是机器人管理员
-        if user_id not in bot_admins:
-            logger.info(f'非管理员的消息，已忽略')
-            return
+
+    # 检查是否是管理员
+    if not await is_admin(event):
+        return
     
     # 处理命令逻辑
     message = event.message
@@ -189,8 +139,7 @@ async def handle_command(client, event):
 async def callback_handler(event):
     """回调处理器入口"""
     # 检查是否是管理员的回调
-    admin_list = get_admin_list()
-    if event.sender_id not in admin_list:
+    if not await is_admin(event):
         return
     await handle_callback(event)
 

@@ -25,10 +25,13 @@ class SenderFilter(BaseFilter):
         client = context.client
         event = context.event
         
-        # 如果不应该转发，直接返回
         if not context.should_forward:
             logger.info('消息不满足转发条件，跳过发送')
             return False
+        
+        if rule.enable_only_push:
+            logger.info('只转发到推送配置，跳过发送')
+            return True
             
         # 获取目标聊天信息
         target_chat = rule.target_chat
@@ -100,44 +103,49 @@ class SenderFilter(BaseFilter):
         # 初始化转发消息列表
         context.forwarded_messages = []
         
-        
-        
-        if not context.media_group_messages:
-            logger.info(f'所有媒体都超限，发送文本和提示')
-            # 构建提示信息
-            text_to_send = context.message_text or ''
+        # if not context.media_group_messages:
+        #     logger.info(f'所有媒体都超限，发送文本和提示')
+        #     # 构建提示信息
+        #     text_to_send = context.message_text or ''
 
-            # 设置原始消息链接
-            context.original_link = f"\n原始消息: https://t.me/c/{str(event.chat_id)[4:]}/{event.message.id}"
+        #     # 设置原始消息链接
+        #     context.original_link = f"\n原始消息: https://t.me/c/{str(event.chat_id)[4:]}/{event.message.id}"
             
-            # 添加每个超限文件的信息
-            for message, size, name in context.skipped_media:
-                text_to_send += f"\n\n⚠️ 媒体文件 {name if name else '未命名文件'} ({size}MB) 超过大小限制"
+        #     # 添加每个超限文件的信息
+        #     for message, size, name in context.skipped_media:
+        #         text_to_send += f"\n\n⚠️ 媒体文件 {name if name else '未命名文件'} ({size}MB) 超过大小限制"
             
-                # 组合完整文本
-            text_to_send = context.sender_info + text_to_send + context.time_info + context.original_link
+        #     # 组合完整文本
+        #     text_to_send = context.sender_info + text_to_send + context.time_info + context.original_link
             
-            
-            await client.send_message(
-                target_chat_id,
-                text_to_send,
-                parse_mode=parse_mode,
-                link_preview=True,
-                buttons=context.buttons
-            )
-            logger.info(f'媒体组所有文件超限，已发送文本和提示')
-            return
+        #     await client.send_message(
+        #         target_chat_id,
+        #         text_to_send,
+        #         parse_mode=parse_mode,
+        #         link_preview=True,
+        #         buttons=context.buttons
+        #     )
+        #     logger.info(f'媒体组所有文件超限，已发送文本和提示')
+        #     return
             
         # 如果有可以发送的媒体，作为一个组发送
+        files = []
         try:
-            files = []
             for message in context.media_group_messages:
                 if message.media:
                     file_path = await message.download_media(os.path.join(os.getcwd(), 'temp'))
                     if file_path:
                         files.append(file_path)
             
+            # 修改：保存下载的文件路径到context.media_files
             if files:
+                # 初始化 media_files 如果它不存在
+                if not hasattr(context, 'media_files') or context.media_files is None:
+                    context.media_files = []
+                # 将当前下载的文件添加到列表中
+                context.media_files.extend(files)
+                logger.info(f'已将 {len(files)} 个下载的媒体文件路径保存到context.media_files')
+                
                 # 添加发送者信息和消息文本
                 caption_text = context.sender_info + context.message_text
                 
@@ -170,16 +178,20 @@ class SenderFilter(BaseFilter):
                     context.forwarded_messages = [sent_messages]
                 
                 logger.info(f'媒体组消息已发送，保存了 {len(context.forwarded_messages)} 条已转发消息')
-            
-            # 删除临时文件
-            for file_path in files:
-                try:
-                    os.remove(file_path)
-                except Exception as e:
-                    logger.error(f'删除临时文件失败: {str(e)}')
         except Exception as e:
             logger.error(f'发送媒体组消息时出错: {str(e)}')
             raise
+        finally:
+            # 删除临时文件，但如果启用了推送则保留
+            if not rule.enable_push:
+                for file_path in files:
+                    try:
+                        os.remove(file_path)
+                        logger.info(f'删除临时文件: {file_path}')
+                    except Exception as e:
+                        logger.error(f'删除临时文件失败: {str(e)}')
+            else:
+                logger.info(f'推送功能已启用，保留临时文件')
     
     async def _send_single_media(self, context, target_chat_id, parse_mode):
         """发送单条媒体消息"""
@@ -190,7 +202,6 @@ class SenderFilter(BaseFilter):
         logger.info(f'发送单条媒体消息')
         
         # 检查是否所有媒体都超限
-        # logger.info(f'是否发送媒体大小超限提醒: {rule.is_send_over_media_size_message}')
         if context.skipped_media and not context.media_files:
             # 构建提示信息
             file_size = context.skipped_media[0][1]
@@ -212,7 +223,11 @@ class SenderFilter(BaseFilter):
             )
             logger.info(f'媒体文件超过大小限制，仅转发文本')
             return
-            
+        
+        # 确保context.media_files存在
+        if not hasattr(context, 'media_files') or context.media_files is None:
+            context.media_files = []
+        
         # 发送媒体文件
         for file_path in context.media_files:
             try:
@@ -236,15 +251,19 @@ class SenderFilter(BaseFilter):
                     }[rule.is_preview]
                 )
                 logger.info(f'媒体消息已发送')
-                
-                # 删除临时文件
-                try:
-                    os.remove(file_path)
-                except Exception as e:
-                    logger.error(f'删除临时文件失败: {str(e)}')
             except Exception as e:
                 logger.error(f'发送媒体消息时出错: {str(e)}')
                 raise
+            finally:
+                # 删除临时文件，但如果启用了推送则保留
+                if not rule.enable_push:
+                    try:
+                        os.remove(file_path)
+                        logger.info(f'删除临时文件: {file_path}')
+                    except Exception as e:
+                        logger.error(f'删除临时文件失败: {str(e)}')
+                else:
+                    logger.info(f'推送功能已启用，保留临时文件: {file_path}')
     
     async def _send_text_message(self, context, target_chat_id, parse_mode):
         """发送纯文本消息"""

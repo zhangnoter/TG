@@ -34,7 +34,8 @@ class MediaFilter(BaseFilter):
         rule = context.rule
         event = context.event
         client = context.client
-        
+
+
         
         # 如果是媒体组消息
         if event.message.grouped_id:
@@ -122,13 +123,23 @@ class MediaFilter(BaseFilter):
         # 如果所有媒体都被屏蔽，设置不转发
         if total_media_count > 0 and total_media_count == blocked_media_count:
             logger.info('媒体组中所有媒体都被屏蔽，设置不转发')
-            context.should_forward = False
+            # 检查是否允许文本通过
+            if rule.media_allow_text:
+                logger.info('媒体被屏蔽但允许文本通过')
+                context.media_blocked = True  # 标记媒体被屏蔽
+            else:
+                context.should_forward = False
             return True
             
         # 如果所有媒体都超限且不发送超限提醒，则设置不转发
         if len(context.skipped_media) > 0 and len(context.media_group_messages) == 0 and not rule.is_send_over_media_size_message:
-            context.should_forward = False
-            logger.info('所有媒体都超限且不发送超限提醒，设置不转发')
+            # 检查是否允许文本通过
+            if rule.media_allow_text:
+                logger.info('媒体超限但允许文本通过')
+                context.media_blocked = True  # 标记媒体被屏蔽
+            else:
+                context.should_forward = False
+                logger.info('所有媒体都超限且不发送超限提醒，设置不转发')
     
     async def _process_single_media(self, context):
         """处理单条媒体消息"""
@@ -169,7 +180,12 @@ class MediaFilter(BaseFilter):
                     media_types = session.query(MediaTypes).filter_by(rule_id=rule.id).first()
                     if media_types and await self._is_media_type_blocked(event.message.media, media_types):
                         logger.info(f'媒体类型被屏蔽，跳过消息 ID={event.message.id}')
-                        context.should_forward = False
+                        # 检查是否允许文本通过
+                        if rule.media_allow_text:
+                            logger.info('媒体被屏蔽但允许文本通过')
+                            context.media_blocked = True  # 标记媒体被屏蔽
+                        else:
+                            context.should_forward = False
                         return True
                 finally:
                     session.close()
@@ -178,7 +194,12 @@ class MediaFilter(BaseFilter):
             if rule.enable_extension_filter and event.message.media:
                 if not await self._is_media_extension_allowed(rule, event.message.media):
                     logger.info(f'媒体扩展名被屏蔽，跳过消息 ID={event.message.id}')
-                    context.should_forward = False
+                    # 检查是否允许文本通过
+                    if rule.media_allow_text:
+                        logger.info('媒体被屏蔽但允许文本通过')
+                        context.media_blocked = True  # 标记媒体被屏蔽
+                    else:
+                        context.should_forward = False
                     return True
             
             # 检查媒体大小
@@ -204,8 +225,16 @@ class MediaFilter(BaseFilter):
                     logger.info(f'是否发送媒体大小超限提醒: {rule.is_send_over_media_size_message}')
                     context.should_forward = True
                 else:
-                    context.should_forward = False
+                    # 检查是否允许文本通过
+                    if rule.media_allow_text:
+                        logger.info('媒体超限但允许文本通过')
+                        context.media_blocked = True  # 标记媒体被屏蔽
+                        context.skipped_media.append((event.message, file_size, file_name))
+                        return True  # 跳过后续的媒体下载
+                    else:
+                        context.should_forward = False
                 context.skipped_media.append((event.message, file_size, file_name))
+                return True  # 不论如何都跳过后续的媒体下载
             else:
                 # 如果只转发到RSS，则跳过下载媒体文件，交给RSS处理下载
                 if rule.only_rss:
