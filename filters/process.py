@@ -55,8 +55,6 @@ async def process_forward_rule(client, event, chat_id, rule):
     # 添加信息过滤器（处理原始链接和发送者信息）
     filter_chain.add_filter(InfoFilter())
     
-    
-    
     # 添加评论区按钮过滤器
     filter_chain.add_filter(CommentButtonFilter())
 
