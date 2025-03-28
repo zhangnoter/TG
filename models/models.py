@@ -64,6 +64,7 @@ class ForwardRule(Base):
     is_ai = Column(Boolean, default=False)  # 是否启用AI处理
     ai_model = Column(String, nullable=True)  # 使用的AI模型
     ai_prompt = Column(String, nullable=True)  # AI处理的prompt
+    enable_ai_upload_image = Column(Boolean, default=False)  # 是否启用AI图片上传功能
     is_summary = Column(Boolean, default=False)  # 是否启用AI总结
     summary_time = Column(String(5), default=os.getenv('DEFAULT_SUMMARY_TIME', '07:00'))
     summary_prompt = Column(String, nullable=True)  # AI总结的prompt
@@ -363,6 +364,7 @@ def migrate_db(engine):
         'enable_push': 'ALTER TABLE forward_rules ADD COLUMN enable_push BOOLEAN DEFAULT FALSE',
         'enable_only_push': 'ALTER TABLE forward_rules ADD COLUMN enable_only_push BOOLEAN DEFAULT FALSE',
         'media_allow_text': 'ALTER TABLE forward_rules ADD COLUMN media_allow_text BOOLEAN DEFAULT FALSE',
+        'enable_ai_upload_image': 'ALTER TABLE forward_rules ADD COLUMN enable_ai_upload_image BOOLEAN DEFAULT FALSE',
     }
 
     keywords_new_columns = {

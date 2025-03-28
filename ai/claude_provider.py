@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List, Dict
 import anthropic
 from .base import BaseAIProvider
 import os
@@ -35,16 +35,46 @@ class ClaudeProvider(BaseAIProvider):
     async def process_message(self, 
                             message: str, 
                             prompt: Optional[str] = None,
+                            images: Optional[List[Dict[str, str]]] = None,
                             **kwargs) -> str:
         """处理消息"""
         try:
             if not self.client:
                 await self.initialize(**kwargs)
                 
+            # 构建消息列表
             messages = []
             if prompt:
                 messages.append({"role": "system", "content": prompt})
-            messages.append({"role": "user", "content": message})
+            
+            # 如果有图片，需要添加到消息中
+            if images and len(images) > 0:
+                # 构建包含图片的内容列表
+                content = []
+                
+                # 添加文本
+                content.append({
+                    "type": "text",
+                    "text": message
+                })
+                
+                # 添加每张图片
+                for img in images:
+                    content.append({
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": img["mime_type"],
+                            "data": img["data"]
+                        }
+                    })
+                    logger.info(f"已添加一张类型为 {img['mime_type']} 的图片，大小约 {len(img['data']) // 1000} KB")
+                
+                # 添加用户消息
+                messages.append({"role": "user", "content": content})
+            else:
+                # 没有图片，只添加文本
+                messages.append({"role": "user", "content": message})
             
             # 使用流式输出 - 按照官方文档正确实现
             with self.client.messages.stream(

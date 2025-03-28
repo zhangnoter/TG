@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List, Dict
 import openai
 from .base import BaseAIProvider
 import os
@@ -18,6 +18,7 @@ class OpenAIProvider(OpenAIBaseProvider):
     async def process_message(self, 
                             message: str, 
                             prompt: Optional[str] = None,
+                            images: Optional[List[Dict[str, str]]] = None,
                             **kwargs) -> str:
         """处理消息"""
         try:
@@ -27,7 +28,31 @@ class OpenAIProvider(OpenAIBaseProvider):
             messages = []
             if prompt:
                 messages.append({"role": "system", "content": prompt})
-            messages.append({"role": "user", "content": message})
+            
+            # 如果有图片，需要添加到消息中
+            if images and len(images) > 0:
+                # 创建包含文本和图片的内容数组
+                content = []
+                
+                # 添加文本
+                content.append({
+                    "type": "text",
+                    "text": message
+                })
+                
+                # 添加每张图片
+                for img in images:
+                    content.append({
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:{img['mime_type']};base64,{img['data']}"
+                        }
+                    })
+                
+                messages.append({"role": "user", "content": content})
+            else:
+                # 没有图片，只添加文本
+                messages.append({"role": "user", "content": message})
             
             response = await self.client.chat.completions.create(
                 model=self.model,

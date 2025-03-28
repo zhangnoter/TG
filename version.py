@@ -1,23 +1,17 @@
-VERSION = "1.7"
+VERSION = "1.7.1"
 
 # 版本号说明
 VERSION_INFO = {
     "major": 1,        # 主版本号：重大更新，可能不兼容旧版本
     "feature": 7,      # 功能版本号：添加重要新功能
-    "minor": 0,        # 次要版本号：添加小功能或优化
+    "minor": 1,        # 次要版本号：添加小功能或优化
     "patch": 0,        # 补丁版本号：Bug修复和小改动
 } 
 
 
-UPDATE_INFO = """<blockquote><b>✨ 更新日志 v1.7</b>
+UPDATE_INFO = """<blockquote><b>✨ 更新日志 v1.7.1</b>
 
-- 集成Apprise，现已支持多种通知方式，不再局限于Telegram内转发
-
-- 添加放行文本功能，开启后过滤媒体时不会屏蔽整条消息，而是单独转发文本
-
-- 统一鉴权方法
-
-- 调整过滤器顺序
+- 添加上传图片功能，开启后AI处理时可以上传图片
 
 </blockquote>
 """
@@ -31,7 +25,7 @@ WELCOME_TEXT = """
 <blockquote>⭐ <b>给项目点个小小的 Star:</b> <a href='https://github.com/Heavrnl/TelegramForwarder'>TelegramForwarder</a>
 ☕ <b>请我喝杯咖啡:</b> <a href='https://ko-fi.com/0heavrnl'>Ko-fi</a></blockquote>
 
-当前版本: v1.7
+当前版本: v1.7.1
 更新日志: /changelog
 
 感谢您的支持!

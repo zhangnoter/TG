@@ -226,6 +226,15 @@ AI_SETTINGS = {
         'toggle_action': 'set_ai_prompt',
         'toggle_func': None
     },
+    'enable_ai_upload_image': {
+        'display_name': '上传图片',
+        'values': {
+            True: '开启',
+            False: '关闭'
+        },
+        'toggle_action': 'toggle_ai_upload_image',
+        'toggle_func': lambda current: not current
+    },
     'is_keyword_after_ai': {
         'display_name': 'AI处理后再次执行关键字过滤',
         'values': {

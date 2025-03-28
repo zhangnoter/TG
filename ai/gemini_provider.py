@@ -1,9 +1,12 @@
-from typing import Optional
+from typing import Optional, List, Dict
 import google.generativeai as genai
+# 移除对不存在的模块的导入
+# from google.genai import types
 from .base import BaseAIProvider
 from .openai_base_provider import OpenAIBaseProvider
 import os
 import logging
+import base64
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +80,7 @@ class GeminiProvider(BaseAIProvider):
     async def process_message(self, 
                             message: str, 
                             prompt: Optional[str] = None,
+                            images: Optional[List[Dict[str, str]]] = None,
                             **kwargs) -> str:
         """处理消息"""
         try:
@@ -85,22 +89,58 @@ class GeminiProvider(BaseAIProvider):
             
             # 如果使用的是OpenAI兼容接口，则调用该接口的处理方法
             if self.provider:
-                return await self.provider.process_message(message, prompt, **kwargs)
+                return await self.provider.process_message(message, prompt, images, **kwargs)
                 
             # 使用Gemini API的流式处理
             logger.info(f"实际使用的Gemini模型: {self.model_name}")
 
             # 组合提示词和消息
             if prompt:
-                full_message = f"{prompt}\n\n{message}"
+                user_message = f"{prompt}\n\n{message}"
             else:
-                full_message = message
+                user_message = message
             
-            # 使用流式输出
-            response_stream = self.model.generate_content(
-                contents=[full_message],  # contents参数是一个列表
-                stream=True
-            )
+            # 检查是否有图片
+            if images and len(images) > 0:
+                try:
+                    # 使用MultimodalContent添加图片
+                    contents = []
+                    # 添加文本
+                    contents.append({"role": "user", "parts": [{"text": user_message}]})
+                    
+                    # 对每张图片进行处理
+                    for img in images:
+                        try:
+                            # 直接添加图片字节到模型的输入
+                            image_part = {
+                                "inline_data": {
+                                    "mime_type": img["mime_type"],
+                                    "data": img["data"]  # 使用原始base64数据
+                                }
+                            }
+                            contents[0]["parts"].append(image_part)
+                            logger.info(f"已添加一张类型为 {img['mime_type']} 的图片，大小约 {len(img['data']) // 1000} KB")
+                        except Exception as img_error:
+                            logger.error(f"处理单张图片时出错: {str(img_error)}")
+                    
+                    # 使用流式输出 - 不设置额外参数，使用默认值
+                    response_stream = self.model.generate_content(
+                        contents,
+                        stream=True
+                    )
+                except Exception as e:
+                    logger.error(f"Gemini处理带图片消息时出错: {str(e)}")
+                    # 如果处理图片失败，尝试只用文本
+                    response_stream = self.model.generate_content(
+                        [{"role": "user", "parts": [{"text": user_message}]}],
+                        stream=True
+                    )
+            else:
+                # 无图片，使用流式输出
+                response_stream = self.model.generate_content(
+                    [{"role": "user", "parts": [{"text": user_message}]}],
+                    stream=True
+                )
             
             # 收集完整响应
             full_response = ""
