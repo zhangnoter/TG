@@ -364,10 +364,14 @@ AI处理提示词中可以使用以下格式：
 ### 如何添加推送配置？
 完整的推送平台列表和配置格式请参考 [Apprise Wiki](https://github.com/caronc/apprise/wiki)
 
-以ntfy为例，推送格式为`ntfy://ntfy.sh/你的主题名`，那么点击 `添加推送配置` 按钮后输入以下内容即可
-```
-ntfy://ntfy.sh/你的主题名
-```
+**示例：使用 ntfy.sh 推送**
+
+*   假设你想推送到 ntfy.sh 上的一个名为 `my_topic` 的主题。
+*   根据 Apprise Wiki，其格式为 `ntfy://ntfy.sh/你的主题名`。
+*   那么，你需要添加的配置 URL 就是：
+    ```
+    ntfy://ntfy.sh/my_topic
+    ```
 
 
 
