@@ -228,10 +228,12 @@ async def callback_select_time(event, rule_id, session, message, data):
 
 
 async def callback_select_model(event, rule_id, session, message, data):
-    # 处理模型选择
-    _, rule_id, model = data.split(':')
+    # 分割数据，最多分割2次，将第三部分直接作为完整的模型名称
+    parts = data.split(':', 2)
+    _, rule_id_part, model = parts
+    
     try:
-        rule = session.query(ForwardRule).get(int(rule_id))
+        rule = session.query(ForwardRule).get(int(rule_id_part))
         if rule:
             # 记录旧模型
             old_model = rule.ai_model
@@ -239,7 +241,7 @@ async def callback_select_model(event, rule_id, session, message, data):
             # 更新模型
             rule.ai_model = model
             session.commit()
-            logger.info(f"已更新规则 {rule_id} 的AI模型为: {model}")
+            logger.info(f"已更新规则 {rule_id_part} 的AI模型为: {model}")
             
             # 检查是否启用了同步功能
             if rule.enable_sync:
