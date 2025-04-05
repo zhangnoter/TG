@@ -142,16 +142,15 @@ class AIFilter(BaseFilter):
                         logger.error(f"下载单条消息媒体到内存时出错: {str(e)}")
             
             # 如果有消息文本或图片，使用AI处理
-            if original_message_text or has_media_to_process:
+            if context.message_text or has_media_to_process:
                 try:
                     # 确保即使没有文本也能处理图片
-                    text_to_process = original_message_text if original_message_text else "[图片消息]"
+                    text_to_process = context.message_text if context.message_text else "[图片消息]"
                     
                     logger.info(f"开始AI处理，文本长度: {len(text_to_process)}，图片数量: {len(image_files)}")
                     processed_text = await _ai_handle(text_to_process, rule, image_files)
                     context.message_text = processed_text
-                    
-                    # 不再删除临时文件，假设有其他代码会处理
+
                     
                     # 如果需要在AI处理后再次检查关键字
                     logger.info(f"rule.is_keyword_after_ai:{rule.is_keyword_after_ai}")
