@@ -30,6 +30,12 @@ AI_MODELS_CONFIG = {
         "gemini-1.5-pro"
     ],
     "grok": [
+        "grok-3-beta",
+        "grok-3-fast-beta",
+        "grok-3-mini-beta",
+        "grok-3-mini-fast-beta",
+        "grok-2-vision-1212",
+        "grok-2-image-1212",
         "grok-2-latest"
     ],
     "deepseek": [
