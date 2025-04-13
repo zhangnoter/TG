@@ -1,5 +1,5 @@
-from typing import Optional
-from openai import OpenAI
+from typing import Optional, List, Dict
+from openai import AsyncOpenAI
 from .openai_base_provider import OpenAIBaseProvider
 import os
 import logging
