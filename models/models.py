@@ -86,7 +86,7 @@ class ForwardRule(Base):
     source_chat = relationship('Chat', foreign_keys=[source_chat_id], back_populates='source_rules')
     target_chat = relationship('Chat', foreign_keys=[target_chat_id], back_populates='target_rules')
     keywords = relationship('Keyword', back_populates='rule')
-    replace_rules = relationship('ReplaceRule', back_populates='rule')
+    replace_rules = relationship('ReplaceRule', back_populates='rule', cascade="all, delete-orphan")
     media_types = relationship('MediaTypes', uselist=False, back_populates='rule', cascade="all, delete-orphan")
     media_extensions = relationship('MediaExtensions', back_populates='rule', cascade="all, delete-orphan")
     rss_config = relationship('RSSConfig', uselist=False, back_populates='rule', cascade="all, delete-orphan")
