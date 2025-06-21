@@ -359,7 +359,7 @@ class SummaryScheduler:
         try:
             rules = session.query(ForwardRule).filter_by(is_summary=True).all()
             # 使用 gather 但限制并发数
-            tasks = [self._execute_summary(rule.id) for rule in rules]
+            tasks = [self._execute_summary(rule.id, is_now=True) for rule in rules]
             for i in range(0, len(tasks), 2):  # 每次执行2个任务
                 batch = tasks[i:i+2]
                 await asyncio.gather(*batch)
