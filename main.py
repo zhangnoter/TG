@@ -36,28 +36,24 @@ phone_number = os.getenv('PHONE_NUMBER')
 # ======================================================
 # 新增：代理配置
 # 从环境变量获取代理信息
-proxy_type = os.getenv('PROXY_TYPE')  # 例如：'SOCKS5', 'HTTP', 'MTPROTO'
+proxy_type = os.getenv('PROXY_TYPE')  # 例如：'HTTP'
 proxy_addr = os.getenv('PROXY_ADDR')
 proxy_port = os.getenv('PROXY_PORT')
 proxy_username = os.getenv('PROXY_USERNAME')
 proxy_password = os.getenv('PROXY_PASSWORD')
-proxy_secret = os.getenv('PROXY_SECRET') # 仅MTProto代理需要
 
 proxy_config = None
 if proxy_type and proxy_addr and proxy_port:
     try:
         proxy_port = int(proxy_port)
-        if proxy_type.upper() == 'SOCKS5':
-            proxy_config = (proxy_addr, proxy_port, proxy_username, proxy_password)
-            logger.info(f"使用 SOCKS5 代理: {proxy_addr}:{proxy_port}")
-        elif proxy_type.upper() == 'HTTP':
+        # 只检查 HTTP 代理类型
+        if proxy_type.upper() == 'HTTP':
+            # 对于 HTTP 代理，Telethon 期望的格式是 (addr, port, username, password)
+            # 用户名和密码是可选的
             proxy_config = (proxy_addr, proxy_port, proxy_username, proxy_password)
             logger.info(f"使用 HTTP 代理: {proxy_addr}:{proxy_port}")
-        elif proxy_type.upper() == 'MTPROTO' and proxy_secret:
-            proxy_config = ('mtproxy://' + proxy_addr + ':' + str(proxy_port) + '@' + proxy_secret)
-            logger.info(f"使用 MTProto 代理: {proxy_addr}:{proxy_port}")
         else:
-            logger.warning(f"不支持的代理类型或缺少必要参数: {proxy_type}")
+            logger.warning(f"当前配置只支持 HTTP 代理。您设置的代理类型是: {proxy_type}，将不使用代理。")
     except ValueError:
         logger.error("代理端口必须是有效的数字。")
     except Exception as e:
