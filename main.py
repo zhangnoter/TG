@@ -33,6 +33,36 @@ api_id = os.getenv('API_ID')
 api_hash = os.getenv('API_HASH')
 bot_token = os.getenv('BOT_TOKEN')
 phone_number = os.getenv('PHONE_NUMBER')
+# ======================================================
+# 新增：代理配置
+# 从环境变量获取代理信息
+proxy_type = os.getenv('PROXY_TYPE')  # 例如：'SOCKS5', 'HTTP', 'MTPROTO'
+proxy_addr = os.getenv('PROXY_ADDR')
+proxy_port = os.getenv('PROXY_PORT')
+proxy_username = os.getenv('PROXY_USERNAME')
+proxy_password = os.getenv('PROXY_PASSWORD')
+proxy_secret = os.getenv('PROXY_SECRET') # 仅MTProto代理需要
+
+proxy_config = None
+if proxy_type and proxy_addr and proxy_port:
+    try:
+        proxy_port = int(proxy_port)
+        if proxy_type.upper() == 'SOCKS5':
+            proxy_config = (proxy_addr, proxy_port, proxy_username, proxy_password)
+            logger.info(f"使用 SOCKS5 代理: {proxy_addr}:{proxy_port}")
+        elif proxy_type.upper() == 'HTTP':
+            proxy_config = (proxy_addr, proxy_port, proxy_username, proxy_password)
+            logger.info(f"使用 HTTP 代理: {proxy_addr}:{proxy_port}")
+        elif proxy_type.upper() == 'MTPROTO' and proxy_secret:
+            proxy_config = ('mtproxy://' + proxy_addr + ':' + str(proxy_port) + '@' + proxy_secret)
+            logger.info(f"使用 MTProto 代理: {proxy_addr}:{proxy_port}")
+        else:
+            logger.warning(f"不支持的代理类型或缺少必要参数: {proxy_type}")
+    except ValueError:
+        logger.error("代理端口必须是有效的数字。")
+    except Exception as e:
+        logger.error(f"解析代理配置时发生错误: {e}")
+# ======================================================
 
 # 创建 DBOperations 实例
 db_ops = None
